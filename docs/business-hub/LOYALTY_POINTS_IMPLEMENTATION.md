@@ -210,12 +210,37 @@ needs to keep its history. The stamp-card tables (`LoyaltyProgram`, `LoyaltyCard
 | Schema ⇄ migration parity (12 tests, offline) | `tests/prisma/loyalty-points-migration-parity.test.ts` |
 | Real PostgreSQL: rollback, concurrency, unique indexes | `tests/integration/business-hub-loyalty-points-postgres.test.ts` |
 | Real Chrome: owner configuration, purchase, wallet, redemption, six viewports | `scripts/browser/business-hub-journey.check.mjs` |
+| Public page: the four programme combinations as the browser receives them | `tests/unit/public-points-entry.test.tsx` |
+| Public page: the Loyalty Rewards section in all three states | `tests/unit/public-loyalty-rewards-visibility.test.tsx` |
+| Public state read (active / inactive / unreadable), offline | `tests/unit/public-loyalty-rewards-state.test.ts` |
+| Public state read on a real database, incl. a read that fails | `tests/integration/business-hub-loyalty-points-postgres.test.ts` (scenario 19) |
 
 The offline suites use the Business Hub fake, whose `$transaction` is a pass-through without
 rollback. Anything that depends on real transactional rollback or real row locking is asserted in
 the PostgreSQL suite and the browser journey, never in the fake.
 
-## 12. Open decisions for the owner
+## 12. What a public Business Page shows
+
+Every public Business Page carries a **Loyalty Rewards** section (subtitle "Shop. Earn. Enjoy
+rewards."). The section is part of the page in every state — hiding it made the feature
+undiscoverable — and its STATE carries the truth. `publicLoyaltyRewards()` returns that state:
+
+| State | When | What the customer is shown |
+|---|---|---|
+| `inactive` | There is no programme, or the owner has switched it off. | "Points rewards coming soon", plus what the feature will offer. No rate, reward, balance, expiry or button. |
+| `unknown` | The configuration could not be read. | A neutral availability message: the section stays on the page instead of vanishing. Still nothing published. |
+| `active` | The programme is live. | The earning rules, rewards and redemption information the owner actually configured, plus the card-code lookup. |
+
+Only `active` offers the card-code lookup, so a page never implies points can be earned or spent
+when they cannot. Unset values are published as absent — never as a default — so no rate, reward
+value or expiry is invented. The stamp card is a separate section driven by its own flag, and is
+unchanged by any of this.
+
+The graphite (`#16181d`) and lime (`#b6ff2e`) identity is the one the rest of Loyalty 2.0 already
+ships with; it is applied with the same tokens as the customer wallet, so the brand stylesheet keeps
+its own palette.
+
+## 13. Open decisions for the owner
 
 1. **Activation.** Which businesses switch points on, and with which rate. Nothing awards points
    until this is decided per business.

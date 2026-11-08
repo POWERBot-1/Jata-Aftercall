@@ -133,19 +133,113 @@ export async function findProgramme(businessId: string): Promise<PointsProgramme
   return toProgrammeConfig(existing, await eligibleItemsFor(existing.id));
 }
 
+/** Why the public Loyalty Rewards section is in the state a visitor sees. */
+export type PublicLoyaltyStatus = "active" | "inactive" | "unknown";
+
+export type PublicReward = {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: string;
+  pointsCost: number;
+  discountKES: number | null;
+};
+
 /**
- * Whether a public page may show the Points & rewards section for this business.
+ * What a public page may publish about a business's points programme.
  *
- * `findProgramme`, never `getOrCreateProgramme`: a public page must never create a programme as a
- * side effect of being looked at. Everything here fails CLOSED — a page that cannot prove the
- * programme is active shows no points section at all, rather than an empty or misleading one.
+ * `status` is the only field that is always present:
+ *   • `active`   — the programme is live, so `earning`, `redemption` and `rewards` carry the
+ *                  values the owner actually configured,
+ *   • `inactive` — there is no programme, or it is switched off. Nothing is published, so the
+ *                  page cannot invent a rate, a reward or a balance,
+ *   • `unknown`  — the configuration could not be read. The section stays on the page with a
+ *                  neutral availability message instead of disappearing.
+ * A field is `null` when the owner left it unset: the page renders nothing for it rather than
+ * substituting a default.
+ */
+export type PublicLoyaltyRewards = {
+  status: PublicLoyaltyStatus;
+  earning: {
+    kesPerPoint: number | null;
+    pointsPerUnit: number | null;
+    minPurchaseKES: number;
+    expiryMonths: number | null;
+    description: string | null;
+    terms: string | null;
+  } | null;
+  redemption: {
+    minRedeemPoints: number;
+    pointValueKES: number | null;
+    rules: string | null;
+  } | null;
+  rewards: PublicReward[];
+};
+
+const NOT_PUBLISHED: PublicLoyaltyRewards = { status: "inactive", earning: null, redemption: null, rewards: [] };
+const UNKNOWN: PublicLoyaltyRewards = { status: "unknown", earning: null, redemption: null, rewards: [] };
+
+/**
+ * Reads the public Loyalty Rewards state for a business page.
  *
- * It is independent of the stamp card on purpose: `isLoyaltyEnabled` (the stamp programme) is a
- * different flag on a different table, and neither programme's state affects the other.
+ * `findProgramme`'s read-only path, never `getOrCreateProgramme`: a public page must never create a
+ * programme as a side effect of being looked at, and it must never write anything at all. The three
+ * outcomes are kept apart on purpose — "no programme" and "the programme could not be read" are
+ * different answers, and a customer is told the honest one instead of being shown an empty section
+ * or, worse, a section that silently vanished.
+ *
+ * Independent of the stamp card: `isLoyaltyEnabled` is a different flag on a different table, and
+ * neither programme's state affects the other.
+ */
+export async function publicLoyaltyRewards(businessId: string): Promise<PublicLoyaltyRewards> {
+  let row: any;
+  try {
+    row = await prisma.loyaltyPointsProgramme.findUnique({ where: { businessId } });
+  } catch {
+    // A lookup failure is not proof that points are off. Say so, and let the page keep the
+    // section with a neutral message.
+    return UNKNOWN;
+  }
+  if (!row) return NOT_PUBLISHED;
+  const programme = toProgrammeConfig(row, await eligibleItemsFor(row.id).catch(() => []));
+  if (programme.isActive !== true) return NOT_PUBLISHED;
+  const rewards = (await listRewards(businessId, { includeInactive: false }).catch(() => [])) as PublicReward[];
+  return {
+    status: "active",
+    earning: {
+      kesPerPoint: programme.kesPerPoint,
+      pointsPerUnit: programme.pointsPerUnit,
+      minPurchaseKES: programme.minPurchaseKES,
+      expiryMonths: programme.expiryMonths,
+      description: programme.description,
+      terms: programme.terms,
+    },
+    redemption: {
+      minRedeemPoints: programme.minRedeemPoints,
+      pointValueKES: programme.pointValueKES,
+      rules: programme.redemptionRules,
+    },
+    rewards: rewards.map((reward) => ({
+      id: reward.id,
+      title: reward.title,
+      description: reward.description,
+      kind: reward.kind,
+      pointsCost: reward.pointsCost,
+      discountKES: reward.discountKES,
+    })),
+  };
+}
+
+/**
+ * Whether a public page may show the points LOOKUP for this business.
+ *
+ * Fails CLOSED: only a programme that is provably active lets a customer enter a card code. A
+ * programme that is off, absent or unreadable offers the Loyalty Rewards section without the
+ * lookup, so no page ever implies that points can be earned or spent when they cannot.
  */
 export async function publicPointsEnabled(businessId: string): Promise<boolean> {
-  const programme = await findProgramme(businessId).catch(() => null);
-  return programme?.isActive === true;
+  const rewards = await publicLoyaltyRewards(businessId).catch(() => UNKNOWN);
+  return rewards.status === "active";
 }
 
 async function eligibleItemsFor(programmeId: string) {

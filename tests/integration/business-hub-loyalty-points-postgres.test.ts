@@ -20,13 +20,14 @@
  * separately from the no-database suite.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import prisma from "@/lib/db";
 import {
   adjustPoints,
   awardPoints,
   getOrCreateProgramme,
   listAccounts,
+  publicLoyaltyRewards,
   reconcileAccount,
   redeemPoints,
   reversePoints,
@@ -712,5 +713,63 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     expect(serialised).not.toContain("0712345678");
     expect(serialised).not.toContain("accountId");
     expect(serialised).not.toContain("businessId");
+  });
+  it("19 · the public Loyalty Rewards state is read from the programme, and says when it cannot be", async () => {
+    // STATE A′ — the configuration cannot be read. This is the one that used to be indistinguishable
+    // from "no programme", and a page that cannot read the programme must not quietly claim there
+    // is none: it says so, and publishes nothing.
+    await activate(businessA);
+    const spy = vi.spyOn(prisma.loyaltyPointsProgramme, "findUnique").mockRejectedValue(new Error("connection lost"));
+    try {
+      const unreadable = await publicLoyaltyRewards(businessA);
+      expect(unreadable.status).toBe("unknown");
+      expect(unreadable.earning).toBeNull();
+      expect(unreadable.redemption).toBeNull();
+      expect(unreadable.rewards).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // STATE A — configured but switched off: nothing is published, but the answer is `inactive`,
+    // not `unknown`, because the programme was read successfully.
+    await deactivate(businessA);
+    const off = await publicLoyaltyRewards(businessA);
+    expect(off.status).toBe("inactive");
+    expect(off.earning).toBeNull();
+    expect(off.redemption).toBeNull();
+    expect(off.rewards).toEqual([]);
+
+    // STATE B — live, with the values the owner configured.
+    await activate(businessA, {
+      kesPerPoint: 100,
+      pointsPerUnit: 1,
+      minPurchaseKES: 0,
+      minRedeemPoints: 0,
+      pointValueKES: null,
+      expiryMonths: null,
+      description: "Earn while you eat.",
+      terms: null,
+      redemptionRules: "Collect in store.",
+    });
+    const live = await publicLoyaltyRewards(businessA);
+    expect(live.status).toBe("active");
+    expect(live.earning?.kesPerPoint).toBe(100);
+    expect(live.earning?.pointsPerUnit).toBe(1);
+    expect(live.earning?.description).toBe("Earn while you eat.");
+    expect(live.redemption?.rules).toBe("Collect in store.");
+    expect(live.rewards.length).toBeGreaterThan(0);
+    for (const entry of live.rewards) {
+      expect(entry.pointsCost).toBeGreaterThan(0);
+    }
+
+    // The state is per business: business B stays off while business A is live.
+    await deactivate(businessB);
+    expect((await publicLoyaltyRewards(businessB)).status).toBe("inactive");
+    expect((await publicLoyaltyRewards(businessA)).status).toBe("active");
+
+    // Reading the public state writes nothing — a page view is not an activation.
+    const before = await prisma.loyaltyPointsProgramme.count();
+    await publicLoyaltyRewards(businessA);
+    expect(await prisma.loyaltyPointsProgramme.count()).toBe(before);
   });
 });
