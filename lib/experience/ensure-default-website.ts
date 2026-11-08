@@ -99,7 +99,7 @@ export async function ensureDefaultStudioWebsite(
         role,
         status: "ACTIVE",
       },
-      update: { role, status: "ACTIVE" },
+      update: { role },
     });
     await prisma.studioWebsiteMember.upsert({
       where: { websiteId_userId: { websiteId: website.id, userId } },
