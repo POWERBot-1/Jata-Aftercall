@@ -140,8 +140,8 @@ export function OrderRequestPanel({
 
   if (stage === "sent" && sent) {
     return (
-      <section id="order" className="jata-card" aria-labelledby="order-request-sent">
-        <h2 id="order-request-sent" className="jata-section-title flex items-center gap-2">
+      <section id="order" className="st-section st-hub-panel" aria-labelledby="order-request-sent">
+        <h2 id="order-request-sent" className="st-sectionTitle st-hub-panel__title flex items-center gap-2">
           <CheckCircle2 size={18} aria-hidden="true" className="text-emerald-600" />
           Request sent
         </h2>
@@ -174,8 +174,8 @@ export function OrderRequestPanel({
   }
 
   return (
-    <section id="order" className="jata-card" aria-labelledby="order-request-title">
-      <h2 id="order-request-title" className="jata-section-title flex items-center gap-2">
+    <section id="order" className="st-section st-hub-panel" aria-labelledby="order-request-title">
+      <h2 id="order-request-title" className="st-sectionTitle st-hub-panel__title flex items-center gap-2">
         <ShoppingBasket size={18} aria-hidden="true" />
         Request an order
       </h2>
@@ -193,7 +193,7 @@ export function OrderRequestPanel({
               return (
                 <li
                   key={product.id}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-2"
+                  className="st-hub-product flex items-center gap-3 rounded-2xl p-3"
                 >
                   {product.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -207,7 +207,7 @@ export function OrderRequestPanel({
                   ) : (
                     <div
                       aria-hidden="true"
-                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-xs font-bold text-zinc-500"
+                      className="st-hub-product__placeholder flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-xs font-bold"
                     >
                       {product.name.slice(0, 2).toUpperCase()}
                     </div>
@@ -278,7 +278,7 @@ export function OrderRequestPanel({
         </>
       ) : (
         <form onSubmit={submit} className="mt-4 space-y-3">
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+          <div className="st-hub-review rounded-2xl p-3">
             <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Your request</p>
             <ul className="mt-2 space-y-1">
               {selected.map((entry) => (

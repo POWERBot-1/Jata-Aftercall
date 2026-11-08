@@ -10,6 +10,8 @@
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import BusinessPage from "@/components/BusinessPage";
 import { PromotionSpotlight } from "@/components/business-hub/PromotionSpotlight";
 import { OrderRequestPanel } from "@/components/business-hub/OrderRequestPanel";
@@ -119,6 +121,8 @@ describe("customer page markup", () => {
     expect(html).toContain("Chapati");
     expect(html).toContain("Pilau");
     expect(html).toContain("aria-live");
+    expect(html).toContain("st-section st-hub-panel");
+    expect(html).not.toContain("jata-card");
   });
 
   it("never shows an expired promotion as active", () => {
@@ -144,12 +148,26 @@ describe("customer page markup", () => {
   it("offers an enquiry form with a honeypot and no booking promise", () => {
     const html = renderToStaticMarkup(<EnquiryPanel slug={BUSINESS.slug} businessName={BUSINESS.name} />);
     expect(html).toMatch(/message/i);
+    expect(html).toContain("st-section st-hub-panel");
+    expect(html).not.toContain("jata-card");
     expect(html.toLowerCase()).not.toContain("booking confirmed");
+  });
+
+  it("keeps order, enquiry and QR panels on the shared graphite/lime storefront skin", () => {
+    const css = readFileSync(join(process.cwd(), "app/storefront.css"), "utf8");
+    expect(css).toContain(".st-hub-panel");
+    expect(css).toContain("var(--st-canvas)");
+    expect(css).toContain("var(--st-accent)");
+    expect(css).toContain("@media (max-width: 420px)");
+    expect(css).toContain("overflow-wrap: anywhere");
   });
 
   it("inlines the QR artwork and the public page URL it opens", () => {
     const html = renderToStaticMarkup(<QrIdentityBlock slug={BUSINESS.slug} businessName={BUSINESS.name} />);
     expect(html).toContain("<svg");
+    expect(html).toContain("st-section st-hub-panel");
+    expect(html).toContain("st-hub-qr");
+    expect(html).not.toContain("jata-card");
     expect(html).toContain("https://jataaftercall.co.ke/b/nyumbani-kitchen");
     expect(html).toMatch(/download/i);
     // Nothing private is printed next to the code.
