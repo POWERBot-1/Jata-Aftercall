@@ -105,8 +105,11 @@ jobs:
           set -o pipefail
           bash scripts/lib/prisma-cli.sh migrate deploy 2>&1 | tee /tmp/step-migrate.log
 
-      - name: Generate ephemeral demo fixture password
-        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+      - name: Generate and mask ephemeral demo fixture password
+        run: |
+          fixture_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::$fixture_password"
+          printf 'DEMO_FIXTURE_PASSWORD=%s\\n' "$fixture_password" >> "$GITHUB_ENV"
 
       - name: Seed plans
         env:
