@@ -4720,6 +4720,7 @@ model StudioWorkspaceBusiness {
   businessId  String   @unique
   workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  websites    StudioWebsite[]
   createdAt   DateTime @default(now())
 
   @@unique([workspaceId, businessId])
@@ -4734,8 +4735,7 @@ model StudioWebsite {
   name        String
   status      String   @default("DRAFT")
   isDefault   Boolean  @default(false)
-  workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  workspaceBusiness StudioWorkspaceBusiness @relation(fields: [workspaceId, businessId], references: [workspaceId, businessId], onDelete: Cascade)
   members     StudioWebsiteMember[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
