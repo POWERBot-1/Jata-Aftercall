@@ -53,8 +53,8 @@ export function EnquiryPanel({ slug, businessName }: { slug: string; businessNam
 
   if (reference) {
     return (
-      <section id="enquiry" className="jata-card" aria-labelledby="enquiry-title">
-        <h2 id="enquiry-title" className="jata-section-title flex items-center gap-2">
+      <section id="enquiry" className="st-section st-hub-panel" aria-labelledby="enquiry-title">
+        <h2 id="enquiry-title" className="st-sectionTitle st-hub-panel__title flex items-center gap-2">
           <CheckCircle2 size={18} aria-hidden="true" className="text-emerald-600" />
           Message sent
         </h2>
@@ -78,8 +78,8 @@ export function EnquiryPanel({ slug, businessName }: { slug: string; businessNam
   }
 
   return (
-    <section id="enquiry" className="jata-card" aria-labelledby="enquiry-title">
-      <h2 id="enquiry-title" className="jata-section-title flex items-center gap-2">
+    <section id="enquiry" className="st-section st-hub-panel" aria-labelledby="enquiry-title">
+      <h2 id="enquiry-title" className="st-sectionTitle st-hub-panel__title flex items-center gap-2">
         <MessageSquare size={18} aria-hidden="true" />
         Ask {businessName} a question
       </h2>
