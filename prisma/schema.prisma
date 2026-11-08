@@ -42,6 +42,9 @@ model User {
   controlGrantsProvisioned ControlRoleGrant[] @relation("ControlRoleGrantProvisioner")
   controlMfaCredential ControlMfaCredential?
   controlAuditEvents ControlAuditEvent[] @relation("ControlAuditActor")
+  studioWorkspacesOwned StudioWorkspace[] @relation("StudioWorkspaceOwner")
+  studioWorkspaceMemberships StudioWorkspaceMember[]
+  studioWebsiteMemberships StudioWebsiteMember[]
 }
 
 // An application is not an agent entitlement. No activation is possible until a trusted,
@@ -626,6 +629,8 @@ model Business {
   loyaltyRewards         LoyaltyReward[]
   loyaltyRewardRedemptions LoyaltyRewardRedemption[]
   hubActivities      BusinessHubActivity[]
+  studioWorkspaceLink StudioWorkspaceBusiness?
+  studioWebsites StudioWebsite[]
 
   @@index([ownerId])
   @@index([slug])
@@ -4674,4 +4679,85 @@ model BusinessHubActivity {
 
   @@index([businessId, createdAt])
   @@index([businessId, subjectType, subjectId])
+}
+
+
+model StudioWorkspace {
+  id          String   @id @default(cuid())
+  name        String
+  ownerUserId String
+  owner       User     @relation("StudioWorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  status      String   @default("ACTIVE")
+  members     StudioWorkspaceMember[]
+  businesses  StudioWorkspaceBusiness[]
+  websites    StudioWebsite[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerUserId, status])
+  @@index([updatedAt])
+}
+
+model StudioWorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String   @default("VIEWER")
+  status      String   @default("ACTIVE")
+  workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([userId, status])
+  @@index([workspaceId, status])
+}
+
+model StudioWorkspaceBusiness {
+  id          String   @id @default(cuid())
+  workspaceId String
+  businessId  String   @unique
+  workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, businessId])
+  @@index([workspaceId])
+}
+
+model StudioWebsite {
+  id          String   @id @default(cuid())
+  workspaceId String
+  businessId  String
+  slug        String
+  name        String
+  status      String   @default("DRAFT")
+  isDefault   Boolean  @default(false)
+  workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  members     StudioWebsiteMember[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([workspaceId, updatedAt])
+  @@index([businessId, isDefault])
+  @@index([businessId, status])
+}
+
+model StudioWebsiteMember {
+  id        String   @id @default(cuid())
+  websiteId String
+  userId    String
+  role      String   @default("VIEWER")
+  status    String   @default("ACTIVE")
+  website   StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, userId])
+  @@index([userId, status])
+  @@index([websiteId, status])
 }
