@@ -43,6 +43,27 @@ describe("Website Studio multi-tenant permission policy", () => {
     })).toBe(false);
   });
 
+  it("reserves workspace administration for the actual workspace owner", () => {
+    expect(canStudioRolePerform({
+      workspaceRole: "ADMIN",
+      websiteRole: "OWNER",
+      businessRole: "OWNER",
+      action: "publish",
+    })).toBe(true);
+    expect(canStudioRolePerform({
+      workspaceRole: "ADMIN",
+      websiteRole: "OWNER",
+      businessRole: "OWNER",
+      action: "manage_workspace",
+    })).toBe(false);
+    expect(canStudioRolePerform({
+      workspaceRole: "OWNER",
+      websiteRole: "OWNER",
+      businessRole: "OWNER",
+      action: "manage_workspace",
+    })).toBe(true);
+  });
+
   it("separates editor, publisher, viewer and administrator capabilities", () => {
     const common = { workspaceRole: "PUBLISHER", websiteRole: "PUBLISHER", businessRole: "ADMIN" as const };
     expect(canStudioRolePerform({ ...common, action: "read" })).toBe(true);
