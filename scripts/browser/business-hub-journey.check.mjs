@@ -553,7 +553,10 @@ if (process.exitCode !== 2) {
     );
     await walletPage.screenshot({ path: path.join(evidenceDir, "customer-390-points-wallet.png"), fullPage: true });
 
-    await clickByText(walletPage, "Redeem");
+    // That reward's own button, not the first "Redeem" on the page: the wallet orders its rewards,
+    // so matching on the label alone picks whichever comes first and silently redeems that one.
+    await walletPage.waitForSelector(`[data-reward-id="${pointsReward.id}"]`, { timeout: 30_000 });
+    await walletPage.click(`[data-reward-id="${pointsReward.id}"]`);
     await walletPage.waitForFunction(() => /JATA-RWD-\d{8}-/.test(document.body.innerText), { timeout: 30_000 });
     walletText = await walletPage.evaluate(() => document.body.innerText);
     const redemptionReference = (walletText.match(/JATA-RWD-\d{8}-[A-Z0-9]{6}/) || [null])[0];
