@@ -38,10 +38,11 @@ vi.mock("@/lib/experience/ensure-default-website", async () => {
     }
     return { websiteId: "test-site", businessId, workspaceId: "test-workspace" };
   });
-  const ensureDefaultStudioWebsite = vi.fn(async (businessId: string) => ({
-    websiteId: "test-site",
-    businessId,
-    workspaceId: "test-workspace",
-  }));
+  const ensureDefaultStudioWebsite = vi.fn(async (businessId: string, session: unknown) => {
+    if (typeof tenant.assertBusinessOwnership === "function") {
+      await tenant.assertBusinessOwnership(businessId, session as any);
+    }
+    return { websiteId: "test-site", businessId, workspaceId: "test-workspace" };
+  });
   return { guardStudioWebsiteMutation, assertDefaultStudioWebsiteAccess, ensureDefaultStudioWebsite };
 });
