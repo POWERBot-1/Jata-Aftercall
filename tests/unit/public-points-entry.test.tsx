@@ -152,8 +152,8 @@ describe("what the points section offers a customer", () => {
   it("is laid out with the loyalty band's own styling and responsive controls", () => {
     const html = render({ loyaltyEnabled: false, pointsEnabled: true });
     const section = loyaltySection(html);
-    expect(section).toContain("bg-[#16181d]");
-    expect(section).toContain("text-[#b6ff2e]");
+    expect(section).toContain("st-loyalty");
+    expect(section).toContain("st-loyalty__lookup");
     // Full width on a phone, auto width from the small breakpoint up.
     expect(section).toContain("w-full");
     expect(section).toContain("sm:w-auto");

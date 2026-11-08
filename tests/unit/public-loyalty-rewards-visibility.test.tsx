@@ -116,10 +116,9 @@ describe("the Loyalty Rewards section is visible on a public page", () => {
       const section = band(html);
       expect(section).toContain("Loyalty Rewards");
       expect(section).toContain("Shop. Earn. Enjoy rewards.");
-      // The Loyalty 2.0 identity: graphite panel, lime accent (the palette the rest of Loyalty 2.0
-      // already ships with, applied here with the same tokens).
-      expect(section).toContain("bg-[#16181d]");
-      expect(section).toContain("text-[#b6ff2e]");
+      // Inherits the public storefront system: the band is drawn from the shared `.st-loyalty`
+      // tokens rather than its own one-off palette.
+      expect(section).toContain("st-loyalty");
     }
   });
 
