@@ -44,6 +44,7 @@ jobs:
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
       NODE_ENV: test
       JATA_ALLOW_FIXTURE_SEED: "true"
+      DEMO_FIXTURE_PASSWORD: "WebsiteStudio-CI-Only-Disposable-Password-2026"
       AUTH_SECRET: website-studio-ci-only-not-a-production-secret
       NEXTAUTH_SECRET: website-studio-ci-only-not-a-production-secret
     steps:
