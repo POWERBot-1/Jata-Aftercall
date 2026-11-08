@@ -190,6 +190,6 @@ describe.skipIf(!enabled)("Website Studio multi-site content API on PostgreSQL",
 
     holder.session = session(ownerB);
     const crossTenant = await getWebsiteContent(request(`/api/studio/websites/content?websiteId=${defaultSite!.websiteId}`, "GET"));
-    expect(crossTenant.status).toBe(404); // Cross-tenant business ownership is intentionally hidden as not found.
+    expect(crossTenant.status).toBe(403); // The site exists, but the authenticated owner of another business is denied.
   }, 60_000);
 });
