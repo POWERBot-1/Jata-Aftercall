@@ -9,6 +9,7 @@ export default defineConfig({
     // Component render tests use JSX, so they live in `*.test.tsx` and are collected here too.
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx", "tests/**/*.spec.ts"],
     globals: false,
+    setupFiles: ["tests/setup.ts"],
   },
   resolve: {
     alias: {
