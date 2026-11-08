@@ -42,6 +42,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jata_studio_test?schema=public
       NODE_ENV: test
       JATA_ALLOW_FIXTURE_SEED: "true"
       DEMO_FIXTURE_PASSWORD: "WebsiteStudio-CI-Only-Disposable-Password-2026"
