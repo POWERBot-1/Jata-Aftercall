@@ -59,6 +59,14 @@ async function activate(businessId: string, overrides: Record<string, unknown> =
   await saveProgramme({ businessId, input: parsed.value, actorId: ownerA, actorLabel: "Owner A" });
 }
 
+/** The same configuration, switched off — so a scenario sets the state it asserts instead of inheriting it. */
+async function deactivate(businessId: string) {
+  const parsed = validateProgrammeInput({ isActive: false, kesPerPoint: 100, pointsPerUnit: 1 });
+  expect(parsed.ok, "the configuration should be valid").toBe(true);
+  if (!parsed.ok) throw new Error("invalid configuration");
+  await saveProgramme({ businessId, input: parsed.value, actorId: ownerA, actorLabel: "Owner A" });
+}
+
 async function reward(businessId: string, title: string, pointsCost: number) {
   const parsed = validateRewardInput({ title, pointsCost, kind: "FIXED_POINTS" });
   expect(parsed.ok).toBe(true);
@@ -689,7 +697,15 @@ describe.skipIf(!enabled)("points and rewards against real PostgreSQL", () => {
     const otherCard = await prisma.loyaltyCard.findUnique({ where: { id: cardB } });
     expect(otherCard).toBeTruthy();
     expect(await walletForCardCode(otherCard!.code, { businessSlug: slugA })).toBeNull();
+
+    // What that card shows on its OWN page is that business's own programme's decision, not this
+    // test's to inherit: the cross-tenant scenario above leaves business B active, so both states
+    // are set here and asserted in turn rather than assumed from whatever ran before.
+    await activate(businessB);
+    expect((await walletForCardCode(otherCard!.code, { businessSlug: slugB }))?.active).toBe(true);
+    await deactivate(businessB);
     expect((await walletForCardCode(otherCard!.code, { businessSlug: slugB }))?.active).toBe(false);
+    expect(await walletForCardCode(otherCard!.code, { businessSlug: slugA })).toBeNull();
 
     // The refusal is not a wallet with a balance in it, and never carries a contact value.
     const serialised = JSON.stringify(await walletForCardCode(cardACode, { businessSlug: slugA }));
