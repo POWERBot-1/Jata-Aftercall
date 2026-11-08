@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { assertBusinessOwnership, TenantError } from "@/lib/tenant";
 import { assertStudioWebsiteAccess } from "./tenant";
 
 /**
@@ -120,4 +120,35 @@ export async function ensureDefaultStudioWebsite(
 
 function hash(value: string): string {
   return createHash("md5").update(value).digest("hex");
+}
+
+
+export async function assertDefaultStudioWebsiteAccess(
+  businessId: string,
+  session: SessionPayload,
+  action: "read" | "edit" | "publish" | "manage_workspace" = "read",
+) {
+  const site = await ensureDefaultStudioWebsite(businessId, session);
+  if (!site) throw new TenantError("Studio website not found", 404);
+  return assertStudioWebsiteAccess(site.websiteId, session, action);
+}
+
+export async function guardStudioWebsiteMutation(
+  session: SessionPayload | null,
+  businessId: string | null | undefined,
+  action: "read" | "edit" | "publish" | "manage_workspace" = "read",
+) {
+  if (!session) return { ok: false as const, status: 401, error: "Please sign in to continue." };
+  if (!businessId) return { ok: false as const, status: 400, error: "Choose a business first." };
+  try {
+    await assertDefaultStudioWebsiteAccess(businessId, session, action);
+    return { ok: true as const };
+  } catch (error) {
+    const status = Number((error as { status?: unknown })?.status);
+    return {
+      ok: false as const,
+      status: status >= 400 && status <= 599 ? status : 403,
+      error: status === 404 ? "Studio website not found." : "You do not have permission to access this Studio website.",
+    };
+  }
 }
