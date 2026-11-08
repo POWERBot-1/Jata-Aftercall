@@ -10,7 +10,6 @@
 
 import { useState } from "react";
 import { Gift, Loader2, Search } from "lucide-react";
-import { PointsWallet } from "./PointsWallet";
 
 type Progress = {
   businessName: string;
@@ -32,8 +31,6 @@ export function LoyaltyCardPanel({ businessName }: { businessName: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
-  // Kept so the points wallet can read the same card without asking for the code twice.
-  const [lookupCode, setLookupCode] = useState("");
 
   async function lookup(event: React.FormEvent) {
     event.preventDefault();
@@ -48,7 +45,6 @@ export function LoyaltyCardPanel({ businessName }: { businessName: string }) {
         return;
       }
       setProgress(data as Progress);
-      setLookupCode(code.trim().replace(/\s+/g, ""));
     } catch {
       setError("We couldn't reach the server. Please try again.");
     } finally {
@@ -119,10 +115,6 @@ export function LoyaltyCardPanel({ businessName }: { businessName: string }) {
             Reward: {progress.rewardDescription}. Stamps are added by {businessName} after they verify your purchase —
             this card does not track visits automatically.
           </p>
-
-          {/* Loyalty 2.0: the points wallet appears only for a business that has switched points
-              on. When it has not, this renders nothing and the page is unchanged. */}
-          <PointsWallet code={lookupCode} businessName={businessName} />
 
           <button
             type="button"
