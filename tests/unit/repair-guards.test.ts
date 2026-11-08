@@ -145,6 +145,7 @@ describe("runtime and schema guards", () => {
       "20261106000000_meta_whatsapp_webhooks",
       "20261107000000_agent_activation_review",
       "20261108000000_agent_referral_registration",
+      "20261108010000_website_studio_2_0_workspace_foundation",
       "20261109000000_agent_referral_source",
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",
