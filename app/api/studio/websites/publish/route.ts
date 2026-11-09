@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertStudioWebsiteAccess } from "@/lib/experience/tenant";
+import { assertStudioPublicationAccess, StudioPublicationRefused } from "@/lib/experience/publication-access";
 import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { validateExperienceJson } from "@/lib/experience/schema";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   if (!websiteId) return NextResponse.json({ error: "Choose a website first." }, { status: 400 });
 
   try {
-    const access = await assertStudioWebsiteAccess(websiteId, session, "publish");
+    const access = await assertStudioPublicationAccess(websiteId, session);
     const [website, business] = await Promise.all([
       prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { id: true, slug: true, status: true, isDefault: true } }),
       prisma.business.findUnique({
@@ -196,6 +196,9 @@ export async function POST(request: Request) {
     await syncInteractiveEntitlement(business.id);
     return NextResponse.json({ published: true, websiteId, version: nextVersion, publishedAt, url: website.isDefault ? `/b/${business.slug}` : `/b/${business.slug}/${website.slug}` });
   } catch (error) {
+    if (error instanceof StudioPublicationRefused) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     const status = statusOf(error);
     const code = (error as { message?: string })?.message;
     if (code === "STUDIO_WEBSITE_STATE_TRANSITION_DENIED") {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertStudioWebsiteAccess } from "@/lib/experience/tenant";
+import { assertStudioPublicationAccess, StudioPublicationRefused } from "@/lib/experience/publication-access";
 import { validateExperienceJson } from "@/lib/experience/schema";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logAudit } from "@/lib/audit";
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const access = await assertStudioWebsiteAccess(websiteId, session, "publish");
+    const access = await assertStudioPublicationAccess(websiteId, session);
     const [target, current, business, website] = await Promise.all([
       prisma.studioWebsiteVersion.findUnique({ where: { websiteId_version: { websiteId, version: targetVersion } } }),
       prisma.studioWebsiteContent.findUnique({ where: { websiteId } }),
@@ -128,6 +128,11 @@ export async function POST(request: Request) {
     await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_ROLLED_BACK", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: access.businessId, websiteId, targetVersion, publishedVersion: nextVersion } });
     return NextResponse.json({ rolledBack: true, websiteId, version: nextVersion, restoredFromVersion: targetVersion, publishedAt });
   } catch (error) {
+    // A suspended site is refused with its own actionable code: "not found" would tell the
+    // owner their data vanished, which is not what an operator suspension means.
+    if (error instanceof StudioPublicationRefused) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     const status = Number((error as { status?: unknown })?.status);
     const message = (error as { message?: string })?.message;
     const safeStatus = message === "STUDIO_WEBSITE_ROLLBACK_CONFLICT" || message === "STUDIO_BUSINESS_STATE_CONFLICT" ? 409 : status >= 400 && status <= 599 ? status : 500;

@@ -417,6 +417,41 @@ describe.skipIf(!enabled)("publication state machine through the real routes on 
     expect(after.draftVersion).toBe(before.draftVersion);
   });
 
+  it("denies a suspended site to an outsider instead of revealing it", async () => {
+    // The 409 exists for the owner. Anyone else must keep the plain 404: suspension must not
+    // become a way to discover that a website exists on another tenant.
+    const t = await provisionPublishedTenant();
+    await client.studioWebsite.update({ where: { id: t.secondarySite.id }, data: { status: "SUSPENDED" } });
+    const outsider = await client.user.create({
+      data: { email: `studio-outsider-${Date.now()}@example.test`, name: "Unrelated", passwordHash: "x" },
+    });
+    holder.session = { userId: outsider.id, email: outsider.email, role: "CUSTOMER", name: outsider.name };
+    const current = await t.readVersions(t.secondarySite);
+    const denied = await rollback(t.secondarySite, 1, current.draftVersion, current.publishedVersion);
+    expect(denied.status).toBe(404);
+    expect((await denied.json()).code).toBe("studio_website_not_found");
+    // …and an outsider can never mutate it either.
+    const publishDenied = await publish(t.secondarySite, current.draftVersion, current.publishedVersion);
+    expect(publishDenied.status).toBe(404);
+    const after = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
+    expect(after.publishedVersion).toBe(current.publishedVersion);
+  });
+
+  it("reports a suspended business to its own owner as an actionable conflict", async () => {
+    const t = await provisionPublishedTenant();
+    await client.business.update({ where: { id: t.business.id }, data: { status: "SUSPENDED" } });
+    const s0 = await t.readVersions(t.defaultSite);
+    const refused = await publish(t.defaultSite, s0.draftVersion, s0.publishedVersion);
+    expect(refused.status).toBe(409);
+    const body = await refused.json();
+    expect(body.code).toBe("business_suspended");
+    expect(body.error).toMatch(/operator/i);
+    // Nothing was published on the way to the refusal.
+    const after = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.defaultSite.id } });
+    expect(after.publishedVersion).toBe(s0.publishedVersion);
+    await client.business.update({ where: { id: t.business.id }, data: { status: "ACTIVE" } });
+  });
+
   it("does not resurrect a legacy snapshot when a provisioned site has never published", async () => {
     const t = await provisionPublishedTenant();
     // No publish call at all: the site exists (DRAFT) and the legacy row is live.
