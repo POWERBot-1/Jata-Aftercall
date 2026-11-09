@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 type Row = Record<string, any>;
 const h = vi.hoisted(() => {
-  const tables: Record<string, Row[]> = { business: [], service: [], offer: [], user: [], payment: [], subscription: [], businessMember: [] };
+  const tables: Record<string, Row[]> = { business: [], service: [], offer: [], user: [], payment: [], subscription: [], businessMember: [], studioWebsite: [] };
   let seq = 0;
   const log: string[] = [];
   const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) => row[k] === v);
