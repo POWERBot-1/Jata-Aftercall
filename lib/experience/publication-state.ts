@@ -189,7 +189,7 @@ export function tenantIsPubliclyVisible(business: {
 export function resolvePublicDocument(input: {
   site: StudioSitePublicationRecord | null;
   isDefaultRoute: boolean;
-  legacy: { publishedJson?: string | null; status?: string | null } | null;
+  legacy: { publishedJson?: string | null; draftJson?: string | null; status?: string | null } | null;
   allowDraft: boolean;
   preferDraft: boolean;
   tenantVisible: boolean;
@@ -216,8 +216,15 @@ export function resolvePublicDocument(input: {
     return { json: input.legacy.publishedJson, source: "legacy" };
   }
 
-  // Nothing public. An authorised owner still sees their own draft if one exists.
+  // Nothing public. An authorised owner still sees their own draft if one exists: the
+  // site's own draft first, then — on the default route, before the first Studio
+  // publication — the legacy draft it was migrated from. Either way the result is
+  // tagged "draft" so the page renders its preview banner and stays non-indexable;
+  // resolving it as "legacy" would show unpublished work as if it were live.
   if (draftJson) return { json: draftJson, source: "draft" };
+  if (input.allowDraft && view.legacyFallbackAllowed && input.legacy?.draftJson) {
+    return { json: input.legacy.draftJson, source: "draft" };
+  }
   return { json: null, source: null };
 }
 

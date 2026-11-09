@@ -13,7 +13,7 @@ import { normalizeExperienceDocument, themeOf } from "./document";
 import { resolveExperienceTheme, type ExperienceTheme } from "./themes";
 import type { ExperienceDocument } from "./types";
 import { displayPriceKES } from "../sale-pricing";
-import { describeSitePublication, legacyDraftAllowed, resolvePublicDocument } from "./publication-state";
+import { describeSitePublication, resolvePublicDocument } from "./publication-state";
 
 export type StorefrontVariant = { id: string; label: string; priceKES: number | null; stockStatus: string; options: Record<string, string> };
 export type StorefrontAddOn = { id: string; name: string; priceKES: number };
@@ -313,17 +313,13 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
     preferDraft,
     tenantVisible: business.isPublished && business.status !== "SUSPENDED",
   });
-  let json = decision.json;
-  let resolvedSource = decision.source;
-  // An authorised owner preview of a tenant whose default site has never published may
-  // still fall back to the legacy draft, so preview and public rendering agree. Preserve
-  // the source classification as well as the JSON: otherwise the owner receives draft
-  // content without the preview marker/robots semantics.
-  if (!json && allowDraft && isDefaultRoute && legacyDraftAllowed(studioWebsite, true)) {
-    json = experience?.draftJson || null;
-    if (json) resolvedSource = "draft";
-  }
-  const usingDraft = resolvedSource === "draft";
+  // The resolver is the single place the legacy draft can be selected for an authorised
+  // preview, and it tags that selection "draft" so the preview banner, the preview notice
+  // and the noindex rule apply to it exactly as they do to a site's own draft. Keeping a
+  // second fallback path here is what previously let legacy draft content render as live.
+  const json = decision.json;
+  const usingDraft = decision.source === "draft";
+  const usePreferredDraft = usingDraft && preferDraft;
   if (!json) return null;
 
   let document: ExperienceDocument;
