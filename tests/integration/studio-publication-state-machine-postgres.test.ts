@@ -407,9 +407,12 @@ describe.skipIf(!enabled)("publication state machine through the real routes on 
     const before = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
     const response = await rollback(t.secondarySite, current.publishedVersion, current.draftVersion, current.publishedVersion);
     const after = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
-    // The access boundary intentionally conceals suspended sites as not found;
-    // either that denial or the route's explicit state conflict is fail-closed.
-    expect([404, 409]).toContain(response.status);
+    // Exactly a conflict, not "a conflict or a 404". Accepting either would let the
+    // regression back in: the owner of a suspended site is entitled to know why they cannot
+    // publish, and a 404 tells them their website and content disappeared. Concealment is
+    // still required — for callers who were never entitled — and is asserted separately.
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("website_suspended");
     expect((await client.studioWebsite.findUnique({ where: { id: t.secondarySite.id } })).status).toBe("SUSPENDED");
     expect(after.publishedJson).toBe(before.publishedJson);
     expect(after.publishedVersion).toBe(before.publishedVersion);
