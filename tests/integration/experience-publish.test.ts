@@ -162,7 +162,7 @@ describe("POST /api/experience/publish", () => {
     expect(body.published).toBe(true);
     expect(body.version).toBe(3);
     expect(mocks.experienceUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "PUBLISHED" }) }));
-    expect(mocks.businessUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isPublished: true }) }));
+    expect(mocks.businessUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: "ACTIVE" }), data: expect.objectContaining({ isPublished: true }) }));
     expect(mocks.audit).toHaveBeenCalled();
   });
 
