@@ -106,6 +106,9 @@ export const REQUIRED_ARTIFACTS = [
   "tests/unit/control-policy-pending-access.test.ts",
   "tests/unit/control-plane-routes.test.ts",
   "scripts/browser/control-deny.check.mjs",
+  // Website Studio 2.0 release acceptance record: the merged/deployed SHAs, the
+  // verification actually run against them, and the items deliberately left open.
+  "docs/release/WEBSITE-STUDIO-2-0-PRODUCTION-RELEASE-ACCEPTANCE.md",
   "package.json",
 ];
 
