@@ -49,8 +49,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
 
+    // The next draft revision number must clear BOTH the content row's cursor and any
+    // revision already stored for this website. `StudioWebsiteDraftRevision` is unique on
+    // (websiteId, draftVersion), so deriving it from the content cursor alone can collide
+    // with an existing revision (for example after a draft save that was later superseded)
+    // and turn a legitimate rollback into a 500. Versions are never rewritten to dodge the
+    // collision; the new revision simply takes the next free number.
+    const highestRevision = await prisma.studioWebsiteDraftRevision.findFirst({
+      where: { websiteId },
+      orderBy: { draftVersion: "desc" },
+      select: { draftVersion: true },
+    });
     const nextVersion = current.publishedVersion + 1;
-    const nextDraftVersion = current.draftVersion + 1;
+    const nextDraftVersion = Math.max(current.draftVersion, Number(highestRevision?.draftVersion ?? 0)) + 1;
     const snapshotJson = JSON.stringify(validated.document);
     const publishedAt = new Date();
     const saved = await prisma.$transaction(async (tx: any) => {

@@ -272,7 +272,17 @@ describe.skipIf(!enabled)("Website Studio multi-site content API on PostgreSQL",
     expect(versions.map((row: any) => row.version)).toEqual([1, 2]);
     expect(versions[0].snapshotJson).toBe(snapshotJson);
     expect(versions[1].snapshotJson).toBe(snapshotJson);
-    expect(revisions.some((row: any) => row.source === "ROLLBACK" && row.draftVersion === 2)).toBe(true);
+    // Rollback must append an immutable revision numbered at the NEW draft cursor that the
+    // rollback itself wrote — not a hard-coded integer. The exact number depends on how many
+    // revisions the site already has, and deriving it from the cursor alone (ignoring existing
+    // rows) is precisely the bug that made a legal rollback fail with a unique violation.
+    const contentAfterRollback = await client.studioWebsiteContent.findUnique({ where: { websiteId: defaultSite!.websiteId } });
+    const rollbackRevision = revisions.find((row: any) => row.source === "ROLLBACK");
+    expect(rollbackRevision).toBeDefined();
+    expect(rollbackRevision.draftVersion).toBe(contentAfterRollback.draftVersion);
+    expect(rollbackRevision.snapshotJson).toBe(snapshotJson);
+    // History is appended to, never rewritten.
+    expect(versions[0].snapshotJson).toBe(snapshotJson);
 
     const staleRollback = await rollbackStudioWebsite(request("/api/studio/websites/rollback", "POST", {
       websiteId: defaultSite!.websiteId,

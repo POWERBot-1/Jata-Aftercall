@@ -18,6 +18,8 @@ export default defineConfig({
     exclude: websiteStudioPostgresTests ? [] : [
       "tests/integration/website-studio-tenant-postgres.test.ts",
       "tests/integration/website-studio-multisite-api.test.ts",
+      "tests/integration/storefront-per-site-publication-postgres.test.ts",
+      "tests/integration/studio-publication-state-machine-postgres.test.ts",
     ],
     setupFiles: websiteStudioPostgresTests
       ? ["tests/helpers/server-only-setup.ts"]

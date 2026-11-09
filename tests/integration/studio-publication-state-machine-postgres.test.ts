@@ -163,9 +163,7 @@ async function provisionPublishedTenant(): Promise<Tenant> {
 }
 
 async function publish(site: any, expectedDraftVersion: number, expectedPublishedVersion = 0) {
-  const response = await publishRoute(request({ websiteId: site.id, expectedDraftVersion, expectedPublishedVersion, action: "publish" }));
-  if (response.status !== 200) console.log("PUBLISH FAILED", response.status, await response.clone().text());
-  return response;
+  return publishRoute(request({ websiteId: site.id, expectedDraftVersion, expectedPublishedVersion, action: "publish" }));
 }
 
 async function unpublish(site: any, expectedDraftVersion: number, expectedPublishedVersion: number) {

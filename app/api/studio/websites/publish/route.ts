@@ -179,7 +179,6 @@ export async function POST(request: Request) {
     await syncInteractiveEntitlement(business.id);
     return NextResponse.json({ published: true, websiteId, version: nextVersion, publishedAt, url: website.isDefault ? `/b/${business.slug}` : `/b/${business.slug}/${website.slug}` });
   } catch (error) {
-    if (process.env.STUDIO_DEBUG_PUBLISH === "1") console.error("PUBLISH_THROWN", error);
     const status = statusOf(error);
     return NextResponse.json({ error: status === 403 ? "You do not have permission to publish this website." : status === 404 ? "Studio website not found." : "We could not publish this website." }, { status });
   }
