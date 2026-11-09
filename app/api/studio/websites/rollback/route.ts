@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const [target, current, business, website] = await Promise.all([
       prisma.studioWebsiteVersion.findUnique({ where: { websiteId_version: { websiteId, version: targetVersion } } }),
       prisma.studioWebsiteContent.findUnique({ where: { websiteId } }),
-      prisma.business.findUnique({ where: { id: access.businessId }, select: { id: true, category: true } }),
+      prisma.business.findUnique({ where: { id: access.businessId }, select: { id: true, category: true, status: true } }),
       prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { isDefault: true, status: true } }),
     ]);
     if (!target || !current || !business || !website) return NextResponse.json({ error: "The requested publication was not found for this website." }, { status: 404 });
@@ -61,6 +61,13 @@ export async function POST(request: Request) {
       orderBy: { draftVersion: "desc" },
       select: { draftVersion: true },
     });
+    if (business.status === "SUSPENDED") {
+      return NextResponse.json({
+        error: "This business is suspended. An authorized operator must reinstate it before publication can be restored.",
+        code: "business_suspended",
+      }, { status: 409 });
+    }
+
     if (!canTransitionStudioSite(website.status, "PUBLISHED")) {
       return NextResponse.json({
         error: "A suspended website must be reinstated before its owner can restore a publication.",
@@ -109,7 +116,11 @@ export async function POST(request: Request) {
       // Business.isPublished is the tenant-wide outer route gate. Restoring ANY
       // website (including a secondary site after the last publication was taken down)
       // must reopen it; per-site status still decides which URL is visible.
-      await tx.business.update({ where: { id: business.id }, data: { isPublished: true, status: "ACTIVE" } });
+      const businessChanged = await tx.business.updateMany({
+        where: { id: business.id, status: business.status },
+        data: { isPublished: true, status: "ACTIVE" },
+      });
+      if (businessChanged.count !== 1) throw new Error("STUDIO_BUSINESS_STATE_CONFLICT");
       return true;
     });
     if (!saved) return NextResponse.json({ error: "Publication changed during rollback. Reload and retry.", code: "website_publish_conflict" }, { status: 409 });
@@ -119,7 +130,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const status = Number((error as { status?: unknown })?.status);
     const message = (error as { message?: string })?.message;
-    const safeStatus = message === "STUDIO_WEBSITE_ROLLBACK_CONFLICT" ? 409 : status >= 400 && status <= 599 ? status : 500;
+    const safeStatus = message === "STUDIO_WEBSITE_ROLLBACK_CONFLICT" || message === "STUDIO_BUSINESS_STATE_CONFLICT" ? 409 : status >= 400 && status <= 599 ? status : 500;
     return NextResponse.json({
       error: safeStatus === 403 ? "You do not have permission to roll back this website." : safeStatus === 404 ? "Studio website not found." : safeStatus === 409 ? "The website changed during rollback. Reload its publication history and try again." : "We could not roll back this website.",
       ...(safeStatus === 409 ? { code: "website_publish_conflict" } : {}),
