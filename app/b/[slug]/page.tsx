@@ -51,7 +51,7 @@ const getBusiness = requestCache(async (slug: string) => {
 // Do not fall through to the classic BusinessPage when that Studio site is unpublished.
 const getDefaultStudioWebsite = requestCache(async (businessId: string) => {
   return prisma.studioWebsite.findFirst({
-    where: { businessId, isDefault: true },
+    where: { businessId, isDefault: true, status: "UNPUBLISHED" },
     select: { id: true, status: true },
   });
 });
