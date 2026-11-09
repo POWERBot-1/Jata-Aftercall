@@ -36,7 +36,7 @@ async function loadPublishContext(businessId: string) {
   const [business, experience, productCount, serviceCount, products, paidPayment, subscription] = await Promise.all([
     prisma.business.findUnique({
       where: { id: businessId },
-      select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true },
+      select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true, status: true },
     }),
     prisma.businessExperience.findUnique({ where: { businessId } }),
     prisma.product.count({ where: { businessId, isActive: true } }),
@@ -138,6 +138,14 @@ export async function POST(req: Request) {
       }
       await logAudit({ actorId: session.userId, action: "EXPERIENCE_UNPUBLISHED", targetType: "BUSINESS", targetId: businessId });
       return NextResponse.json({ published: false, status: "UNPUBLISHED" });
+    }
+
+    if (business.status === "SUSPENDED") {
+      return NextResponse.json({
+        error: "This business is suspended. An authorized operator must reinstate it before publication.",
+        code: "business_suspended",
+        published: false,
+      }, { status: 409 });
     }
 
     if (!experience) return NextResponse.json({ error: "Create your website before publishing it." }, { status: 409 });
@@ -249,7 +257,11 @@ export async function POST(req: Request) {
           publishedById: session.userId,
         },
       });
-      await tx.business.update({ where: { id: businessId }, data: { isPublished: true, status: "ACTIVE" } });
+      const businessChanged = await tx.business.updateMany({
+        where: { id: businessId, status: business.status },
+        data: { isPublished: true, status: "ACTIVE" },
+      });
+      if (businessChanged.count !== 1) throw new Error("BUSINESS_PUBLICATION_STATE_CONFLICT");
       await tx.auditEvent.create({
         data: {
           actorId: session.userId,
@@ -278,6 +290,13 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     const message = (error as { message?: string })?.message;
+    if (message === "BUSINESS_PUBLICATION_STATE_CONFLICT") {
+      return NextResponse.json({
+        error: "The business state changed while publishing. Reload and try again.",
+        code: "business_state_conflict",
+        published: false,
+      }, { status: 409 });
+    }
     if (message === "STUDIO_WEBSITE_UNPUBLISH_CONFLICT" || message === "EXPERIENCE_UNPUBLISH_CONFLICT") {
       return NextResponse.json({
         error: "The website changed while it was being unpublished. Reload and try again.",
