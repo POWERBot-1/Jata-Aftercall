@@ -200,6 +200,10 @@ describe.skipIf(!enabled)("Website Studio multi-site content API on PostgreSQL",
     holder.session = session(ownerA);
     const defaultSite = await ensureDefaultStudioWebsite(businessA.id, holder.session);
     await ensureStudioWebsiteContent(defaultSite!.websiteId, businessA.id);
+    // The preceding test uses this same isolated tenant/site. Start this lifecycle
+    // scenario with a clean, deterministic publication history rather than reusing v2.
+    await client.studioWebsiteDraftRevision.deleteMany({ where: { websiteId: defaultSite!.websiteId } });
+    await client.studioWebsiteVersion.deleteMany({ where: { websiteId: defaultSite!.websiteId } });
     const document = createExperienceDocument({ categoryKey: "retail", businessName: "Published default snapshot" });
     const snapshotJson = JSON.stringify(document);
     await client.studioWebsiteContent.update({
