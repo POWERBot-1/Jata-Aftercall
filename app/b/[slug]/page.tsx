@@ -47,6 +47,15 @@ const getBusiness = requestCache(async (slug: string) => {
   });
 });
 
+// Once a default Studio site exists, its per-site publication state is authoritative.
+// Do not fall through to the classic BusinessPage when that Studio site is unpublished.
+const getDefaultStudioWebsite = requestCache(async (businessId: string) => {
+  return prisma.studioWebsite.findFirst({
+    where: { businessId, isDefault: true },
+    select: { id: true, status: true },
+  });
+});
+
 function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>): PublicBusinessAccess {
   return {
     isPublished: business.isPublished,
@@ -145,6 +154,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   } catch {
     experience = null;
   }
+  if (!experience && await getDefaultStudioWebsite(business.id)) {
+    return { title: "Page not found", robots: { index: false, follow: false } };
+  }
   if (experience) {
     return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
   }
@@ -200,6 +212,8 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
   } catch {
     experience = null;
   }
+
+  if (!experience && await getDefaultStudioWebsite(business.id)) notFound();
 
   if (experience) {
     return (
