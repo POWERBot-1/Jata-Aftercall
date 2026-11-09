@@ -40,7 +40,9 @@ export default async function PublicStudioWebsitePage({ params }: Props) {
   });
   return (
     <StorefrontShell data={site} previewNotice={null} structuredData={structuredData}>
-      <ExperienceSite data={site} previewNotice={null} shell={false} />
+      <div data-motion-recipe="fade">
+        <ExperienceSite data={site} previewNotice={null} shell={false} />
+      </div>
     </StorefrontShell>
   );
 }
