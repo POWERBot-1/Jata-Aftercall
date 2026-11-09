@@ -195,19 +195,12 @@ export function resolvePublicDocument(input: {
   tenantVisible: boolean;
 }): { json: string | null; source: "draft" | "published" | "legacy" | null } {
   const view = describeSitePublication(input.site, { isDefaultRoute: input.isDefaultRoute });
-  const newestDraft = input.allowDraft ? readNewestDraft(input) : null;
+  const newestDraft = input.allowDraft
+    ? readNewestDraft({ site: input.site, isDefaultRoute: input.isDefaultRoute, legacy: input.legacy })
+    : null;
 
   // 1. Authorised owner preview. `preferDraft` only ever arrives with `allowDraft`.
   if (newestDraft && input.preferDraft) return { json: newestDraft, source: "draft" };
-
-  // During the compatibility window, the default site's legacy editor still owns the
-  // draft while the per-site row remains DRAFT. A live legacy snapshot must not shadow
-  // that owner's explicitly requested draft preview. This branch is default-only and
-  // is unreachable after publication, unpublish or suspension because the state machine
-  // disables legacy fallback in those states.
-  if (input.allowDraft && input.preferDraft && view.legacyFallbackAllowed && input.legacy?.draftJson) {
-    return { json: input.legacy.draftJson, source: "draft" };
-  }
 
   // 2. This site's own published snapshot, still behind the tenant gate.
   if (view.publiclyPublished && input.tenantVisible) {
@@ -235,24 +228,33 @@ export function resolvePublicDocument(input: {
 }
 
 /**
- * The owner's most recent draft, whichever editor wrote it.
+ * The owner's most recent draft, from the sources that are legitimate for this site right now.
  *
- * While the legacy Studio editor is still the surface owners use, the canonical draft of a
- * tenant lives in `BusinessExperience.draftJson`; `StudioWebsiteContent.draftJson` is only
- * the copy taken when the site was provisioned or published. Reading the copy first served
- * an owner a preview of their *older* text: they edited, opened the preview, and saw the
- * previous draft. Comparing the two recorded versions is what makes "preview" mean "what I
- * just wrote" — and an authorised preview must never show content the owner did not save.
+ * Two questions are being answered at once, and conflating them is what produced both bugs
+ * this function exists to prevent.
  *
- * The site copy wins a tie, so a tenant editing through the Studio itself inherits nothing
- * stale. A missing version counts as 0, never as "newest".
+ * 1. WHICH SOURCES MAY BE READ. A site's own draft always may. The legacy draft may only
+ *    inside the compatibility window — the default route, still DRAFT, never published —
+ *    because `legacyFallbackAllowed` is exactly that window. Without this gate an authorised
+ *    preview of a *published* site would serve the old legacy draft, which is a leak of one
+ *    surface's unpublished text into another.
+ * 2. WHICH OF THEM IS NEWEST. While the legacy Studio editor is the surface owners use, the
+ *    canonical draft lives in `BusinessExperience.draftJson`; the Studio row only holds the
+ *    copy taken at provisioning or publication. Reading the copy first showed an owner the
+ *    draft they had already replaced. Comparing recorded versions makes "preview" mean "what
+ *    I just wrote".
+ *
+ * The site copy wins a tie, so a tenant editing through the Studio inherits nothing stale, and
+ * a missing version counts as 0 rather than as "newest".
  */
 function readNewestDraft(input: {
   site: StudioSitePublicationRecord | null;
+  isDefaultRoute: boolean;
   legacy: { draftJson?: string | null; draftVersion?: number | null } | null;
 }): string | null {
+  const view = describeSitePublication(input.site, { isDefaultRoute: input.isDefaultRoute });
   const siteJson = readDraft(input.site);
-  const legacyJson = input.legacy?.draftJson ?? null;
+  const legacyJson = view.legacyFallbackAllowed ? (input.legacy?.draftJson ?? null) : null;
   if (!siteJson) return legacyJson;
   if (!legacyJson) return siteJson;
   const siteVersion = Number((input.site as { content?: { draftVersion?: number } } | null)?.content?.draftVersion ?? 0);

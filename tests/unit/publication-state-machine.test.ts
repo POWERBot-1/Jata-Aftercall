@@ -102,7 +102,10 @@ describe("publication state machine", () => {
     });
 
     it("does not let an authorised draft query expose legacy drafts after publication", () => {
-      const legacyWithDraft = { ...legacy, draftJson: '{"legacyDraft":true}' };
+      const legacyWithDraft = { ...legacy, draftJson: '{"legacyDraft":true}', draftVersion: 99 };
+      // The legacy draft is newer by version, but it is not a readable source once the site
+      // has published: returning it would serve the old editor's unpublished text on a page
+      // that is publicly live. The gate on the *source* must beat the comparison.
       expect(resolvePublicDocument({
         ...base,
         site: site("PUBLISHED"),
@@ -110,6 +113,10 @@ describe("publication state machine", () => {
         allowDraft: true,
         preferDraft: true,
       })).toEqual({ json: "{}", source: "published" });
+      // The same site with its own newer draft previews that draft, not the legacy one.
+      const siteWithDraft = { status: "PUBLISHED", content: { ...published, draftJson: '{"siteDraft":true}', draftVersion: 4 } };
+      expect(resolvePublicDocument({ ...base, site: siteWithDraft, legacy: legacyWithDraft, allowDraft: true, preferDraft: true }))
+        .toEqual({ json: '{"siteDraft":true}', source: "draft" });
     });
 
     it("never resurfaces the legacy snapshot after an explicit unpublish", () => {
