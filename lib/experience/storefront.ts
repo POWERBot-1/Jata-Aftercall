@@ -299,18 +299,21 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
 
   const siteDraft = studioWebsite?.content?.draftJson ?? null;
   const sitePublished = studioWebsite?.status === "PUBLISHED" ? studioWebsite.content?.publishedJson ?? null : null;
-  // Once a StudioWebsite exists, its publication state is authoritative. Only
-  // businesses not yet provisioned for per-site Studio retain the legacy fallback.
-  const legacyPublished = !websiteSlug && !studioWebsite && business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED"
+  // A newly provisioned default-site identity remains on the legacy renderer until its
+  // first Studio publication. Explicit UNPUBLISHED is terminal for fallback, preventing
+  // an old BusinessExperience snapshot from resurfacing after an owner unpublishes.
+  const legacyEligible = !websiteSlug && (!studioWebsite || studioWebsite.status === "DRAFT");
+  const legacyDraft = legacyEligible ? experience?.draftJson ?? null : null;
+  const legacyPublished = legacyEligible && business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED"
     ? experience.publishedJson : null;
-  const usingDraft = allowDraft && Boolean(siteDraft || (!studioWebsite && experience?.draftJson));
+  const usingDraft = allowDraft && Boolean(siteDraft || legacyDraft);
   const usePreferredDraft = preferDraft && usingDraft;
   const json = usePreferredDraft
-    ? siteDraft || (!studioWebsite ? experience?.draftJson : null) || null
+    ? siteDraft || legacyDraft || null
     : business.isPublished
       ? sitePublished || legacyPublished
       : usingDraft
-        ? siteDraft || (!studioWebsite ? experience?.draftJson : null) || null
+        ? siteDraft || legacyDraft || null
         : null;
   if (!json) return null;
 
