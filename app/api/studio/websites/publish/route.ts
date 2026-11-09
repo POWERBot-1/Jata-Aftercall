@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       }
       await ensureStudioWebsiteContent(websiteId, business.id);
       let conflict = false;
+      let transitioned = false;
       try {
         await prisma.$transaction(async (tx: any) => {
           // The website-state compare-and-swap serializes concurrent unpublish requests.
@@ -73,16 +74,13 @@ export async function POST(request: Request) {
             await tx.business.update({ where: { id: business.id }, data: { isPublished: false } });
             await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
           }
+          transitioned = true;
         });
       } catch (error) {
         if ((error as { message?: string })?.message === "STUDIO_WEBSITE_UNPUBLISH_CONFLICT") conflict = true;
         else throw error;
       }
-      if (conflict) {
-        return NextResponse.json({ error: "This website changed while you were unpublishing it. Reload and try again.", code: "website_unpublish_conflict" }, { status: 409 });
-      }
-      const currentSite = await prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { status: true } });
-      if (currentSite?.status !== "DRAFT") {
+      if (conflict || !transitioned) {
         return NextResponse.json({ error: "This website changed while you were unpublishing it. Reload and try again.", code: "website_unpublish_conflict" }, { status: 409 });
       }
       await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_UNPUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id, expectedDraftVersion, expectedPublishedVersion } });
