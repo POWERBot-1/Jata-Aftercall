@@ -60,7 +60,7 @@ export async function POST(request: Request) {
           // The website-state compare-and-swap serializes concurrent unpublish requests.
           const siteChanged = await tx.studioWebsite.updateMany({
             where: { id: websiteId, status: "PUBLISHED" },
-            data: { status: "DRAFT" },
+            data: { status: "UNPUBLISHED" },
           });
           if (siteChanged.count !== 1) return;
           const contentChanged = await tx.studioWebsiteContent.updateMany({
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "This website changed while you were unpublishing it. Reload and try again.", code: "website_unpublish_conflict" }, { status: 409 });
       }
       await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_UNPUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id, expectedDraftVersion, expectedPublishedVersion } });
-      return NextResponse.json({ published: false, websiteId, status: "DRAFT" });
+      return NextResponse.json({ published: false, websiteId, status: "UNPUBLISHED" });
     }
 
     if (!Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 1) {
