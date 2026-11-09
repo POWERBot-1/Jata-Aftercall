@@ -21,6 +21,7 @@ vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND
 vi.mock("@/lib/db", () => ({
   default: {
     business: { findUnique: vi.fn(async () => business) },
+    studioWebsite: { findFirst: vi.fn(async () => null) },
     businessExperience: { findUnique: vi.fn(async () => null) },
   },
 }));
