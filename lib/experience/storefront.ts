@@ -364,7 +364,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
       ? { title: currentOffer.title, subtitle: currentOffer.subtitle, imageUrl: currentOffer.imageUrl, ctaLabel: currentOffer.ctaLabel, badge: currentOffer.badge }
       : null,
     categories,
-    isPreview: usePreferredDraft || (usingDraft && !published),
+    isPreview: usePreferredDraft || (usingDraft && !(business.isPublished && Boolean(sitePublished || legacyPublished))),
     publishedVersion: studioWebsite?.content?.publishedVersion ?? experience?.publishedVersion ?? 0,
   };
 }
