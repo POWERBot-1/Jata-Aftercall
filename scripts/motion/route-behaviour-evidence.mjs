@@ -22,55 +22,7 @@ try {
  const login=await owner.evaluate(async(password)=>{const r=await fetch('/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:'demo@jata.link',password})});return r.status;},demoFixturePassword);if(login!==200) throw Error(`fixture login ${login}`);
  const api=(url,method='GET',data)=>owner.evaluate(async(url,method,data)=>{const r=await fetch(url,{method,headers:data?{'content-type':'application/json'}:{},body:data?JSON.stringify(data):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,data);
  async function setPreference(preference){const current=await api(`/api/experience?businessId=${business.id}`);if(current.status!==200)throw Error(`read draft ${current.status}`);const document={...current.body.document,themeKey:'beauty-editorial',renderPreference:preference};const patch=await api('/api/experience','PATCH',{businessId:business.id,expectedDraftVersion:current.body.experience.draftVersion,document});if(patch.status!==200)throw Error(`preference patch ${patch.status}`);}
- // Build a fully synthetic, disposable, server-verified AI Front Desk entitlement. This is
- // isolated CI data only: no Paystack call, real charge, customer subscription or production row.
- const ownerUser=await db.user.findUniqueOrThrow({where:{email:'demo@jata.link'},select:{id:true}});
- const aiPlan=await db.planConfig.findUnique({where:{key:'AI_BUSINESS_FRONT_DESK'}});
- if(!aiPlan)throw Error('Synthetic AI plan fixture missing from disposable catalogue');
- const now=new Date(),expiresAt=new Date(Date.now()+30*864e5),aiPaymentReference=`MOTION-AI-FRONT-DESK-${business.id}`;
- await db.business.update({where:{id:business.id},data:{status:'ACTIVE',isPublished:true,openingHours:'Mon-Sun 09:00-18:00'}});
- await db.product.update({where:{id:product.id},data:{basePriceKES:499,isActive:true}});
- await db.notificationRecipient.upsert({
-  where:{businessId_label:{businessId:business.id,label:'OWNER'}},
-  update:{phone:'0700000000',email:'owner@marysbeauty.test',isActive:true},
-  create:{businessId:business.id,label:'OWNER',phone:'0700000000',email:'owner@marysbeauty.test',isActive:true},
- });
- await db.subscription.upsert({
-  where:{businessId:business.id},
-  update:{userId:ownerUser.id,planId:aiPlan.id,status:'ACTIVE',startAt:now,expiresAt,graceUntil:null},
-  create:{businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,status:'ACTIVE',startAt:now,expiresAt},
- });
- await db.payment.upsert({
-  where:{reference:aiPaymentReference},
-  update:{businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,amount:49900,currency:'KES',status:'PAID',purpose:'SUBSCRIPTION'},
-  create:{reference:aiPaymentReference,businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,amount:49900,currency:'KES',status:'PAID',purpose:'SUBSCRIPTION'},
- });
- await db.aIPackageEntitlement.upsert({
-  where:{businessId:business.id},
-  update:{packageKey:'AI_BUSINESS_FRONT_DESK',status:'ACTIVE',activatedAt:now,expiresAt},
-  create:{businessId:business.id,packageKey:'AI_BUSINESS_FRONT_DESK',status:'ACTIVE',activatedAt:now,expiresAt},
- });
- const configDoc=await db.knowledgeDocument.findFirst({where:{businessId:business.id,sourceType:'ai_front_desk_config',isApproved:false}});
- const aiConfig={
-  businessId:business.id,tone:'friendly',toneOfVoice:'Friendly',language:'mixed',languageBehavior:'English + Swahili',
-  salesBehavior:'informational',orderingAllowed:false,bookingsAllowed:false,preordersAllowed:false,autoReplyEnabled:true,
-  humanEscalation:'uncertain',welcomeMessage:'Welcome to Mary\'s Beauty Studio.',greetingMessage:'Welcome to Mary\'s Beauty Studio.',
-  fallbackMessage:'I will connect you with the business team for confirmation.',
-  escalationRules:'Escalate complaints, uncertain answers, and requests requiring staff confirmation.',
-  operationalStatus:'CONFIGURED',pauseAllOrdering:false,
-  delivery:{mode:'PICKUP',pickupEnabled:true,deliveryEnabled:false,zones:[]},
-  policies:{refundPolicy:'Staff confirms all refund requests.',orderRules:'No order is accepted without staff confirmation.'},
-  escalationTopics:['complaint','uncertain'],walkInsAccepted:true,requiredCustomerFields:['name','phone'],
-  outOfStockBehavior:'state_fact',afterHoursBehavior:'handoff',branches:[],bulkPricing:[],
-  paymentDetails:{cash:true},draftVersion:1,publishedVersion:0,
- };
- if(configDoc)await db.knowledgeDocument.update({where:{id:configDoc.id},data:{content:JSON.stringify(aiConfig)}});
- else await db.knowledgeDocument.create({data:{businessId:business.id,title:'__JATA_AI_FRONT_DESK_CONFIG__',content:JSON.stringify(aiConfig),sourceType:'ai_front_desk_config',isApproved:false}});
- const aiPublish=await api('/api/ai/publish','POST',{businessId:business.id});
- if(aiPublish.status!==200||aiPublish.body?.ok!==true)throw Error(`Synthetic published AI fixture refused: HTTP ${aiPublish.status}; ${JSON.stringify(aiPublish.body?.readiness?.missingItems||aiPublish.body?.error||aiPublish.body)}`);
- events.push({kind:'synthetic-published-ai-fixture',result:'PASS',businessSlug:business.slug,subscriptionPlanKey:aiPlan.key,entitlement:'ACTIVE',payment:'synthetic PAID row in disposable PostgreSQL only',providerInteraction:false,publishedVersion:aiPublish.body.publishedVersion});
- save();
- await setPreference('motion');
+
  const page=await browser.newPage();const installTrace=()=>{
   const trace=[];window.__routeMotionTrace=trace;
   const emit=(kind,data={})=>trace.push({kind,at:performance.now(),...data});
@@ -127,6 +79,55 @@ try {
    const row={sha,browser:browserVersion,route:target.route,viewport:`${width}x${height}`,status:response?.status()??null,...data,screenshot:name};rows.push(row);save();
   }
  }
+ // Build a fully synthetic, disposable, server-verified AI Front Desk entitlement. This is
+ // isolated CI data only: no Paystack call, real charge, customer subscription or production row.
+ const ownerUser=await db.user.findUniqueOrThrow({where:{email:'demo@jata.link'},select:{id:true}});
+ const aiPlan=await db.planConfig.findUnique({where:{key:'AI_BUSINESS_FRONT_DESK'}});
+ if(!aiPlan)throw Error('Synthetic AI plan fixture missing from disposable catalogue');
+ const now=new Date(),expiresAt=new Date(Date.now()+30*864e5),aiPaymentReference=`MOTION-AI-FRONT-DESK-${business.id}`;
+ await db.business.update({where:{id:business.id},data:{status:'ACTIVE',isPublished:true,openingHours:'Mon-Sun 09:00-18:00'}});
+ await db.product.update({where:{id:product.id},data:{basePriceKES:499,isActive:true}});
+ await db.notificationRecipient.upsert({
+  where:{businessId_label:{businessId:business.id,label:'OWNER'}},
+  update:{phone:'0700000000',email:'owner@marysbeauty.test',isActive:true},
+  create:{businessId:business.id,label:'OWNER',phone:'0700000000',email:'owner@marysbeauty.test',isActive:true},
+ });
+ await db.subscription.upsert({
+  where:{businessId:business.id},
+  update:{userId:ownerUser.id,planId:aiPlan.id,status:'ACTIVE',startAt:now,expiresAt,graceUntil:null},
+  create:{businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,status:'ACTIVE',startAt:now,expiresAt},
+ });
+ await db.payment.upsert({
+  where:{reference:aiPaymentReference},
+  update:{businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,amount:49900,currency:'KES',status:'PAID',purpose:'SUBSCRIPTION'},
+  create:{reference:aiPaymentReference,businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,amount:49900,currency:'KES',status:'PAID',purpose:'SUBSCRIPTION'},
+ });
+ await db.aIPackageEntitlement.upsert({
+  where:{businessId:business.id},
+  update:{packageKey:'AI_BUSINESS_FRONT_DESK',status:'ACTIVE',activatedAt:now,expiresAt},
+  create:{businessId:business.id,packageKey:'AI_BUSINESS_FRONT_DESK',status:'ACTIVE',activatedAt:now,expiresAt},
+ });
+ const configDoc=await db.knowledgeDocument.findFirst({where:{businessId:business.id,sourceType:'ai_front_desk_config',isApproved:false}});
+ const aiConfig={
+  businessId:business.id,tone:'friendly',toneOfVoice:'Friendly',language:'mixed',languageBehavior:'English + Swahili',
+  salesBehavior:'informational',orderingAllowed:false,bookingsAllowed:false,preordersAllowed:false,autoReplyEnabled:true,
+  humanEscalation:'uncertain',welcomeMessage:'Welcome to Mary\'s Beauty Studio.',greetingMessage:'Welcome to Mary\'s Beauty Studio.',
+  fallbackMessage:'I will connect you with the business team for confirmation.',
+  escalationRules:'Escalate complaints, uncertain answers, and requests requiring staff confirmation.',
+  operationalStatus:'CONFIGURED',pauseAllOrdering:false,
+  delivery:{mode:'PICKUP',pickupEnabled:true,deliveryEnabled:false,zones:[]},
+  policies:{refundPolicy:'Staff confirms all refund requests.',orderRules:'No order is accepted without staff confirmation.'},
+  escalationTopics:['complaint','uncertain'],walkInsAccepted:true,requiredCustomerFields:['name','phone'],
+  outOfStockBehavior:'state_fact',afterHoursBehavior:'handoff',branches:[],bulkPricing:[],
+  paymentDetails:{cash:true},draftVersion:1,publishedVersion:0,
+ };
+ if(configDoc)await db.knowledgeDocument.update({where:{id:configDoc.id},data:{content:JSON.stringify(aiConfig)}});
+ else await db.knowledgeDocument.create({data:{businessId:business.id,title:'__JATA_AI_FRONT_DESK_CONFIG__',content:JSON.stringify(aiConfig),sourceType:'ai_front_desk_config',isApproved:false}});
+ const aiPublish=await api('/api/ai/publish','POST',{businessId:business.id});
+ if(aiPublish.status!==200||aiPublish.body?.ok!==true)throw Error(`Synthetic published AI fixture refused: HTTP ${aiPublish.status}; ${JSON.stringify(aiPublish.body?.readiness?.missingItems||aiPublish.body?.error||aiPublish.body)}`);
+ events.push({kind:'synthetic-published-ai-fixture',result:'PASS',businessSlug:business.slug,subscriptionPlanKey:aiPlan.key,entitlement:'ACTIVE',payment:'synthetic PAID row in disposable PostgreSQL only',providerInteraction:false,publishedVersion:aiPublish.body.publishedVersion});
+ save();
+
  // Customer-facing AI route: a genuinely published, entitled synthetic Front Desk, not preview.
  for(const [width,height] of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
   await page.bringToFront();await page.setViewport({width,height,deviceScaleFactor:1});await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
