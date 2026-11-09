@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertDefaultStudioWebsiteAccess } from "@/lib/experience/ensure-default-website";
+import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { canSetPublished, hasVerifiedPublicationRight } from "@/lib/publication";
@@ -35,7 +36,7 @@ async function loadPublishContext(businessId: string) {
   const [business, experience, productCount, serviceCount, products, paidPayment, subscription] = await Promise.all([
     prisma.business.findUnique({
       where: { id: businessId },
-      select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true },
+      select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true, status: true },
     }),
     prisma.businessExperience.findUnique({ where: { businessId } }),
     prisma.product.count({ where: { businessId, isActive: true } }),
@@ -87,15 +88,64 @@ export async function POST(req: Request) {
     // their site. The publish-level role check above still applies: hiding the site is a
     // protected state change too, and only users with the publish role may perform it.
     if (action === "unpublish") {
-      if (experience) {
-        await prisma.businessExperience.update({
-          where: { businessId },
-          data: { status: "UNPUBLISHED", publishedAt: null },
-        });
+      const website = await prisma.studioWebsite.findFirst({
+        where: { businessId, isDefault: true },
+        select: { id: true, status: true },
+      });
+      if (!website) return NextResponse.json({ error: "Studio website not found." }, { status: 404 });
+      if (website.status === "SUSPENDED") {
+        return NextResponse.json({ error: "This website is suspended by an operator and cannot be changed by its owner.", code: "website_suspended" }, { status: 409 });
       }
-      await prisma.business.update({ where: { id: businessId }, data: { isPublished: false } });
+      const content = await ensureStudioWebsiteContent(website.id, businessId);
+      const changed = await prisma.$transaction(async (tx) => {
+        // Claim the exact published-site state before any other write. If an operator
+        // suspends the site while this request is in flight, the stale owner request
+        // cannot undo that hold.
+        if (website.status === "PUBLISHED") {
+          const siteChanged = await tx.studioWebsite.updateMany({
+            where: { id: website.id, status: "PUBLISHED" },
+            data: { status: "UNPUBLISHED" },
+          });
+          if (siteChanged.count !== 1) return false;
+          const contentChanged = await tx.studioWebsiteContent.updateMany({
+            where: { websiteId: website.id, draftVersion: content.draftVersion, publishedVersion: content.publishedVersion },
+            data: { updatedAt: new Date() },
+          });
+          if (contentChanged.count !== 1) throw new Error("STUDIO_WEBSITE_UNPUBLISH_CONFLICT");
+        }
+
+        if (experience) {
+          const legacyChanged = await tx.businessExperience.updateMany({
+            where: { businessId, draftVersion: experience.draftVersion },
+            data: { status: "UNPUBLISHED", publishedAt: null },
+          });
+          if (legacyChanged.count !== 1) throw new Error("EXPERIENCE_UNPUBLISH_CONFLICT");
+        }
+
+        // The business flag is only the outer tenant gate. Keep it open while any
+        // secondary site remains published; otherwise the default-site takedown would
+        // make every sibling disappear even though their own state is still PUBLISHED.
+        const remainingPublished = await tx.studioWebsite.count({
+          where: { businessId, status: "PUBLISHED" },
+        });
+        if (remainingPublished === 0) {
+          await tx.business.update({ where: { id: businessId }, data: { isPublished: false } });
+        }
+        return true;
+      });
+      if (!changed) {
+        return NextResponse.json({ error: "The website publication state changed. Reload before unpublishing again.", code: "website_publish_conflict" }, { status: 409 });
+      }
       await logAudit({ actorId: session.userId, action: "EXPERIENCE_UNPUBLISHED", targetType: "BUSINESS", targetId: businessId });
       return NextResponse.json({ published: false, status: "UNPUBLISHED" });
+    }
+
+    if (business.status === "SUSPENDED") {
+      return NextResponse.json({
+        error: "This business is suspended. An authorized operator must reinstate it before publication.",
+        code: "business_suspended",
+        published: false,
+      }, { status: 409 });
     }
 
     if (!experience) return NextResponse.json({ error: "Create your website before publishing it." }, { status: 409 });
@@ -207,7 +257,11 @@ export async function POST(req: Request) {
           publishedById: session.userId,
         },
       });
-      await tx.business.update({ where: { id: businessId }, data: { isPublished: true, status: "ACTIVE" } });
+      const businessChanged = await tx.business.updateMany({
+        where: { id: businessId, status: business.status },
+        data: { isPublished: true, status: "ACTIVE" },
+      });
+      if (businessChanged.count !== 1) throw new Error("BUSINESS_PUBLICATION_STATE_CONFLICT");
       await tx.auditEvent.create({
         data: {
           actorId: session.userId,
@@ -234,7 +288,21 @@ export async function POST(req: Request) {
       url: getBusinessUrl(business.slug),
       message: "You’re live 🎉",
     });
-  } catch {
+  } catch (error) {
+    const message = (error as { message?: string })?.message;
+    if (message === "BUSINESS_PUBLICATION_STATE_CONFLICT") {
+      return NextResponse.json({
+        error: "The business state changed while publishing. Reload and try again.",
+        code: "business_state_conflict",
+        published: false,
+      }, { status: 409 });
+    }
+    if (message === "STUDIO_WEBSITE_UNPUBLISH_CONFLICT" || message === "EXPERIENCE_UNPUBLISH_CONFLICT") {
+      return NextResponse.json({
+        error: "The website changed while it was being unpublished. Reload and try again.",
+        code: "website_publish_conflict",
+      }, { status: 409 });
+    }
     console.error("experience publish failed");
     return NextResponse.json({ error: SAFE_ERRORS.publishFailed }, { status: 500 });
   }

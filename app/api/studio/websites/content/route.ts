@@ -131,7 +131,8 @@ export async function PUT(request: Request) {
 
       await tx.studioWebsiteDraftRevision.create({
         data: {
-          id: `swdr_${websiteId}_${nextVersion}`,
+          // Database-generated id: a deterministic `swdr_<site>_<n>` collides with the
+          // revision seeded by lib/experience/site-content.ts during migration.
           websiteId,
           draftVersion: nextVersion,
           source: "EDIT",

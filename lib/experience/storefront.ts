@@ -13,6 +13,7 @@ import { normalizeExperienceDocument, themeOf } from "./document";
 import { resolveExperienceTheme, type ExperienceTheme } from "./themes";
 import type { ExperienceDocument } from "./types";
 import { displayPriceKES } from "../sale-pricing";
+import { describeSitePublication, resolvePublicDocument } from "./publication-state";
 
 export type StorefrontVariant = { id: string; label: string; priceKES: number | null; stockStatus: string; options: Record<string, string> };
 export type StorefrontAddOn = { id: string; name: string; priceKES: number };
@@ -251,6 +252,8 @@ export type LoadStorefrontOptions = {
    * together with `allowDraft`.
    */
   preferDraft?: boolean;
+  /** Explicit per-business secondary-site slug; omitted resolves the default site. */
+  websiteSlug?: string;
 };
 
 /**
@@ -262,7 +265,7 @@ export type LoadStorefrontOptions = {
  * performs a single load and the SSR root segment completes with the metadata —
  * keeping the hydration bootstrap scripts behind the content in the emitted HTML.
  */
-async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft: boolean): Promise<StorefrontData | null> {
+async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft: boolean, websiteSlug: string | null): Promise<StorefrontData | null> {
   const business = await prisma.business.findUnique({
     where: { slug },
     select: {
@@ -273,28 +276,55 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
   });
   if (!business) return null;
   if (business.status === "SUSPENDED") return null;
-  if (!business.isPublished && !allowDraft) return null;
+  // The tenant kill switch is applied inside the state machine (tenantVisible), not
+  // here: a hidden tenant returns nothing to a visitor but still resolves its own
+  // site for the owner's authorised preview.
 
-  const experience = await prisma.businessExperience.findUnique({
-    where: { businessId: business.id },
-    select: { publishedJson: true, draftJson: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
+  // The default Studio website is now the preferred publication source. The old
+  // BusinessExperience remains a compatibility fallback for businesses that have not
+  // completed the per-site cutover; secondary sites are resolved by their own route.
+  const [studioWebsite, experience] = await Promise.all([
+    prisma.studioWebsite.findFirst({
+      where: websiteSlug
+        ? { businessId: business.id, slug: websiteSlug, isDefault: false }
+        : { businessId: business.id, isDefault: true },
+      select: {
+        id: true,
+        status: true,
+        content: { select: { draftJson: true, publishedJson: true, draftVersion: true, publishedVersion: true } },
+      },
+    }),
+    prisma.businessExperience.findUnique({
+      where: { businessId: business.id },
+      select: { publishedJson: true, draftJson: true, draftVersion: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
+    }),
+  ]);
+
+  // Publication is decided by exactly one place: lib/experience/publication-state.ts.
+  // The site row is loaded WITHOUT a status filter so the state machine can tell
+  // "never published" (DRAFT, legacy fallback allowed) apart from "explicitly taken
+  // down" (UNPUBLISHED/SUSPENDED, no fallback) and "published" (its own snapshot).
+  const isDefaultRoute = websiteSlug === null;
+  const decision = resolvePublicDocument({
+    site: studioWebsite,
+    isDefaultRoute,
+    legacy: experience,
+    allowDraft,
+    preferDraft,
+    tenantVisible: business.isPublished && business.status !== "SUSPENDED",
   });
-
-  const published = business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED";
-  const usingDraft = allowDraft && Boolean(experience?.draftJson);
-  const usePreferredDraft = preferDraft && usingDraft;
-  const json = usePreferredDraft
-    ? experience!.draftJson
-    : published
-      ? experience!.publishedJson
-      : usingDraft
-        ? experience!.draftJson
-        : null;
+  // The resolver is the single place the legacy draft can be selected for an authorised
+  // preview, and it tags that selection "draft" so the preview banner, the preview notice
+  // and the noindex rule apply to it exactly as they do to a site's own draft. Keeping a
+  // second fallback path here is what previously let legacy draft content render as live.
+  const json = decision.json;
+  const usingDraft = decision.source === "draft";
+  const usePreferredDraft = usingDraft && preferDraft;
   if (!json) return null;
 
   let document: ExperienceDocument;
   try {
-    document = normalizeExperienceDocument(JSON.parse(json), experience!.categoryKey);
+    document = normalizeExperienceDocument(JSON.parse(json), experience?.categoryKey);
   } catch {
     // An unreadable/newer format is not rendered as an older schema. The /b route retains
     // its classic HTML business-page fallback; no published/draft data is modified here.
@@ -342,15 +372,22 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
       ? { title: currentOffer.title, subtitle: currentOffer.subtitle, imageUrl: currentOffer.imageUrl, ctaLabel: currentOffer.ctaLabel, badge: currentOffer.badge }
       : null,
     categories,
-    isPreview: usePreferredDraft || (usingDraft && !published),
-    publishedVersion: experience?.publishedVersion ?? 0,
+    // Preview is exactly "the visitor is looking at something not publicly live".
+    isPreview: usingDraft,
+    // The version of what is actually being rendered: the site's own publication when
+    // the site published, otherwise the legacy row that stood in for it.
+    publishedVersion: decision.source === "published"
+      ? describeSitePublication(studioWebsite, { isDefaultRoute }).publishedVersion
+      : decision.source === "legacy"
+        ? Number(experience?.publishedVersion ?? 0)
+        : 0,
   };
 }
 
 const loadStorefrontCached = requestCache(loadStorefrontImpl);
 
 export function loadStorefront(slug: string, options: LoadStorefrontOptions = {}): Promise<StorefrontData | null> {
-  return loadStorefrontCached(slug, options.allowDraft === true, options.preferDraft === true);
+  return loadStorefrontCached(slug, options.allowDraft === true, options.preferDraft === true, options.websiteSlug ?? null);
 }
 
 export function findItem(data: StorefrontData, id: string): StorefrontItem | null {

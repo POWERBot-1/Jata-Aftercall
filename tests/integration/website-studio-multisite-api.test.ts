@@ -14,7 +14,10 @@ import { createExperienceDocument } from "@/lib/experience/document";
 import { POST as createWebsite } from "@/app/api/studio/websites/route";
 import { GET as getWebsiteContent, PUT as saveWebsiteContent } from "@/app/api/studio/websites/content/route";
 import { POST as restoreWebsiteDraft } from "@/app/api/studio/websites/revisions/route";
+import { POST as changeStudioPublication } from "@/app/api/studio/websites/publish/route";
+import { POST as rollbackStudioWebsite } from "@/app/api/studio/websites/rollback/route";
 import { ensureDefaultStudioWebsite } from "@/lib/experience/ensure-default-website";
+import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 
 const enabled = realPrismaConfigured;
@@ -191,5 +194,111 @@ describe.skipIf(!enabled)("Website Studio multi-site content API on PostgreSQL",
     holder.session = session(ownerB);
     const crossTenant = await getWebsiteContent(request(`/api/studio/websites/content?websiteId=${defaultSite!.websiteId}`, "GET"));
     expect(crossTenant.status).toBe(403); // The site exists, but the authenticated owner of another business is denied.
+  }, 60_000);
+
+  it("serializes concurrent unpublish and restores a default publication with immutable rollback history", async () => {
+    holder.session = session(ownerA);
+    const defaultSite = await ensureDefaultStudioWebsite(businessA.id, holder.session);
+    await ensureStudioWebsiteContent(defaultSite!.websiteId, businessA.id);
+    // The preceding test uses this same isolated tenant/site. Start this lifecycle
+    // scenario with a clean, deterministic publication history rather than reusing v2.
+    await client.studioWebsiteDraftRevision.deleteMany({ where: { websiteId: defaultSite!.websiteId } });
+    await client.studioWebsiteVersion.deleteMany({ where: { websiteId: defaultSite!.websiteId } });
+    const document = createExperienceDocument({ categoryKey: "retail", businessName: "Published default snapshot" });
+    const snapshotJson = JSON.stringify(document);
+    await client.studioWebsiteContent.update({
+      where: { websiteId: defaultSite!.websiteId },
+      data: {
+        draftJson: snapshotJson,
+        draftVersion: 1,
+        historyCursor: 1,
+        publishedJson: snapshotJson,
+        publishedVersion: 1,
+        publishedById: ownerA.id,
+        publishedAt: new Date(),
+      },
+    });
+    await client.studioWebsiteVersion.create({
+      data: {
+        id: `studio-publication-default-${stamp}`,
+        websiteId: defaultSite!.websiteId,
+        version: 1,
+        snapshotJson,
+        themeKey: document.themeKey,
+        categoryKey: document.categoryKey,
+        note: "Initial default publication",
+        publishedById: ownerA.id,
+      },
+    });
+    await client.studioWebsite.update({ where: { id: defaultSite!.websiteId }, data: { status: "PUBLISHED" } });
+    await client.business.update({ where: { id: businessA.id }, data: { isPublished: true } });
+    await client.businessExperience.updateMany({ where: { businessId: businessA.id }, data: { status: "PUBLISHED" } });
+
+    const unpublishBody = {
+      websiteId: defaultSite!.websiteId,
+      action: "unpublish",
+      expectedDraftVersion: 1,
+      expectedPublishedVersion: 1,
+    };
+    const concurrent = await Promise.all([
+      changeStudioPublication(request("/api/studio/websites/publish", "POST", unpublishBody)),
+      changeStudioPublication(request("/api/studio/websites/publish", "POST", unpublishBody)),
+    ]);
+    expect(concurrent.map((response) => response.status).sort()).toEqual([200, 409]);
+    const afterUnpublish = await client.studioWebsite.findUnique({ where: { id: defaultSite!.websiteId } });
+    const afterUnpublishContent = await client.studioWebsiteContent.findUnique({ where: { websiteId: defaultSite!.websiteId } });
+    const hiddenBusiness = await client.business.findUnique({ where: { id: businessA.id }, select: { isPublished: true } });
+    expect(afterUnpublish.status).toBe("UNPUBLISHED");
+    expect(afterUnpublishContent.publishedVersion).toBe(1);
+    expect(hiddenBusiness.isPublished).toBe(false);
+
+    const restored = await rollbackStudioWebsite(request("/api/studio/websites/rollback", "POST", {
+      websiteId: defaultSite!.websiteId,
+      targetVersion: 1,
+      expectedPublishedVersion: 1,
+      expectedDraftVersion: 1,
+    }));
+    expect(restored.status).toBe(200);
+    const restoredBody = await restored.json();
+    expect(restoredBody).toMatchObject({ rolledBack: true, version: 2, restoredFromVersion: 1 });
+    const [liveBusiness, liveSite, versions, revisions] = await Promise.all([
+      client.business.findUnique({ where: { id: businessA.id }, select: { isPublished: true } }),
+      client.studioWebsite.findUnique({ where: { id: defaultSite!.websiteId } }),
+      client.studioWebsiteVersion.findMany({ where: { websiteId: defaultSite!.websiteId }, orderBy: { version: "asc" } }),
+      client.studioWebsiteDraftRevision.findMany({ where: { websiteId: defaultSite!.websiteId }, orderBy: { draftVersion: "asc" } }),
+    ]);
+    expect(liveBusiness.isPublished).toBe(true);
+    expect(liveSite.status).toBe("PUBLISHED");
+    expect(versions.map((row: any) => row.version)).toEqual([1, 2]);
+    expect(versions[0].snapshotJson).toBe(snapshotJson);
+    expect(versions[1].snapshotJson).toBe(snapshotJson);
+    // Rollback must append an immutable revision numbered at the NEW draft cursor that the
+    // rollback itself wrote — not a hard-coded integer. The exact number depends on how many
+    // revisions the site already has, and deriving it from the cursor alone (ignoring existing
+    // rows) is precisely the bug that made a legal rollback fail with a unique violation.
+    const contentAfterRollback = await client.studioWebsiteContent.findUnique({ where: { websiteId: defaultSite!.websiteId } });
+    const rollbackRevision = revisions.find((row: any) => row.source === "ROLLBACK");
+    expect(rollbackRevision).toBeDefined();
+    expect(rollbackRevision.draftVersion).toBe(contentAfterRollback.draftVersion);
+    expect(rollbackRevision.snapshotJson).toBe(snapshotJson);
+    // History is appended to, never rewritten.
+    expect(versions[0].snapshotJson).toBe(snapshotJson);
+
+    const staleRollback = await rollbackStudioWebsite(request("/api/studio/websites/rollback", "POST", {
+      websiteId: defaultSite!.websiteId,
+      targetVersion: 1,
+      expectedPublishedVersion: 1,
+      expectedDraftVersion: 1,
+    }));
+    expect(staleRollback.status).toBe(409);
+
+    holder.session = session(ownerB);
+    const foreignRollback = await rollbackStudioWebsite(request("/api/studio/websites/rollback", "POST", {
+      websiteId: defaultSite!.websiteId,
+      targetVersion: 1,
+      expectedPublishedVersion: 2,
+      expectedDraftVersion: 2,
+    }));
+    expect(foreignRollback.status).toBe(403);
   }, 60_000);
 });

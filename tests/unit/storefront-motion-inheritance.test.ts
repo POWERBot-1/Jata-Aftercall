@@ -31,6 +31,12 @@ describe("storefront motion integration contract (SSR, not browser evidence)", (
     const exceptions: Record<string, string[]> = {
       "app/b/[slug]/page.tsx": ["ExperienceSite", "BusinessPage"],
       "app/b/[slug]/ai/page.tsx": ["AIFrontDeskCustomerClient", "motionPreference={preference}", "motionEnabled={Boolean(storefront"],
+      // A secondary Studio website renders through the SAME shared `ExperienceSite` →
+      // `StorefrontShell` composition as the default site, so it inherits the shell,
+      // motion controller and template family rather than declaring its own. Audited
+      // here explicitly (rather than by loosening the rule) so any future page that
+      // really does bypass the shell still fails.
+      "app/b/[slug]/[siteSlug]/page.tsx": ["<ExperienceSite", "shell={false}"],
     };
     for (const file of pages(root)) {
       const source = readFileSync(file, "utf8");

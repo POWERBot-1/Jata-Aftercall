@@ -59,7 +59,6 @@ export async function POST(request: Request) {
       if (changed.count !== 1) return false;
       await tx.studioWebsiteDraftRevision.create({
         data: {
-          id: `swdr_${websiteId}_${nextVersion}`,
           websiteId,
           draftVersion: nextVersion,
           source: "RESTORE",

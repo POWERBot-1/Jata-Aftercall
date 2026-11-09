@@ -32,6 +32,7 @@ vi.mock("@/lib/db", () => ({
         };
       },
     },
+    studioWebsite: { findFirst: async () => null },
     businessExperience: { findUnique: async () => null },
   },
 }));

@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { getBusinessRoleForUser, TenantError, type BusinessRole } from "@/lib/tenant";
 import { canStudioRolePerform, type StudioAction, type StudioRole } from "./tenant-policy";
 
-type StudioWebsiteAccess = {
+export type StudioWebsiteAccess = {
   websiteId: string;
   businessId: string;
   workspaceId: string;
