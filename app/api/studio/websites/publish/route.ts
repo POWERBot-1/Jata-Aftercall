@@ -40,7 +40,7 @@ export async function POST(request: Request) {
       prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { id: true, slug: true, status: true, isDefault: true } }),
       prisma.business.findUnique({
         where: { id: access.businessId },
-        select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true },
+        select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true, status: true },
       }),
     ]);
     if (!website || !business) return NextResponse.json({ error: "Studio website not found." }, { status: 404 });
@@ -97,6 +97,13 @@ export async function POST(request: Request) {
       }
       await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_UNPUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id, expectedDraftVersion, expectedPublishedVersion } });
       return NextResponse.json({ published: false, websiteId, status: "UNPUBLISHED" });
+    }
+
+    if (business.status === "SUSPENDED") {
+      return NextResponse.json({
+        error: "This business is suspended. An authorized operator must reinstate it before publication.",
+        code: "business_suspended",
+      }, { status: 409 });
     }
 
     if (!Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 1) {
@@ -173,7 +180,11 @@ export async function POST(request: Request) {
       if (siteChanged.count !== 1) throw new Error("STUDIO_WEBSITE_STATE_CONFLICT");
       // Public business visibility is the outer gate for all /b routes. A first
       // secondary-site publication must make that tenant publicly routable too.
-      await tx.business.update({ where: { id: business.id }, data: { isPublished: true, status: "ACTIVE" } });
+      const businessChanged = await tx.business.updateMany({
+        where: { id: business.id, status: business.status },
+        data: { isPublished: true, status: "ACTIVE" },
+      });
+      if (businessChanged.count !== 1) throw new Error("STUDIO_BUSINESS_STATE_CONFLICT");
       if (website.isDefault) {
         await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
       }
@@ -190,8 +201,8 @@ export async function POST(request: Request) {
     if (code === "STUDIO_WEBSITE_STATE_TRANSITION_DENIED") {
       return NextResponse.json({ error: "A suspended website must be reinstated before its owner can publish it.", code: "website_state_transition_denied" }, { status: 409 });
     }
-    if (code === "STUDIO_WEBSITE_STATE_CONFLICT") {
-      return NextResponse.json({ error: "The website publication state changed. Reload before publishing again.", code: "website_state_conflict" }, { status: 409 });
+    if (code === "STUDIO_WEBSITE_STATE_CONFLICT" || code === "STUDIO_BUSINESS_STATE_CONFLICT") {
+      return NextResponse.json({ error: "The website or business state changed. Reload before publishing again.", code: "website_state_conflict" }, { status: 409 });
     }
     return NextResponse.json({ error: status === 403 ? "You do not have permission to publish this website." : status === 404 ? "Studio website not found." : "We could not publish this website." }, { status });
   }
