@@ -275,26 +275,42 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
   if (business.status === "SUSPENDED") return null;
   if (!business.isPublished && !allowDraft) return null;
 
-  const experience = await prisma.businessExperience.findUnique({
-    where: { businessId: business.id },
-    select: { publishedJson: true, draftJson: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
-  });
+  // The default Studio website is now the preferred publication source. The old
+  // BusinessExperience remains a compatibility fallback for businesses that have not
+  // completed the per-site cutover; secondary sites are resolved by their own route.
+  const [studioWebsite, experience] = await Promise.all([
+    prisma.studioWebsite.findFirst({
+      where: { businessId: business.id, isDefault: true, status: { not: "SUSPENDED" } },
+      select: {
+        id: true,
+        status: true,
+        content: { select: { draftJson: true, publishedJson: true, draftVersion: true, publishedVersion: true } },
+      },
+    }),
+    prisma.businessExperience.findUnique({
+      where: { businessId: business.id },
+      select: { publishedJson: true, draftJson: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
+    }),
+  ]);
 
-  const published = business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED";
-  const usingDraft = allowDraft && Boolean(experience?.draftJson);
+  const siteDraft = studioWebsite?.content?.draftJson ?? null;
+  const sitePublished = studioWebsite?.status === "PUBLISHED" ? studioWebsite.content?.publishedJson ?? null : null;
+  const legacyPublished = business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED"
+    ? experience.publishedJson : null;
+  const usingDraft = allowDraft && Boolean(siteDraft || experience?.draftJson);
   const usePreferredDraft = preferDraft && usingDraft;
   const json = usePreferredDraft
-    ? experience!.draftJson
-    : published
-      ? experience!.publishedJson
+    ? siteDraft || experience?.draftJson || null
+    : business.isPublished
+      ? sitePublished || legacyPublished
       : usingDraft
-        ? experience!.draftJson
+        ? siteDraft || experience?.draftJson || null
         : null;
   if (!json) return null;
 
   let document: ExperienceDocument;
   try {
-    document = normalizeExperienceDocument(JSON.parse(json), experience!.categoryKey);
+    document = normalizeExperienceDocument(JSON.parse(json), experience?.categoryKey);
   } catch {
     // An unreadable/newer format is not rendered as an older schema. The /b route retains
     // its classic HTML business-page fallback; no published/draft data is modified here.
@@ -343,7 +359,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
       : null,
     categories,
     isPreview: usePreferredDraft || (usingDraft && !published),
-    publishedVersion: experience?.publishedVersion ?? 0,
+    publishedVersion: studioWebsite?.content?.publishedVersion ?? experience?.publishedVersion ?? 0,
   };
 }
 
