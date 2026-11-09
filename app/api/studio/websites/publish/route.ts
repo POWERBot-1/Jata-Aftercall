@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   }
   const websiteId = typeof body.websiteId === "string" ? body.websiteId.trim() : "";
   const expectedDraftVersion = Number(body.expectedDraftVersion);
+  const expectedPublishedVersion = Number(body.expectedPublishedVersion);
   const action = body.action === "unpublish" ? "unpublish" : "publish";
   if (!websiteId) return NextResponse.json({ error: "Choose a website first." }, { status: 400 });
 
@@ -44,16 +45,47 @@ export async function POST(request: Request) {
     if (!website || !business) return NextResponse.json({ error: "Studio website not found." }, { status: 404 });
 
     if (action === "unpublish") {
-      await prisma.$transaction(async (tx: any) => {
-        await tx.studioWebsite.update({ where: { id: websiteId }, data: { status: "DRAFT" } });
-        // Public business visibility is shared by the legacy route. Hide it as well so an
-        // older published snapshot cannot leak through during the transition.
-        if (website.isDefault) {
-          await tx.business.update({ where: { id: business.id }, data: { isPublished: false } });
-          await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
-        }
-      });
-      await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_UNPUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id } });
+      if (!Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 0 ||
+          !Number.isSafeInteger(expectedPublishedVersion) || expectedPublishedVersion < 0) {
+        return NextResponse.json({
+          error: "Reload the website and confirm the draft and publication versions before unpublishing.",
+          code: "website_unpublish_version_required",
+        }, { status: 428 });
+      }
+      await ensureStudioWebsiteContent(websiteId, business.id);
+      let conflict = false;
+      try {
+        await prisma.$transaction(async (tx: any) => {
+          // The website-state compare-and-swap serializes concurrent unpublish requests.
+          const siteChanged = await tx.studioWebsite.updateMany({
+            where: { id: websiteId, status: "PUBLISHED" },
+            data: { status: "DRAFT" },
+          });
+          if (siteChanged.count !== 1) return;
+          const contentChanged = await tx.studioWebsiteContent.updateMany({
+            where: { websiteId, draftVersion: expectedDraftVersion, publishedVersion: expectedPublishedVersion },
+            data: { updatedAt: new Date() },
+          });
+          if (contentChanged.count !== 1) throw new Error("STUDIO_WEBSITE_UNPUBLISH_CONFLICT");
+          // Public business visibility is shared by the legacy route. Hide it as well so an
+          // older published snapshot cannot leak through during the transition.
+          if (website.isDefault) {
+            await tx.business.update({ where: { id: business.id }, data: { isPublished: false } });
+            await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
+          }
+        });
+      } catch (error) {
+        if ((error as { message?: string })?.message === "STUDIO_WEBSITE_UNPUBLISH_CONFLICT") conflict = true;
+        else throw error;
+      }
+      if (conflict) {
+        return NextResponse.json({ error: "This website changed while you were unpublishing it. Reload and try again.", code: "website_unpublish_conflict" }, { status: 409 });
+      }
+      const currentSite = await prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { status: true } });
+      if (currentSite?.status !== "DRAFT") {
+        return NextResponse.json({ error: "This website changed while you were unpublishing it. Reload and try again.", code: "website_unpublish_conflict" }, { status: 409 });
+      }
+      await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_UNPUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id, expectedDraftVersion, expectedPublishedVersion } });
       return NextResponse.json({ published: false, websiteId, status: "DRAFT" });
     }
 
