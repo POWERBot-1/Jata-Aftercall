@@ -19,8 +19,10 @@ export async function POST(request: Request) {
   const websiteId = typeof body.websiteId === "string" ? body.websiteId.trim() : "";
   const targetVersion = Number(body.targetVersion);
   const expectedPublishedVersion = Number(body.expectedPublishedVersion);
+  const expectedDraftVersion = Number(body.expectedDraftVersion);
   if (!websiteId || !Number.isSafeInteger(targetVersion) || targetVersion < 1 ||
-      !Number.isSafeInteger(expectedPublishedVersion) || expectedPublishedVersion < 0) {
+      !Number.isSafeInteger(expectedPublishedVersion) || expectedPublishedVersion < 0 ||
+      !Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 0) {
     return NextResponse.json({ error: "Choose a published version and confirm the version currently live." }, { status: 400 });
   }
 
@@ -32,8 +34,8 @@ export async function POST(request: Request) {
       prisma.business.findUnique({ where: { id: access.businessId }, select: { category: true } }),
     ]);
     if (!target || !current || !business) return NextResponse.json({ error: "The requested publication was not found for this website." }, { status: 404 });
-    if (current.publishedVersion !== expectedPublishedVersion) {
-      return NextResponse.json({ error: "This website was published elsewhere. Reload its publication history.", code: "website_publish_conflict", currentPublishedVersion: current.publishedVersion }, { status: 409 });
+    if (current.publishedVersion !== expectedPublishedVersion || current.draftVersion !== expectedDraftVersion) {
+      return NextResponse.json({ error: "This website changed after you reviewed it. Reload its draft and publication history.", code: "website_publish_conflict", currentPublishedVersion: current.publishedVersion, currentDraftVersion: current.draftVersion }, { status: 409 });
     }
     const validated = validateExperienceJson(target.snapshotJson, business.category);
     if (!validated.ok) return NextResponse.json({ error: "That historical publication is no longer valid for this renderer.", issues: validated.issues }, { status: 422 });
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
     const publishedAt = new Date();
     const saved = await prisma.$transaction(async (tx: any) => {
       const changed = await tx.studioWebsiteContent.updateMany({
-        where: { websiteId, publishedVersion: expectedPublishedVersion },
+        where: { websiteId, publishedVersion: expectedPublishedVersion, draftVersion: expectedDraftVersion },
         data: {
           publishedJson: snapshotJson, publishedVersion: nextVersion, publishedAt,
           publishedById: session.userId, draftJson: snapshotJson,
