@@ -55,10 +55,20 @@ beforeEach(() => {
 
 describe("public Website Studio content visibility", () => {
 
-  it("does not resurrect the legacy publication after a default Studio site exists but is unpublished", async () => {
+  it("preserves legacy publication for a newly provisioned default site until Studio publication", async () => {
     state.studioWebsite = {
       id: "default-site",
       status: "DRAFT",
+      content: { draftJson: null, publishedJson: null, draftVersion: 0, publishedVersion: 0 },
+    };
+    const page = await loadStorefront("default-site-legacy-fallback");
+    expect(page?.document.brand.businessName).toBe("Example business");
+  });
+
+  it("does not resurrect the legacy publication after an explicit default Studio unpublish", async () => {
+    state.studioWebsite = {
+      id: "default-site",
+      status: "UNPUBLISHED",
       content: { draftJson: null, publishedJson: null, draftVersion: 0, publishedVersion: 0 },
     };
     const page = await loadStorefront("default-site-unpublished");
