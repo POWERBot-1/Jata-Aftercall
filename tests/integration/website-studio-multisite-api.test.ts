@@ -244,7 +244,7 @@ describe.skipIf(!enabled)("Website Studio multi-site content API on PostgreSQL",
     const afterUnpublish = await client.studioWebsite.findUnique({ where: { id: defaultSite!.websiteId } });
     const afterUnpublishContent = await client.studioWebsiteContent.findUnique({ where: { websiteId: defaultSite!.websiteId } });
     const hiddenBusiness = await client.business.findUnique({ where: { id: businessA.id }, select: { isPublished: true } });
-    expect(afterUnpublish.status).toBe("DRAFT");
+    expect(afterUnpublish.status).toBe("UNPUBLISHED");
     expect(afterUnpublishContent.publishedVersion).toBe(1);
     expect(hiddenBusiness.isPublished).toBe(false);
 
