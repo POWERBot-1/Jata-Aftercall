@@ -492,7 +492,7 @@ describe("POST /api/experience/publish — role gate on both directions (§5, §
     );
     expect(response.status).toBe(200);
     expect((await response.json()).published).toBe(false);
-    expect(st.experienceUpdate).toHaveBeenCalledWith(
+    expect(st.experienceUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "UNPUBLISHED" }) }),
     );
     expect(st.businessUpdate).toHaveBeenCalledWith(
@@ -514,8 +514,8 @@ describe("POST /api/experience/publish — role gate on both directions (§5, §
     expect(st.experienceUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "PUBLISHED" }) }),
     );
-    expect(st.businessUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ isPublished: true }) }),
+    expect(st.businessUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: "ACTIVE" }), data: expect.objectContaining({ isPublished: true }) }),
     );
     expect(st.auditCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ action: "EXPERIENCE_PUBLISHED" }) }),
