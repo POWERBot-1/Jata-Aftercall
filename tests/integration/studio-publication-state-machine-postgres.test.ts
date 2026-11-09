@@ -31,6 +31,7 @@ import { createExperienceDocument } from "@/lib/experience/document";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { POST as publishRoute } from "@/app/api/studio/websites/publish/route";
 import { POST as rollbackRoute } from "@/app/api/studio/websites/rollback/route";
+import { POST as legacyPublishRoute } from "@/app/api/experience/publish/route";
 import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 
@@ -179,6 +180,14 @@ async function rollback(site: any, targetVersion: number, expectedDraftVersion: 
   }));
 }
 
+async function legacyUnpublish(businessId: string) {
+  return legacyPublishRoute(new Request("http://localhost/api/experience/publish", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ businessId, action: "unpublish" }),
+  }));
+}
+
 describe.skipIf(!enabled)("publication state machine through the real routes on PostgreSQL", () => {
   beforeAll(async () => {
     client = makeRealPrisma();
@@ -302,6 +311,22 @@ describe.skipIf(!enabled)("publication state machine through the real routes on 
     const response = await unpublish(t.defaultSite, d1.draftVersion + 99, d1.publishedVersion);
     expect(response.status).toBe(409);
     expect((await client.studioWebsite.findUnique({ where: { id: t.defaultSite.id } })).status).toBe("PUBLISHED");
+  });
+
+  it("keeps a published secondary site live when the legacy default-site UI unpublishes", async () => {
+    const t = await provisionPublishedTenant();
+    const d0 = await t.readVersions(t.defaultSite);
+    const s0 = await t.readVersions(t.secondarySite);
+    expect((await publish(t.defaultSite, d0.draftVersion, d0.publishedVersion)).status).toBe(200);
+    expect((await publish(t.secondarySite, s0.draftVersion, s0.publishedVersion)).status).toBe(200);
+
+    const response = await legacyUnpublish(t.business.id);
+    expect(response.status).toBe(200);
+    expect((await client.studioWebsite.findUnique({ where: { id: t.defaultSite.id } })).status).toBe("UNPUBLISHED");
+    expect((await client.business.findUnique({ where: { id: t.business.id } })).isPublished).toBe(true);
+    expect(await loadStorefront(t.business.slug)).toBeNull();
+    expect((await loadStorefront(t.business.slug, { websiteSlug: "market" }))!.document.brand.tagline)
+      .toBe(t.secondaryDoc.brand.tagline);
   });
 
   it("reopens the tenant public gate when rollback restores the last unpublished secondary site", async () => {
