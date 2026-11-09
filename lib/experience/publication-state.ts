@@ -200,6 +200,15 @@ export function resolvePublicDocument(input: {
   // 1. Authorised owner preview. `preferDraft` only ever arrives with `allowDraft`.
   if (draftJson && input.preferDraft) return { json: draftJson, source: "draft" };
 
+  // During the compatibility window, the default site's legacy editor still owns the
+  // draft while the per-site row remains DRAFT. A live legacy snapshot must not shadow
+  // that owner's explicitly requested draft preview. This branch is default-only and
+  // is unreachable after publication, unpublish or suspension because the state machine
+  // disables legacy fallback in those states.
+  if (input.allowDraft && input.preferDraft && view.legacyFallbackAllowed && input.legacy?.draftJson) {
+    return { json: input.legacy.draftJson, source: "draft" };
+  }
+
   // 2. This site's own published snapshot, still behind the tenant gate.
   if (view.publiclyPublished && input.tenantVisible) {
     return { json: input.site?.content?.publishedJson ?? null, source: "published" };
