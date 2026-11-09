@@ -30,6 +30,7 @@ vi.mock("@/lib/audit", () => ({ logAudit: vi.fn(async () => undefined) }));
 import { createExperienceDocument } from "@/lib/experience/document";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { POST as publishRoute } from "@/app/api/studio/websites/publish/route";
+import { POST as rollbackRoute } from "@/app/api/studio/websites/rollback/route";
 import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 
@@ -172,6 +173,12 @@ async function unpublish(site: any, expectedDraftVersion: number, expectedPublis
   }));
 }
 
+async function rollback(site: any, targetVersion: number, expectedDraftVersion: number, expectedPublishedVersion: number) {
+  return rollbackRoute(request({
+    websiteId: site.id, targetVersion, expectedDraftVersion, expectedPublishedVersion,
+  }));
+}
+
 describe.skipIf(!enabled)("publication state machine through the real routes on PostgreSQL", () => {
   beforeAll(async () => {
     client = makeRealPrisma();
@@ -295,6 +302,46 @@ describe.skipIf(!enabled)("publication state machine through the real routes on 
     const response = await unpublish(t.defaultSite, d1.draftVersion + 99, d1.publishedVersion);
     expect(response.status).toBe(409);
     expect((await client.studioWebsite.findUnique({ where: { id: t.defaultSite.id } })).status).toBe("PUBLISHED");
+  });
+
+  it("reopens the tenant public gate when rollback restores the last unpublished secondary site", async () => {
+    const t = await provisionPublishedTenant();
+    const d0 = await t.readVersions(t.defaultSite);
+    const s0 = await t.readVersions(t.secondarySite);
+    expect((await publish(t.defaultSite, d0.draftVersion, d0.publishedVersion)).status).toBe(200);
+    expect((await publish(t.secondarySite, s0.draftVersion, s0.publishedVersion)).status).toBe(200);
+
+    const d1 = await t.readVersions(t.defaultSite);
+    expect((await unpublish(t.defaultSite, d1.draftVersion, d1.publishedVersion)).status).toBe(200);
+    const s1 = await t.readVersions(t.secondarySite);
+    expect((await unpublish(t.secondarySite, s1.draftVersion, s1.publishedVersion)).status).toBe(200);
+    expect((await client.business.findUnique({ where: { id: t.business.id } })).isPublished).toBe(false);
+    expect(await loadStorefront(t.business.slug, { websiteSlug: "market" })).toBeNull();
+
+    const current = await t.readVersions(t.secondarySite);
+    const restored = await rollback(t.secondarySite, current.publishedVersion, current.draftVersion, current.publishedVersion);
+    expect(restored.status).toBe(200);
+    expect((await client.business.findUnique({ where: { id: t.business.id } })).isPublished).toBe(true);
+    expect((await loadStorefront(t.business.slug, { websiteSlug: "market" }))!.document.brand.tagline)
+      .toBe(t.secondaryDoc.brand.tagline);
+    expect(await loadStorefront(t.business.slug)).toBeNull();
+  });
+
+  it("refuses rollback of an operator-suspended site without changing its content", async () => {
+    const t = await provisionPublishedTenant();
+    const s0 = await t.readVersions(t.secondarySite);
+    expect((await publish(t.secondarySite, s0.draftVersion, s0.publishedVersion)).status).toBe(200);
+    await client.studioWebsite.update({ where: { id: t.secondarySite.id }, data: { status: "SUSPENDED" } });
+    const current = await t.readVersions(t.secondarySite);
+    const before = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
+    const response = await rollback(t.secondarySite, current.publishedVersion, current.draftVersion, current.publishedVersion);
+    const after = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
+    expect(response.status).toBe(409);
+    expect((await client.studioWebsite.findUnique({ where: { id: t.secondarySite.id } })).status).toBe("SUSPENDED");
+    expect(after.publishedJson).toBe(before.publishedJson);
+    expect(after.publishedVersion).toBe(before.publishedVersion);
+    expect(after.draftJson).toBe(before.draftJson);
+    expect(after.draftVersion).toBe(before.draftVersion);
   });
 
   it("does not resurrect a legacy snapshot when a provisioned site has never published", async () => {
