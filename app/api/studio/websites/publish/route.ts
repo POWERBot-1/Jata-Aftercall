@@ -160,11 +160,17 @@ export async function POST(request: Request) {
         },
       });
       // Only a legal state transition may reach PUBLISHED. A SUSPENDED site must be
-      // reinstated by the operator, never silently republished by its owner.
+      // reinstated by the operator, never silently republished by its owner. The status
+      // predicate is also a compare-and-swap: an operator suspension or another publish
+      // that lands after the read above must not be overwritten by this stale request.
       if (!canTransitionStudioSite(website.status, "PUBLISHED")) {
         throw new Error("STUDIO_WEBSITE_STATE_TRANSITION_DENIED");
       }
-      await tx.studioWebsite.update({ where: { id: websiteId }, data: { status: "PUBLISHED" } });
+      const siteChanged = await tx.studioWebsite.updateMany({
+        where: { id: websiteId, status: website.status },
+        data: { status: "PUBLISHED" },
+      });
+      if (siteChanged.count !== 1) throw new Error("STUDIO_WEBSITE_STATE_CONFLICT");
       // Public business visibility is the outer gate for all /b routes. A first
       // secondary-site publication must make that tenant publicly routable too.
       await tx.business.update({ where: { id: business.id }, data: { isPublished: true, status: "ACTIVE" } });
@@ -180,6 +186,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ published: true, websiteId, version: nextVersion, publishedAt, url: website.isDefault ? `/b/${business.slug}` : `/b/${business.slug}/${website.slug}` });
   } catch (error) {
     const status = statusOf(error);
+    const code = (error as { message?: string })?.message;
+    if (code === "STUDIO_WEBSITE_STATE_TRANSITION_DENIED") {
+      return NextResponse.json({ error: "A suspended website must be reinstated before its owner can publish it.", code: "website_state_transition_denied" }, { status: 409 });
+    }
+    if (code === "STUDIO_WEBSITE_STATE_CONFLICT") {
+      return NextResponse.json({ error: "The website publication state changed. Reload before publishing again.", code: "website_state_conflict" }, { status: 409 });
+    }
     return NextResponse.json({ error: status === 403 ? "You do not have permission to publish this website." : status === 404 ? "Studio website not found." : "We could not publish this website." }, { status });
   }
 }
