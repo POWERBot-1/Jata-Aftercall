@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createExperienceDocument } from "@/lib/experience/document";
 
-const state = vi.hoisted(() => ({ offer: null as any, serviceCalls: [] as any[] }));
+const state = vi.hoisted(() => ({ offer: null as any, studioWebsite: null as any, serviceCalls: [] as any[] }));
 
 vi.mock("@/lib/db", () => ({
   default: {
@@ -23,6 +23,7 @@ vi.mock("@/lib/db", () => ({
         status: "ACTIVE",
       })),
     },
+    studioWebsite: { findFirst: vi.fn(async () => state.studioWebsite) },
     businessExperience: {
       findUnique: vi.fn(async () => ({
         publishedJson: JSON.stringify(createExperienceDocument({ categoryKey: "retail", businessName: "Example business" })),
@@ -48,10 +49,22 @@ import { loadStorefront } from "@/lib/experience/storefront";
 
 beforeEach(() => {
   state.offer = null;
+  state.studioWebsite = null;
   state.serviceCalls.length = 0;
 });
 
 describe("public Website Studio content visibility", () => {
+
+  it("does not resurrect the legacy publication after a default Studio site exists but is unpublished", async () => {
+    state.studioWebsite = {
+      id: "default-site",
+      status: "DRAFT",
+      content: { draftJson: null, publishedJson: null, draftVersion: 0, publishedVersion: 0 },
+    };
+    const page = await loadStorefront("default-site-unpublished");
+    expect(page).toBeNull();
+  });
+
   it("queries active services and hides inactive or expired offers", async () => {
     state.offer = { title: "Expired example", subtitle: null, isActive: true, validUntil: new Date(Date.now() - 60_000) };
     const expired = await loadStorefront("expired-example");
