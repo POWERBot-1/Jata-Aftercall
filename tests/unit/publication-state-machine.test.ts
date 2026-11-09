@@ -90,6 +90,28 @@ describe("publication state machine", () => {
         .toEqual({ json: '{"legacy":true}', source: "legacy" });
     });
 
+    it("shows the authorised legacy draft before the live legacy fallback on a never-published default site", () => {
+      const legacyWithDraft = { ...legacy, draftJson: '{"legacyDraft":true}' };
+      expect(resolvePublicDocument({
+        ...base,
+        site: site("DRAFT", {}),
+        legacy: legacyWithDraft,
+        allowDraft: true,
+        preferDraft: true,
+      })).toEqual({ json: '{"legacyDraft":true}', source: "draft" });
+    });
+
+    it("does not let an authorised draft query expose legacy drafts after publication", () => {
+      const legacyWithDraft = { ...legacy, draftJson: '{"legacyDraft":true}' };
+      expect(resolvePublicDocument({
+        ...base,
+        site: site("PUBLISHED"),
+        legacy: legacyWithDraft,
+        allowDraft: true,
+        preferDraft: true,
+      })).toEqual({ json: '{"draft":true}', source: "draft" });
+    });
+
     it("never resurfaces the legacy snapshot after an explicit unpublish", () => {
       expect(resolvePublicDocument({ ...base, site: site("UNPUBLISHED") })).toEqual({ json: null, source: null });
       expect(resolvePublicDocument({ ...base, site: site("SUSPENDED") })).toEqual({ json: null, source: null });
