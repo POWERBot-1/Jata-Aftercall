@@ -110,8 +110,10 @@ export async function POST(request: Request) {
         },
       });
       await tx.studioWebsite.update({ where: { id: websiteId }, data: { status: "PUBLISHED" } });
+      // Public business visibility is the outer gate for all /b routes. A first
+      // secondary-site publication must make that tenant publicly routable too.
+      await tx.business.update({ where: { id: business.id }, data: { isPublished: true, status: "ACTIVE" } });
       if (website.isDefault) {
-        await tx.business.update({ where: { id: business.id }, data: { isPublished: true, status: "ACTIVE" } });
         await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
       }
       return true;
