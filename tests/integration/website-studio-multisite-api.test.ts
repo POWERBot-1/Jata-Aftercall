@@ -17,6 +17,7 @@ import { POST as restoreWebsiteDraft } from "@/app/api/studio/websites/revisions
 import { POST as changeStudioPublication } from "@/app/api/studio/websites/publish/route";
 import { POST as rollbackStudioWebsite } from "@/app/api/studio/websites/rollback/route";
 import { ensureDefaultStudioWebsite } from "@/lib/experience/ensure-default-website";
+import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { makeRealPrisma, realPrismaConfigured } from "../helpers/prisma-client";
 
 const enabled = realPrismaConfigured;
