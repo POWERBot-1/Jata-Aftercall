@@ -14,7 +14,7 @@
  * classic page renderer shows an explicit unavailable state instead.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MapPin, MessageCircle, Phone, Share2 } from "lucide-react";
 import { useCart } from "./CartProvider";
@@ -23,6 +23,37 @@ import { getWhatsAppUrl, normalizeKePhone } from "@/lib/phone";
 import { getDirectionsUrl } from "@/lib/location";
 import { buildContactActions, shareBusinessPage, type ContactActionKey } from "@/lib/contactActions";
 import { legacyCopyText } from "@/lib/shareClipboard";
+
+/**
+ * Publish the bar's real height so the reserved spacer can track it.
+ *
+ * The bar wraps to a second row on narrow viewports and its height therefore changes with
+ * viewport width, font size and locale. A fixed spacer guess is either too short — the bar then
+ * covers the page's own actions, which is what happened at 390 px — or wastefully tall. Measuring
+ * the element and writing `--eb-actionbar-h` keeps the reserved space exactly equal to what the
+ * bar occupies, with no per-breakpoint table to maintain. The CSS fallback still applies if
+ * measurement is unavailable, so a failure degrades to the previous behaviour rather than to zero.
+ */
+function useActionBarHeight() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const apply = () => {
+      const height = node.getBoundingClientRect().height;
+      if (height > 0) root.style.setProperty("--eb-actionbar-h", `${Math.round(height)}px`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--eb-actionbar-h");
+    };
+  }, []);
+  return ref;
+}
 
 export function ActionBar({
   businessId,
@@ -55,6 +86,7 @@ export function ActionBar({
   businessName?: string | null;
 }) {
   const cart = useCart();
+  const barRef = useActionBarHeight();
   const [shareStatus, setShareStatus] = useState("");
   const wa = normalizeKePhone(whatsapp);
   const tel = normalizeKePhone(phone);
@@ -118,7 +150,7 @@ export function ActionBar({
 
   return (
     <>
-      <div className="eb-actionbar eb-actionbar--contacts" role="complementary" aria-label="Quick actions">
+      <div ref={barRef} className="eb-actionbar eb-actionbar--contacts" role="complementary" aria-label="Quick actions">
         {actions.map((action) =>
           action.href && !action.onClick ? (
             <a

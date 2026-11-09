@@ -1223,8 +1223,23 @@ button:focus-visible {
  * touch target are unchanged. */
 .eb-actionbar .eb-btn { flex: 1 1 45%; min-width: 0; padding-inline: 0.5rem; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
-/* Reserve the full two-row height below 900px so the fixed bar never covers page content. */
-.eb-actionbar-spacer { height: 9.5rem; }
+/* Reserve the full two-row height below 900px so the fixed bar never covers page content.
+ *
+ * The reserved height is now DERIVED from the bar instead of guessed. The bar wraps to a second
+ * row whenever four actions cannot share one readable row (see DEF-1 above), which made it 168 px
+ * tall on a 390 px viewport while this spacer was still a fixed 9.5rem (152 px). The 16 px gap was
+ * enough for the bar to sit on top of the hero's own "Order now / WhatsApp / Directions" actions —
+ * measured, not assumed. A guess cannot track a wrapping bar across font sizes and locales, so the
+ * spacer publishes the bar's real height as `--eb-actionbar-h` and reserves that plus a small gap.
+ *
+ * The 9.5rem / 11.5rem values stay as the fallback for a browser without container-relative
+ * measurement (and for the first paint before the bar reports), so nothing collapses. */
+.eb-actionbar-spacer {
+  height: calc(var(--eb-actionbar-h, 9.5rem) + 0.75rem);
+}
+.eb-actionbar-spacer--contacts {
+  height: calc(var(--eb-actionbar-h, 11.5rem) + 0.75rem);
+}
 @media (min-width: 900px) { .eb-actionbar-spacer { height: 0; } }
 
 /* ── Cart drawer ── */
@@ -5470,7 +5485,7 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
 }
 /* Action bar share feedback and the extra row the four contact controls can occupy. */
 .eb-actionbar__status { flex: 1 1 100%; margin: 0; text-align: center; font-size: 0.72rem; line-height: 1.35; }
-.eb-actionbar-spacer--contacts { height: 11.5rem; }
+.eb-actionbar-spacer--contacts { height: calc(var(--eb-actionbar-h, 11.5rem) + 0.75rem); }
 @media (min-width: 900px) { .eb-actionbar-spacer--contacts { height: 0; } }
 /* Desktop storefront footer keeps all four actions visible when the mobile bar is hidden. */
 .eb-footer__contact-actions { margin-top: 1rem; max-width: 34rem; }
