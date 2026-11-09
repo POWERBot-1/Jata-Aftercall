@@ -26,7 +26,7 @@ const st = vi.hoisted(() => ({
   failRoleLookupAt: 0,
   business: {
     id: "biz-1", name: "Choma Place", slug: "choma-place", category: "Food & Restaurant",
-    phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false,
+    phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false, status: "ACTIVE",
   },
   experience: null as any,
   productCount: 2,
@@ -38,6 +38,7 @@ const st = vi.hoisted(() => ({
   subscription: null as any,
   entitlementRow: { status: "ACTIVE" } as { status: string } | null,
   businessUpdate: vi.fn(async (args: any) => ({ id: args?.where?.id ?? "biz-1", ...(args?.data ?? {}) })),
+  businessUpdateMany: vi.fn(async () => ({ count: 1 })),
   experienceUpdate: vi.fn(async () => ({ id: "exp-1", status: "UNPUBLISHED", publishedAt: null })),
   experienceUpdateMany: vi.fn(async () => ({ count: 1 })),
   auditCreate: vi.fn(async () => ({})),
@@ -101,6 +102,7 @@ vi.mock("@/lib/experience/ensure-default-website", async () => {
   };
 });
 vi.mock("@/lib/audit", () => ({ logAudit: st.logAudit }));
+vi.mock("@/lib/experience/site-content", () => ({ ensureStudioWebsiteContent: vi.fn(async () => ({ draftVersion: 3, publishedVersion: 0 })) }));
 
 vi.mock("@/lib/ai-readiness", () => ({ publishAIBusinessFrontDesk: st.publishAI }));
 
@@ -123,6 +125,7 @@ vi.mock("@/lib/db", () => ({
           : [],
       ),
       update: st.businessUpdate,
+      updateMany: st.businessUpdateMany,
     },
     businessMember: {
       findMany: vi.fn(async (args: any) => {
@@ -139,6 +142,12 @@ vi.mock("@/lib/db", () => ({
       upsert: vi.fn(async () => ({})),
       findUnique: vi.fn(async () => null),
     },
+    studioWebsite: {
+      findFirst: vi.fn(async () => ({ id: "site-1", status: "DRAFT" })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+      count: vi.fn(async () => 0),
+    },
+    studioWebsiteContent: { updateMany: vi.fn(async () => ({ count: 1 })) },
     businessExperience: {
       findUnique: vi.fn(async () => st.experience),
       update: st.experienceUpdate,
@@ -187,7 +196,7 @@ beforeEach(() => {
   st.failRoleLookupAt = 0;
   st.business = {
     id: "biz-1", name: "Choma Place", slug: "choma-place", category: "Food & Restaurant",
-    phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false,
+    phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false, status: "ACTIVE",
   };
   st.experience = null;
   st.productCount = 2;
@@ -195,6 +204,7 @@ beforeEach(() => {
   st.subscription = null;
   st.entitlementRow = { status: "ACTIVE" };
   st.businessUpdate.mockClear();
+  st.businessUpdateMany.mockClear();
   st.experienceUpdate.mockClear();
   st.experienceUpdateMany.mockClear();
   st.auditCreate.mockClear();
@@ -210,7 +220,9 @@ beforeEach(() => {
         update: st.experienceUpdate,
       },
       experienceVersion: { upsert: vi.fn(async () => ({})) },
-      business: { update: st.businessUpdate },
+      business: { update: st.businessUpdate, updateMany: st.businessUpdateMany },
+      studioWebsite: { updateMany: vi.fn(async () => ({ count: 1 })), count: vi.fn(async () => 0) },
+      studioWebsiteContent: { updateMany: vi.fn(async () => ({ count: 1 })) },
       auditEvent: { create: st.auditCreate },
     }),
   );
