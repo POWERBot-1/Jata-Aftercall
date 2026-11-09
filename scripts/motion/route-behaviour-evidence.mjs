@@ -11,7 +11,7 @@ const base=new URL(process.env.BASE_URL||'http://localhost:4100');
 if(base.protocol!=='http:'||!['localhost','127.0.0.1'].includes(base.hostname)||base.port!=='4100'||base.pathname!=='/'||process.env.CI!=='true'||process.env.MOTION_ISOLATED!=='1'||process.env.DATABASE_URL!=='postgresql://jata:jata@localhost:5432/jata_e2e?schema=public'||process.env.AUTH_SECRET!=='interactive-business-e2e-test-secret') throw Error('Not isolated');
 const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(sha!==process.env.EXPECTED_SHA) throw Error('HEAD mismatch');
 const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
-const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[],aiRows=[];let browser;
+const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[],aiRows=[];let browser,originalStudioSubscription=null;
 const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,aiRows,limitations:['No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
 let browserVersion='unavailable';
 try {
@@ -85,6 +85,8 @@ try {
  const ownerUser=await db.user.findUniqueOrThrow({where:{email:'demo@jata.link'},select:{id:true}});
  const aiPlan=await db.planConfig.findUnique({where:{key:'AI_BUSINESS_FRONT_DESK'}});
  if(!aiPlan)throw Error('Synthetic AI plan fixture missing from disposable catalogue');
+ originalStudioSubscription=await db.subscription.findUnique({where:{businessId:business.id}});
+ if(!originalStudioSubscription)throw Error('Studio subscription fixture missing before temporary AI entitlement swap');
  const now=new Date(),expiresAt=new Date(Date.now()+30*864e5),aiPaymentReference=`MOTION-AI-FRONT-DESK-${business.id}`;
  await db.business.update({where:{id:business.id},data:{status:'ACTIVE',isPublished:true,openingHours:'Mon-Sun 09:00-18:00'}});
  await db.product.update({where:{id:product.id},data:{basePriceKES:499,isActive:true}});
@@ -147,6 +149,15 @@ try {
   const screenshot=`ai-live-reduced-${width}x${height}.jpg`;await page.screenshot({path:path.join(out,screenshot),type:'jpeg',quality:50});
   aiRows.push({sha,browser:browserVersion,route:`${routeBase}/ai`,viewport:`${width}x${height}`,status:response?.status()??null,setting:'reduced',...state,screenshot,syntheticFixture:true});save();
  }
+ // Restore the disposable Website Studio subscription before the remaining Studio editor
+ // preference tests. The AI publication remains a recorded synthetic fixture, but is no longer
+ // customer-operational once the original non-AI subscription is restored.
+ await db.subscription.update({
+  where:{businessId:business.id},
+  data:{userId:originalStudioSubscription.userId,planId:originalStudioSubscription.planId,status:originalStudioSubscription.status,startAt:originalStudioSubscription.startAt,expiresAt:originalStudioSubscription.expiresAt,graceUntil:originalStudioSubscription.graceUntil},
+ });
+ events.push({kind:'restore-studio-subscription-fixture',result:'PASS',restoredPlanId:originalStudioSubscription.planId,aiFixtureOperationalAfterRestore:false});
+ save();
  // Real published application document, real browser preference change. Do not inject
  // targets, observer notifications or animation implementations. This is a targeted race,
  // not evidence that the eight-slot queue was stressed.
