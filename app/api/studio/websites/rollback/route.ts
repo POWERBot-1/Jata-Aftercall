@@ -28,12 +28,13 @@ export async function POST(request: Request) {
 
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "publish");
-    const [target, current, business] = await Promise.all([
+    const [target, current, business, website] = await Promise.all([
       prisma.studioWebsiteVersion.findUnique({ where: { websiteId_version: { websiteId, version: targetVersion } } }),
       prisma.studioWebsiteContent.findUnique({ where: { websiteId } }),
-      prisma.business.findUnique({ where: { id: access.businessId }, select: { category: true } }),
+      prisma.business.findUnique({ where: { id: access.businessId }, select: { id: true, category: true } }),
+      prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { isDefault: true } }),
     ]);
-    if (!target || !current || !business) return NextResponse.json({ error: "The requested publication was not found for this website." }, { status: 404 });
+    if (!target || !current || !business || !website) return NextResponse.json({ error: "The requested publication was not found for this website." }, { status: 404 });
     if (current.publishedVersion !== expectedPublishedVersion || current.draftVersion !== expectedDraftVersion) {
       return NextResponse.json({ error: "This website changed after you reviewed it. Reload its draft and publication history.", code: "website_publish_conflict", currentPublishedVersion: current.publishedVersion, currentDraftVersion: current.draftVersion }, { status: 409 });
     }
@@ -77,6 +78,10 @@ export async function POST(request: Request) {
         },
       });
       await tx.studioWebsite.update({ where: { id: websiteId }, data: { status: "PUBLISHED" } });
+      // Restoring the default site's publication must reopen its public business gate.
+      if (website.isDefault) {
+        await tx.business.update({ where: { id: business.id }, data: { isPublished: true, status: "ACTIVE" } });
+      }
       return true;
     });
     if (!saved) return NextResponse.json({ error: "Publication changed during rollback. Reload and retry.", code: "website_publish_conflict" }, { status: 409 });
