@@ -10,6 +10,7 @@ import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experie
 import { hasVerifiedPublicationRight, canSetPublished } from "@/lib/publication";
 import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 import { logAudit } from "@/lib/audit";
+import { canTransitionStudioSite } from "@/lib/experience/publication-state";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
       try {
         await prisma.$transaction(async (tx: any) => {
           // The website-state compare-and-swap serializes concurrent unpublish requests.
+          // UNPUBLISHED (not DRAFT) is what makes the takedown explicit: the public loader
+          // only permits the legacy fallback for a site that has NEVER published, so a
+          // taken-down default site can no longer resurface its old legacy snapshot.
           const siteChanged = await tx.studioWebsite.updateMany({
             where: { id: websiteId, status: "PUBLISHED" },
             data: { status: "UNPUBLISHED" },
@@ -68,10 +72,18 @@ export async function POST(request: Request) {
             data: { updatedAt: new Date() },
           });
           if (contentChanged.count !== 1) throw new Error("STUDIO_WEBSITE_UNPUBLISH_CONFLICT");
-          // Public business visibility is shared by the legacy route. Hide it as well so an
-          // older published snapshot cannot leak through during the transition.
-          if (website.isDefault) {
+          // The tenant flag is an outer kill switch shared by every site, so it is only
+          // cleared when NO site of this tenant is still published. Clearing it
+          // unconditionally would blank the tenant's still-live sibling websites.
+          const stillPublished = await tx.studioWebsite.count({
+            where: { businessId: business.id, status: "PUBLISHED" },
+          });
+          if (stillPublished === 0) {
             await tx.business.update({ where: { id: business.id }, data: { isPublished: false } });
+          }
+          // The legacy row is only a pre-cutover stand-in for the default site. Once the
+          // default site has published, retire it so it can never be rendered again.
+          if (website.isDefault) {
             await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
           }
           transitioned = true;
@@ -138,12 +150,20 @@ export async function POST(request: Request) {
       if (changed.count !== 1) return false;
       await tx.studioWebsiteVersion.create({
         data: {
-          id: `swv_${websiteId}_${nextVersion}`, websiteId, version: nextVersion,
+          // A deterministic id would collide with a version migrated from the legacy row
+          // (lib/experience/site-content.ts seeds `swv_<site>_<n>`), turning a legal
+          // publication into a unique-constraint failure. Let the database name it.
+          websiteId, version: nextVersion,
           snapshotJson, themeKey: schema.document.themeKey, categoryKey: schema.document.categoryKey,
           note: typeof body.note === "string" ? body.note.slice(0, 160) : "Published from Website Studio",
           publishedById: session.userId, publishedAt,
         },
       });
+      // Only a legal state transition may reach PUBLISHED. A SUSPENDED site must be
+      // reinstated by the operator, never silently republished by its owner.
+      if (!canTransitionStudioSite(website.status, "PUBLISHED")) {
+        throw new Error("STUDIO_WEBSITE_STATE_TRANSITION_DENIED");
+      }
       await tx.studioWebsite.update({ where: { id: websiteId }, data: { status: "PUBLISHED" } });
       // Public business visibility is the outer gate for all /b routes. A first
       // secondary-site publication must make that tenant publicly routable too.
@@ -159,6 +179,7 @@ export async function POST(request: Request) {
     await syncInteractiveEntitlement(business.id);
     return NextResponse.json({ published: true, websiteId, version: nextVersion, publishedAt, url: website.isDefault ? `/b/${business.slug}` : `/b/${business.slug}/${website.slug}` });
   } catch (error) {
+    if (process.env.STUDIO_DEBUG_PUBLISH === "1") console.error("PUBLISH_THROWN", error);
     const status = statusOf(error);
     return NextResponse.json({ error: status === 403 ? "You do not have permission to publish this website." : status === 404 ? "Studio website not found." : "We could not publish this website." }, { status });
   }

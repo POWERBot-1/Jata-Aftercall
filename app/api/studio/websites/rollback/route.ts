@@ -65,14 +65,16 @@ export async function POST(request: Request) {
       if (changed.count !== 1) return false;
       await tx.studioWebsiteVersion.create({
         data: {
-          id: `swv_${websiteId}_${nextVersion}`, websiteId, version: nextVersion,
+          // Database-generated id: a deterministic one collides with a version migrated from
+          // the legacy row (lib/experience/site-content.ts seeds `swv_<site>_<n>`).
+          websiteId, version: nextVersion,
           snapshotJson, themeKey: validated.document.themeKey, categoryKey: validated.document.categoryKey,
           note: `Rollback to publication ${targetVersion}`, publishedById: session.userId, publishedAt,
         },
       });
       await tx.studioWebsiteDraftRevision.create({
         data: {
-          id: `swdr_${websiteId}_${nextDraftVersion}`, websiteId, draftVersion: nextDraftVersion,
+          websiteId, draftVersion: nextDraftVersion,
           source: "ROLLBACK", label: `Restored published version ${targetVersion}`,
           snapshotJson, createdById: session.userId,
         },

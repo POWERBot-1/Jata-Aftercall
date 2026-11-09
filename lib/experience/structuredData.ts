@@ -123,9 +123,15 @@ export function seoMetadataFor(params: {
   document: ExperienceDocument;
   pageTitle?: string;
   isPreview?: boolean;
+  /**
+   * Canonical path override. A secondary Studio website is a distinct page from the
+   * tenant's default site, so it must declare its own canonical URL rather than
+   * pointing search engines at `/b/<businessSlug>`.
+   */
+  canonicalPath?: string;
 }) {
   const { business, document } = params;
-  const url = absolute(`/b/${business.slug}`);
+  const url = absolute(params.canonicalPath || `/b/${business.slug}`);
   const title = params.pageTitle
     ? `${params.pageTitle} · ${business.name}`
     : document.seo?.title || `${business.name} — ${document.brand.tagline || business.location || business.description || ""}`.replace(/\s+—\s*$/, "");

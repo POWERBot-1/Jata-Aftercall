@@ -13,6 +13,7 @@ import { normalizeExperienceDocument, themeOf } from "./document";
 import { resolveExperienceTheme, type ExperienceTheme } from "./themes";
 import type { ExperienceDocument } from "./types";
 import { displayPriceKES } from "../sale-pricing";
+import { describeSitePublication, legacyDraftAllowed, resolvePublicDocument } from "./publication-state";
 
 export type StorefrontVariant = { id: string; label: string; priceKES: number | null; stockStatus: string; options: Record<string, string> };
 export type StorefrontAddOn = { id: string; name: string; priceKES: number };
@@ -275,7 +276,9 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
   });
   if (!business) return null;
   if (business.status === "SUSPENDED") return null;
-  if (!business.isPublished && !allowDraft) return null;
+  // The tenant kill switch is applied inside the state machine (tenantVisible), not
+  // here: a hidden tenant returns nothing to a visitor but still resolves its own
+  // site for the owner's authorised preview.
 
   // The default Studio website is now the preferred publication source. The old
   // BusinessExperience remains a compatibility fallback for businesses that have not
@@ -283,8 +286,8 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
   const [studioWebsite, experience] = await Promise.all([
     prisma.studioWebsite.findFirst({
       where: websiteSlug
-        ? { businessId: business.id, slug: websiteSlug, isDefault: false, status: { not: "SUSPENDED" } }
-        : { businessId: business.id, isDefault: true, status: { not: "SUSPENDED" } },
+        ? { businessId: business.id, slug: websiteSlug, isDefault: false }
+        : { businessId: business.id, isDefault: true },
       select: {
         id: true,
         status: true,
@@ -297,24 +300,27 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
     }),
   ]);
 
-  const siteDraft = studioWebsite?.content?.draftJson ?? null;
-  const sitePublished = studioWebsite?.status === "PUBLISHED" ? studioWebsite.content?.publishedJson ?? null : null;
-  // A newly provisioned default-site identity remains on the legacy renderer until its
-  // first Studio publication. Explicit UNPUBLISHED is terminal for fallback, preventing
-  // an old BusinessExperience snapshot from resurfacing after an owner unpublishes.
-  const legacyEligible = !websiteSlug && (!studioWebsite || studioWebsite.status === "DRAFT");
-  const legacyDraft = legacyEligible ? experience?.draftJson ?? null : null;
-  const legacyPublished = legacyEligible && business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED"
-    ? experience.publishedJson : null;
-  const usingDraft = allowDraft && Boolean(siteDraft || legacyDraft);
-  const usePreferredDraft = preferDraft && usingDraft;
-  const json = usePreferredDraft
-    ? siteDraft || legacyDraft || null
-    : business.isPublished
-      ? sitePublished || legacyPublished
-      : usingDraft
-        ? siteDraft || legacyDraft || null
-        : null;
+  // Publication is decided by exactly one place: lib/experience/publication-state.ts.
+  // The site row is loaded WITHOUT a status filter so the state machine can tell
+  // "never published" (DRAFT, legacy fallback allowed) apart from "explicitly taken
+  // down" (UNPUBLISHED/SUSPENDED, no fallback) and "published" (its own snapshot).
+  const isDefaultRoute = websiteSlug === null;
+  const decision = resolvePublicDocument({
+    site: studioWebsite,
+    isDefaultRoute,
+    legacy: experience,
+    allowDraft,
+    preferDraft,
+    tenantVisible: business.isPublished && business.status !== "SUSPENDED",
+  });
+  let json = decision.json;
+  // An authorised owner preview of a tenant whose default site has never published may
+  // still fall back to the legacy draft, so preview and public rendering agree.
+  if (!json && allowDraft && isDefaultRoute && legacyDraftAllowed(studioWebsite, true)) {
+    json = experience?.draftJson || null;
+  }
+  const usingDraft = decision.source === "draft";
+  const usePreferredDraft = usingDraft && preferDraft;
   if (!json) return null;
 
   let document: ExperienceDocument;
@@ -367,8 +373,15 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
       ? { title: currentOffer.title, subtitle: currentOffer.subtitle, imageUrl: currentOffer.imageUrl, ctaLabel: currentOffer.ctaLabel, badge: currentOffer.badge }
       : null,
     categories,
-    isPreview: usePreferredDraft || (usingDraft && !(business.isPublished && Boolean(sitePublished || legacyPublished))),
-    publishedVersion: studioWebsite?.content?.publishedVersion ?? experience?.publishedVersion ?? 0,
+    // Preview is exactly "the visitor is looking at something not publicly live".
+    isPreview: decision.source === "draft",
+    // The version of what is actually being rendered: the site's own publication when
+    // the site published, otherwise the legacy row that stood in for it.
+    publishedVersion: decision.source === "published"
+      ? describeSitePublication(studioWebsite, { isDefaultRoute }).publishedVersion
+      : decision.source === "legacy"
+        ? Number(experience?.publishedVersion ?? 0)
+        : 0,
   };
 }
 

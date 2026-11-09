@@ -55,6 +55,14 @@ beforeEach(() => {
 
 describe("public Website Studio content visibility", () => {
 
+  /**
+   * "Never published" and "explicitly unpublished" are different states and must behave
+   * differently. Conflating them caused two customer-visible failures:
+   *   • treating a merely-provisioned site as unpublished blanked live websites;
+   *   • treating an unpublished site as merely-provisioned resurrected a legacy page the
+   *     owner had taken down.
+   * Both halves are asserted so neither can regress silently.
+   */
   it("preserves legacy publication for a newly provisioned default site until Studio publication", async () => {
     state.studioWebsite = {
       id: "default-site",
@@ -62,6 +70,8 @@ describe("public Website Studio content visibility", () => {
       content: { draftJson: null, publishedJson: null, draftVersion: 0, publishedVersion: 0 },
     };
     const page = await loadStorefront("default-site-legacy-fallback");
+    // Provisioning a tenant for Studio must not take its existing website offline.
+    expect(page).not.toBeNull();
     expect(page?.document.brand.businessName).toBe("Example business");
   });
 
@@ -72,7 +82,22 @@ describe("public Website Studio content visibility", () => {
       content: { draftJson: null, publishedJson: null, draftVersion: 0, publishedVersion: 0 },
     };
     const page = await loadStorefront("default-site-unpublished");
+    // The owner asked for it to be gone; an older legacy snapshot must never reappear.
     expect(page).toBeNull();
+  });
+
+  it("never exposes a published snapshot of a suspended site", async () => {
+    state.studioWebsite = {
+      id: "default-site",
+      status: "SUSPENDED",
+      content: {
+        draftJson: null,
+        publishedJson: JSON.stringify(createExperienceDocument({ categoryKey: "retail", businessName: "Example business" })),
+        draftVersion: 1,
+        publishedVersion: 1,
+      },
+    };
+    expect(await loadStorefront("default-site-suspended")).toBeNull();
   });
 
   it("queries active services and hides inactive or expired offers", async () => {
