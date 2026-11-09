@@ -296,7 +296,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
     }),
     prisma.businessExperience.findUnique({
       where: { businessId: business.id },
-      select: { publishedJson: true, draftJson: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
+      select: { publishedJson: true, draftJson: true, draftVersion: true, categoryKey: true, themeKey: true, status: true, publishedVersion: true },
     }),
   ]);
 

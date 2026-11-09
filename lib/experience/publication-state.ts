@@ -195,10 +195,10 @@ export function resolvePublicDocument(input: {
   tenantVisible: boolean;
 }): { json: string | null; source: "draft" | "published" | "legacy" | null } {
   const view = describeSitePublication(input.site, { isDefaultRoute: input.isDefaultRoute });
-  const draftJson = input.allowDraft ? readDraft(input.site) : null;
+  const newestDraft = input.allowDraft ? readNewestDraft(input) : null;
 
   // 1. Authorised owner preview. `preferDraft` only ever arrives with `allowDraft`.
-  if (draftJson && input.preferDraft) return { json: draftJson, source: "draft" };
+  if (newestDraft && input.preferDraft) return { json: newestDraft, source: "draft" };
 
   // During the compatibility window, the default site's legacy editor still owns the
   // draft while the per-site row remains DRAFT. A live legacy snapshot must not shadow
@@ -230,11 +230,34 @@ export function resolvePublicDocument(input: {
   // publication — the legacy draft it was migrated from. Either way the result is
   // tagged "draft" so the page renders its preview banner and stays non-indexable;
   // resolving it as "legacy" would show unpublished work as if it were live.
-  if (draftJson) return { json: draftJson, source: "draft" };
-  if (input.allowDraft && view.legacyFallbackAllowed && input.legacy?.draftJson) {
-    return { json: input.legacy.draftJson, source: "draft" };
-  }
+  if (newestDraft) return { json: newestDraft, source: "draft" };
   return { json: null, source: null };
+}
+
+/**
+ * The owner's most recent draft, whichever editor wrote it.
+ *
+ * While the legacy Studio editor is still the surface owners use, the canonical draft of a
+ * tenant lives in `BusinessExperience.draftJson`; `StudioWebsiteContent.draftJson` is only
+ * the copy taken when the site was provisioned or published. Reading the copy first served
+ * an owner a preview of their *older* text: they edited, opened the preview, and saw the
+ * previous draft. Comparing the two recorded versions is what makes "preview" mean "what I
+ * just wrote" — and an authorised preview must never show content the owner did not save.
+ *
+ * The site copy wins a tie, so a tenant editing through the Studio itself inherits nothing
+ * stale. A missing version counts as 0, never as "newest".
+ */
+function readNewestDraft(input: {
+  site: StudioSitePublicationRecord | null;
+  legacy: { draftJson?: string | null; draftVersion?: number | null } | null;
+}): string | null {
+  const siteJson = readDraft(input.site);
+  const legacyJson = input.legacy?.draftJson ?? null;
+  if (!siteJson) return legacyJson;
+  if (!legacyJson) return siteJson;
+  const siteVersion = Number((input.site as { content?: { draftVersion?: number } } | null)?.content?.draftVersion ?? 0);
+  const legacyVersion = Number(input.legacy?.draftVersion ?? 0);
+  return legacyVersion > siteVersion ? legacyJson : siteJson;
 }
 
 /** Narrow helper: the recorded draft of a site, or null. */

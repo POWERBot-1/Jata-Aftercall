@@ -132,6 +132,28 @@ describe("publication state machine", () => {
         .toEqual({ json: '{"draft":true}', source: "draft" });
     });
 
+    it("shows the owner the draft they actually wrote, not the provisioning copy", () => {
+      // A provisioned site keeps a copy of the legacy draft taken at provisioning time. The
+      // owner then edits through the Studio editor, which writes the legacy row. If the copy
+      // won, the preview would show text the owner had already replaced — the reported
+      // "I edited it but the preview shows the old version" defect.
+      const staleSite = { status: "DRAFT", content: { draftJson: '{"stale":true}', publishedJson: null, publishedVersion: 0, draftVersion: 1 } };
+      const freshLegacy = { draftJson: '{"fresh":true}', draftVersion: 7 };
+      expect(resolvePublicDocument({ ...base, site: staleSite, legacy: freshLegacy, allowDraft: true, preferDraft: true }))
+        .toEqual({ json: '{"fresh":true}', source: "draft" });
+      // The reverse case: a Studio-side draft newer than the legacy row must win.
+      const freshSite = { status: "PUBLISHED", content: { draftJson: '{"site":true}', publishedJson: "{}", draftVersion: 9 } };
+      expect(resolvePublicDocument({ ...base, site: freshSite, legacy: freshLegacy, allowDraft: true, preferDraft: true }))
+        .toEqual({ json: '{"site":true}', source: "draft" });
+      // A tie prefers the site's own copy; an unknown version never outranks a known one.
+      const tied = { status: "DRAFT", content: { draftJson: '{"site":true}', publishedJson: null, publishedVersion: 0, draftVersion: 7 } };
+      expect(resolvePublicDocument({ ...base, site: tied, legacy: freshLegacy, allowDraft: true, preferDraft: true }).json)
+        .toBe('{"site":true}');
+      // Anonymous visitors never see either draft.
+      expect(resolvePublicDocument({ ...base, site: staleSite, legacy: freshLegacy, preferDraft: true }))
+        .toEqual({ json: null, source: null });
+    });
+
     it("never substitutes a sibling or the default site for a missing secondary site", () => {
       expect(resolvePublicDocument({ ...base, isDefaultRoute: false, site: null }))
         .toEqual({ json: null, source: null });
