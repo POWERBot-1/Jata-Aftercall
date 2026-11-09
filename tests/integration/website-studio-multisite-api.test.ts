@@ -198,7 +198,7 @@ describe.skipIf(!enabled)("Website Studio multi-site content API on PostgreSQL",
   it("serializes concurrent unpublish and restores a default publication with immutable rollback history", async () => {
     holder.session = session(ownerA);
     const defaultSite = await ensureDefaultStudioWebsite(businessA.id, holder.session);
-    const content = await ensureStudioWebsiteContent(defaultSite!.websiteId, businessA.id);
+    await ensureStudioWebsiteContent(defaultSite!.websiteId, businessA.id);
     const document = createExperienceDocument({ categoryKey: "retail", businessName: "Published default snapshot" });
     const snapshotJson = JSON.stringify(document);
     await client.studioWebsiteContent.update({
