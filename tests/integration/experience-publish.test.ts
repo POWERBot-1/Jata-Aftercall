@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   roleError: null as (Error & { status?: number }) | null,
   business: {
     id: "business-a", name: "Choma Place", slug: "choma-place", category: "Food & Restaurant",
-    phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false,
+    phone: "0722000000", whatsapp: null, location: "Kilimani", logoUrl: "/logo.png", isPublished: false, status: "ACTIVE",
   },
   experience: {
     id: "exp-a", businessId: "business-a", status: "DRAFT", categoryKey: "food", themeKey: "food-grill",
@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   experienceUpdateMany: vi.fn(),
   versionUpsert: vi.fn(),
   businessUpdate: vi.fn(),
+  businessUpdateMany: vi.fn(),
   transaction: vi.fn(),
   audit: vi.fn(),
   sync: vi.fn(),
@@ -66,6 +67,7 @@ vi.mock("@/lib/tenant", () => ({
 vi.mock("@/lib/db", () => ({
   default: {
     business: { findUnique: vi.fn(async () => mocks.business), update: mocks.businessUpdate },
+    studioWebsite: { findFirst: vi.fn(async () => ({ id: "site-a", status: "DRAFT" })) },
     businessExperience: { findUnique: vi.fn(async () => mocks.experience), update: mocks.experienceUpdate },
     product: {
       count: vi.fn(async () => mocks.productCount),
@@ -80,6 +82,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
+vi.mock("@/lib/experience/site-content", () => ({ ensureStudioWebsiteContent: vi.fn(async () => ({ draftVersion: 3, publishedVersion: 0 })) }));
 vi.mock("@/lib/experience/entitlement", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/experience/entitlement")>();
   return {
@@ -108,6 +111,7 @@ beforeEach(() => {
   mocks.ownershipError = null;
   mocks.roleError = null;
   mocks.business.isPublished = false;
+  mocks.business.status = "ACTIVE";
   mocks.experience.status = "DRAFT";
   mocks.experience.draftVersion = 3;
   mocks.experience.publishedVersion = 0;
@@ -117,6 +121,7 @@ beforeEach(() => {
   mocks.productCount = 2;
   mocks.experienceUpdate.mockResolvedValue({ id: "exp-a", status: "PUBLISHED", publishedVersion: 3, publishedAt: new Date() });
   mocks.businessUpdate.mockResolvedValue({ id: "business-a", isPublished: true });
+  mocks.businessUpdateMany.mockResolvedValue({ count: 1 });
   mocks.experienceUpdateMany.mockResolvedValue({ count: 1 });
   mocks.versionUpsert.mockResolvedValue({});
   mocks.transaction.mockImplementation(async (work: any) => work({
@@ -126,7 +131,9 @@ beforeEach(() => {
       findUnique: vi.fn(async () => ({ id: "exp-a", status: "PUBLISHED", publishedVersion: 3, publishedAt: new Date() })),
     },
     experienceVersion: { upsert: mocks.versionUpsert },
-    business: { update: mocks.businessUpdate },
+    business: { update: mocks.businessUpdate, updateMany: mocks.businessUpdateMany },
+    studioWebsite: { updateMany: vi.fn(async () => ({ count: 1 })), count: vi.fn(async () => 0) },
+    studioWebsiteContent: { updateMany: vi.fn(async () => ({ count: 1 })) },
     auditEvent: { create: mocks.audit },
   }));
   mocks.audit.mockResolvedValue({});
