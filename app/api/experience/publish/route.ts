@@ -276,7 +276,14 @@ export async function POST(req: Request) {
       url: getBusinessUrl(business.slug),
       message: "You’re live 🎉",
     });
-  } catch {
+  } catch (error) {
+    const message = (error as { message?: string })?.message;
+    if (message === "STUDIO_WEBSITE_UNPUBLISH_CONFLICT" || message === "EXPERIENCE_UNPUBLISH_CONFLICT") {
+      return NextResponse.json({
+        error: "The website changed while it was being unpublished. Reload and try again.",
+        code: "website_publish_conflict",
+      }, { status: 409 });
+    }
     console.error("experience publish failed");
     return NextResponse.json({ error: SAFE_ERRORS.publishFailed }, { status: 500 });
   }
