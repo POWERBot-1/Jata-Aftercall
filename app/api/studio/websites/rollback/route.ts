@@ -37,7 +37,12 @@ export async function POST(request: Request) {
     if (current.publishedVersion !== expectedPublishedVersion || current.draftVersion !== expectedDraftVersion) {
       return NextResponse.json({ error: "This website changed after you reviewed it. Reload its draft and publication history.", code: "website_publish_conflict", currentPublishedVersion: current.publishedVersion, currentDraftVersion: current.draftVersion }, { status: 409 });
     }
-    const validated = validateExperienceJson(target.snapshotJson, business.category);
+    let categoryKey: string | undefined;
+    try {
+      const parsed = JSON.parse(target.snapshotJson) as { categoryKey?: unknown };
+      if (typeof parsed?.categoryKey === "string") categoryKey = parsed.categoryKey;
+    } catch { /* schema validation below returns the safe failure */ }
+    const validated = validateExperienceJson(target.snapshotJson, categoryKey);
     if (!validated.ok) return NextResponse.json({ error: "That historical publication is no longer valid for this renderer.", issues: validated.issues }, { status: 422 });
     if (containsInlineImageDataUrl(validated.document)) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
