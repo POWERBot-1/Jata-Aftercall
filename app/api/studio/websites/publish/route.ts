@@ -65,7 +65,12 @@ export async function POST(request: Request) {
     if (content.draftVersion !== expectedDraftVersion || !content.draftJson) {
       return NextResponse.json({ error: "This website changed. Reload the latest draft before publishing.", code: "website_draft_version_conflict", currentDraftVersion: content.draftVersion }, { status: 409 });
     }
-    const schema = validateExperienceJson(content.draftJson, business.category);
+    let categoryKey: string | undefined;
+    try {
+      const parsed = JSON.parse(content.draftJson) as { categoryKey?: unknown };
+      if (typeof parsed?.categoryKey === "string") categoryKey = parsed.categoryKey;
+    } catch { /* schema validation below returns the safe failure */ }
+    const schema = validateExperienceJson(content.draftJson, categoryKey);
     if (!schema.ok) return NextResponse.json({ error: "The website draft failed validation.", code: "experience_schema_invalid", issues: schema.issues }, { status: 422 });
     if (containsInlineImageDataUrl(schema.document)) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
