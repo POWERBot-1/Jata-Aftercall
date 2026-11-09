@@ -102,5 +102,5 @@ export function ExperienceSite({ data: incoming, previewNotice, shell = true }: 
 
   return shell
     ? <StorefrontShell data={data} previewNotice={previewNotice} structuredData={structuredData}>{content}</StorefrontShell>
-    : <div data-motion-recipe="fade">{content}</div>;
+    : content;
 }
