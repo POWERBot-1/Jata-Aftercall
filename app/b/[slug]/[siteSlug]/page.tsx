@@ -4,6 +4,8 @@ import prisma from "@/lib/db";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
+import { StorefrontShell } from "@/components/storefront/StorefrontShell";
+import { structuredDataFor } from "@/lib/experience/structuredData";
 
 export const dynamic = "force-dynamic";
 
@@ -30,5 +32,15 @@ export default async function PublicStudioWebsitePage({ params }: Props) {
   const { slug, siteSlug } = await params;
   const site = await loadPublicSite(slug, siteSlug);
   if (!site) notFound();
-  return <ExperienceSite data={site} previewNotice={null} />;
+  const structuredData = structuredDataFor({
+    business: site.business,
+    document: site.document,
+    items: site.items.map((item) => ({ name: item.name, basePriceKES: item.price, description: item.description, imageUrl: item.imageUrl })),
+    services: site.services.map((service) => ({ title: service.name, priceFrom: service.price, description: service.description })),
+  });
+  return (
+    <StorefrontShell data={site} previewNotice={null} structuredData={structuredData}>
+      <ExperienceSite data={site} previewNotice={null} shell={false} />
+    </StorefrontShell>
+  );
 }
