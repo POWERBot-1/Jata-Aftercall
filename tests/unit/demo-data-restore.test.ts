@@ -61,6 +61,7 @@ vi.mock("@/lib/db", () => ({
         };
       },
     },
+    studioWebsite: h.db.studioWebsite,
     businessExperience: { findUnique: async () => null },
   },
 }));
