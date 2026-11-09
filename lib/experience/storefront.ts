@@ -314,13 +314,16 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
     tenantVisible: business.isPublished && business.status !== "SUSPENDED",
   });
   let json = decision.json;
+  let resolvedSource = decision.source;
   // An authorised owner preview of a tenant whose default site has never published may
-  // still fall back to the legacy draft, so preview and public rendering agree.
+  // still fall back to the legacy draft, so preview and public rendering agree. Preserve
+  // the source classification as well as the JSON: otherwise the owner receives draft
+  // content without the preview marker/robots semantics.
   if (!json && allowDraft && isDefaultRoute && legacyDraftAllowed(studioWebsite, true)) {
     json = experience?.draftJson || null;
+    if (json) resolvedSource = "draft";
   }
-  const usingDraft = decision.source === "draft";
-  const usePreferredDraft = usingDraft && preferDraft;
+  const usingDraft = resolvedSource === "draft";
   if (!json) return null;
 
   let document: ExperienceDocument;
@@ -374,7 +377,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
       : null,
     categories,
     // Preview is exactly "the visitor is looking at something not publicly live".
-    isPreview: decision.source === "draft",
+    isPreview: usingDraft,
     // The version of what is actually being rendered: the site's own publication when
     // the site published, otherwise the legacy row that stood in for it.
     publishedVersion: decision.source === "published"
