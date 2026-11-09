@@ -301,7 +301,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
   const sitePublished = studioWebsite?.status === "PUBLISHED" ? studioWebsite.content?.publishedJson ?? null : null;
   // Once a StudioWebsite exists, its publication state is authoritative. Only
   // businesses not yet provisioned for per-site Studio retain the legacy fallback.
-  const legacyPublished = !websiteSlug && !sitePublished && business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED"
+  const legacyPublished = !websiteSlug && !studioWebsite && business.isPublished && experience?.publishedJson && experience.status === "PUBLISHED"
     ? experience.publishedJson : null;
   const usingDraft = allowDraft && Boolean(siteDraft || (!studioWebsite && experience?.draftJson));
   const usePreferredDraft = preferDraft && usingDraft;
