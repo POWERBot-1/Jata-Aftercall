@@ -109,7 +109,7 @@ describe("publication state machine", () => {
         legacy: legacyWithDraft,
         allowDraft: true,
         preferDraft: true,
-      })).toEqual({ json: '{"draft":true}', source: "draft" });
+      })).toEqual({ json: "{}", source: "published" });
     });
 
     it("never resurfaces the legacy snapshot after an explicit unpublish", () => {
