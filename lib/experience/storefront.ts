@@ -251,6 +251,8 @@ export type LoadStorefrontOptions = {
    * together with `allowDraft`.
    */
   preferDraft?: boolean;
+  /** Explicit per-business secondary-site slug; omitted resolves the default site. */
+  websiteSlug?: string;
 };
 
 /**
@@ -262,7 +264,7 @@ export type LoadStorefrontOptions = {
  * performs a single load and the SSR root segment completes with the metadata —
  * keeping the hydration bootstrap scripts behind the content in the emitted HTML.
  */
-async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft: boolean): Promise<StorefrontData | null> {
+async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft: boolean, websiteSlug: string | null): Promise<StorefrontData | null> {
   const business = await prisma.business.findUnique({
     where: { slug },
     select: {
@@ -280,7 +282,9 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
   // completed the per-site cutover; secondary sites are resolved by their own route.
   const [studioWebsite, experience] = await Promise.all([
     prisma.studioWebsite.findFirst({
-      where: { businessId: business.id, isDefault: true, status: { not: "SUSPENDED" } },
+      where: websiteSlug
+        ? { businessId: business.id, slug: websiteSlug, isDefault: false, status: { not: "SUSPENDED" } }
+        : { businessId: business.id, isDefault: true, status: { not: "SUSPENDED" } },
       select: {
         id: true,
         status: true,
@@ -368,7 +372,7 @@ async function loadStorefrontImpl(slug: string, allowDraft: boolean, preferDraft
 const loadStorefrontCached = requestCache(loadStorefrontImpl);
 
 export function loadStorefront(slug: string, options: LoadStorefrontOptions = {}): Promise<StorefrontData | null> {
-  return loadStorefrontCached(slug, options.allowDraft === true, options.preferDraft === true);
+  return loadStorefrontCached(slug, options.allowDraft === true, options.preferDraft === true, options.websiteSlug ?? null);
 }
 
 export function findItem(data: StorefrontData, id: string): StorefrontItem | null {
