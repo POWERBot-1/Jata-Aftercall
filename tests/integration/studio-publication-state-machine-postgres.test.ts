@@ -188,6 +188,14 @@ async function legacyUnpublish(businessId: string) {
   }));
 }
 
+async function legacyPublish(businessId: string, expectedDraftVersion: number) {
+  return legacyPublishRoute(new Request("http://localhost/api/experience/publish", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ businessId, expectedDraftVersion }),
+  }));
+}
+
 describe.skipIf(!enabled)("publication state machine through the real routes on PostgreSQL", () => {
   beforeAll(async () => {
     client = makeRealPrisma();
@@ -311,6 +319,44 @@ describe.skipIf(!enabled)("publication state machine through the real routes on 
     const response = await unpublish(t.defaultSite, d1.draftVersion + 99, d1.publishedVersion);
     expect(response.status).toBe(409);
     expect((await client.studioWebsite.findUnique({ where: { id: t.defaultSite.id } })).status).toBe("PUBLISHED");
+  });
+
+  it("does not let per-site publish reactivate a suspended business", async () => {
+    const t = await provisionPublishedTenant();
+    const s0 = await t.readVersions(t.secondarySite);
+    await client.business.update({ where: { id: t.business.id }, data: { status: "SUSPENDED" } });
+    const response = await publish(t.secondarySite, s0.draftVersion, s0.publishedVersion);
+    expect(response.status).toBe(409);
+    expect((await client.business.findUnique({ where: { id: t.business.id } })).status).toBe("SUSPENDED");
+    expect((await client.studioWebsite.findUnique({ where: { id: t.secondarySite.id } })).status).toBe("DRAFT");
+  });
+
+  it("does not let rollback reactivate a suspended business or alter its site", async () => {
+    const t = await provisionPublishedTenant();
+    const s0 = await t.readVersions(t.secondarySite);
+    expect((await publish(t.secondarySite, s0.draftVersion, s0.publishedVersion)).status).toBe(200);
+    const current = await t.readVersions(t.secondarySite);
+    const before = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
+    await client.business.update({ where: { id: t.business.id }, data: { status: "SUSPENDED" } });
+    const response = await rollback(t.secondarySite, current.publishedVersion, current.draftVersion, current.publishedVersion);
+    const after = await client.studioWebsiteContent.findUnique({ where: { websiteId: t.secondarySite.id } });
+    expect(response.status).toBe(409);
+    expect((await client.business.findUnique({ where: { id: t.business.id } })).status).toBe("SUSPENDED");
+    expect((await client.studioWebsite.findUnique({ where: { id: t.secondarySite.id } })).status).toBe("PUBLISHED");
+    expect(after.publishedJson).toBe(before.publishedJson);
+    expect(after.publishedVersion).toBe(before.publishedVersion);
+    expect(after.draftJson).toBe(before.draftJson);
+    expect(after.draftVersion).toBe(before.draftVersion);
+  });
+
+  it("does not let the legacy publish UI reactivate a suspended business", async () => {
+    const t = await provisionPublishedTenant();
+    const experience = await client.businessExperience.findUnique({ where: { businessId: t.business.id } });
+    await client.business.update({ where: { id: t.business.id }, data: { status: "SUSPENDED" } });
+    const response = await legacyPublish(t.business.id, experience.draftVersion);
+    expect(response.status).toBe(409);
+    expect((await client.business.findUnique({ where: { id: t.business.id } })).status).toBe("SUSPENDED");
+    expect((await client.businessExperience.findUnique({ where: { businessId: t.business.id } })).status).toBe("PUBLISHED");
   });
 
   it("keeps a published secondary site live when the legacy default-site UI unpublishes", async () => {
