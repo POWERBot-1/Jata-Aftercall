@@ -1137,4 +1137,22 @@
   "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
   "currentAssessmentStatus": "BLOCKED"
  }
+,
+ "RELEASE-002": {
+  "status": "PASS",
+  "acceptance": "The owner explicitly authorizes normal, policy-compliant PR #104 merge and production deployment, conditional on every mandatory release check and acceptance gate passing; no gate bypass is authorized.",
+  "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §044 (RELEASE-002)",
+  "implementationLocation": "docs/ADMIN_BUILDING_INSTRUCTIONS.md, PR #104 release authorization and deployment verification workflow.",
+  "verificationMethod": "Verified the owner's explicit approval message in the current conversation and preserved its exact scope and conditions in the append-only instruction register.",
+  "testResult": "Owner authorization is recorded. It authorizes normal merge and deployment only after the final exact candidate is READY; it does not waive programme completeness or other mandatory checks.",
+  "evidence": [
+   "docs/ADMIN_BUILDING_INSTRUCTIONS.md"
+  ],
+  "assessmentReference": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §044",
+  "verificationCommit": "e146269567204d1597fade60976565f874255593",
+  "scopeNote": "This PASS records release-action authorization only. It is not a statement that PR #104 is ready, merged, or deployed.",
+  "sourceCommit": "e146269567204d1597fade60976565f874255593",
+  "currentAssessmentSourceSha": "e146269567204d1597fade60976565f874255593",
+  "currentAssessmentStatus": "PASS"
+ }
 }
