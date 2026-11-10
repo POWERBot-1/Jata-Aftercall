@@ -10,21 +10,27 @@ import {
   Gift,
   Home,
   Image as ImageIcon,
+  LayoutTemplate,
   Megaphone,
   Package,
+  Palette,
+  PanelsTopLeft,
   QrCode,
   Receipt,
   Settings2,
   Sparkles,
+  UploadCloud,
   Users,
+  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/ui";
 
 /**
  * Studio navigation (§4, §13)
  *
- * The owner's business tools remain available, while all website editing is consolidated into
- * the single OpenPage-powered Website Studio. Every destination is a 44px touch target, the current section is marked with
+ * The owner's map of their website, named in their language: Home, Website, Products & services,
+ * Photos, Design, Brand, Orders & bookings, Analytics, Preview — plus the publish panel back on
+ * Home. Every destination is a 44px touch target, the current section is marked with
  * `aria-current="page"` and is visibly distinct, and the row scrolls horizontally on a phone
  * rather than wrapping into an unusable grid.
  *
@@ -35,11 +41,16 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
   const base = `/dashboard/businesses/${businessId}`;
   const pathname = usePathname() || "";
   const tabs = [
-    { href: "/dashboard/studio", label: "All businesses", icon: Home },
-    // One editing surface: OpenPage-powered prompt generation, refinement, preview and publishing.
+    { href: base, label: "Home", icon: Home, exact: true },
+    // Prompt-first Website Studio. The Canvas and classic tabs remain until the replacement
+    // has passed acceptance, so no owner loses access to the editor they already know.
     { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
+    { href: `${base}/canvas`, label: "Canvas", icon: PanelsTopLeft },
+    { href: `${base}/sections`, label: "Website", icon: LayoutTemplate },
+    { href: `${base}/create`, label: "Create", icon: Wand2 },
     { href: `${base}/items`, label: "Products & services", icon: Package },
     { href: `${base}/photos`, label: "Gallery", icon: ImageIcon },
+    { href: `${base}/design`, label: "Design", icon: Palette },
     { href: `${base}/theme`, label: "Brand & settings", icon: Settings2 },
     ...(capabilities.includes("commerce") || capabilities.includes("booking")
       ? [{ href: `${base}/orders`, label: "Orders & bookings", icon: Receipt }]
@@ -57,6 +68,7 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
     { href: `${base}/loyalty/points`, label: "Points", icon: Coins },
     { href: `${base}/qr`, label: "QR code", icon: QrCode },
     { href: `${base}/preview`, label: "Preview", icon: Eye },
+    { href: `${base}#publish`, label: "Publish", icon: UploadCloud },
   ];
 
   return (
