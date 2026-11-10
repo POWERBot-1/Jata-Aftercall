@@ -354,6 +354,9 @@ jobs:
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
           # DEF-1 (§M.4): quick-action-bar labels must stay inside their own controls at 320-430px.
           npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log
+          # The CLASSIC page's sticky contact bar (the element the 320x568 capture actually showed),
+          # measured at deviceScaleFactor 2 so the Share-edge gutter is a number, not a guess.
+          npm run test:browser:classic-sticky 2>&1 | tee /tmp/step-classic-sticky-browser.log
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
           npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
@@ -379,7 +382,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$|^ACTIONBAR GUTTER .+$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$|^ACTIONBAR GUTTER .+$|^CLASSIC STICKY .+$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [
@@ -395,7 +398,8 @@ jobs:
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
-              ['Quick-action-bar containment and edge gutters (Share-edge question)', '/tmp/step-actionbar-browser.log'],
+              ['Quick-action-bar containment and edge gutters (storefront .eb-actionbar)', '/tmp/step-actionbar-browser.log'],
+              ['Classic sticky contact bar edge gutter at native device scale (Share-edge question)', '/tmp/step-classic-sticky-browser.log'],
               ['Registered family geometry/SSR/touch browser', '/tmp/step-family-browser.log'],
               ['Local raster pixels (provider/persistence BLOCKED)', '/tmp/step-media-local-browser.log'],
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');

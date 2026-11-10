@@ -4,7 +4,7 @@
 # This file deliberately does not list itself; a digest of itself cannot verify.
 
 362b71ae3e0dad7691dfa2563ab040a36bd1dc25ea6c5f417a2e7303cb7d1c65  .github/workflows/candidate-rehearsal.yml
-a1869d232bfd3eec1511b32cb124ac2056be30eeb5d50474a1f1315ce852a1bc  .github/workflows/interactive-business-e2e.yml
+8d31f3c9687da4c88751672a3dca6efae0a5c0468f89b32e17f70e46408fe50f  .github/workflows/interactive-business-e2e.yml
 9d84ddb57796a1c5879c91a5933fad68ce7a60f8af19bff6a45d31243b22ca88  .github/workflows/production-smoke.yml
 607c5199fad24c597f4b033dcb3f8a7984c269d31fc0b13ed4eb69860afe48e0  .github/workflows/release-validation.yml
 e37097ea26b91b8c777ee2721a727b814823d8e2f8eb6fa2f0a8de20b481d723  app/control/page.tsx
@@ -39,7 +39,7 @@ c243200ae609452030a6530c4980566783d488c64e588f4d4adae676f8a4cbd6  docs/schema-re
 228edaf23857c28d1490e521e5ffe986c0189f6f4a10a34504f53351b9e44e29  docs/schema-reconciliation/reconciliation.patch
 13824aac50398df70cdfb08a3e4f5d9eebbdb91c9a13863922e0eb01ae547772  lib/control/access.ts
 0688630571185f7519255d2f237de8bae443fe3fe5c291b12d9e26fea596fa4a  lib/control/role-policy.ts
-ad49b70a8ee61f1a5fd0a272369bc40761f9a30a7931a542b11e9b79b3abb6ba  package.json
+85e3031ec8cbca69639b008a95898a69fc630a09078671a3568cff88e914ee74  package.json
 c761b2aa36654901227b6fbf2f3c176b699722777f38eda1406ce2591a5a6137  scripts/__tests__/authorize-migration.test.mjs
 f3bd80668e116c0d7e736f6181cbf873484f66d610656848770031bce8ccff15  scripts/__tests__/check-schema-drift.test.mjs
 955ac772c693993d2c62cc92445f09bbeb87dfed08bbd3cab0cd5444fd5a7481  scripts/__tests__/check-test-output.test.mjs
