@@ -44,7 +44,11 @@ vi.mock("@/lib/tenant", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   default: {
-    business: { findUnique: vi.fn(async () => mocks.business) },
+    business: {
+      findUnique: vi.fn(async () => mocks.business),
+      // An explicit type change now moves the business record with the draft.
+      update: vi.fn(async () => mocks.business),
+    },
     businessExperience: {
       findUnique: vi.fn(async () => mocks.experience),
       update: mocks.experienceUpdate,

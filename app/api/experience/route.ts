@@ -16,6 +16,7 @@ import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-webs
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { getExperienceProfile, isCategoryKey } from "@/lib/experience/categories";
+import { planCreateCategory, planContentCategory } from "@/lib/experience/category-authority";
 import {
   addSection,
   createExperienceDocument,
@@ -159,9 +160,14 @@ export async function POST(req: Request) {
     const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-    const categoryKey = isCategoryKey(body?.categoryKey) ? body.categoryKey : null;
-    if (!categoryKey) return NextResponse.json({ error: "Choose the type of business you run." }, { status: 400 });
-
+    // The business record, not the request body, decides which kind of business this site is.
+    // Changing a business's type is `PATCH /api/business`, which updates that record; letting a
+    // website request name its own category would let an owner silently switch this site to a
+    // different set of sections, catalogue rules and customer flow. The check itself runs after the
+    // existing-draft version guards below, so an unversioned or stale request is refused for that
+    // reason first and keeps its documented status code.
+    const tenant = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true } });
+    if (!tenant) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     const existing = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (existing) {
       // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
@@ -176,6 +182,14 @@ export async function POST(req: Request) {
       if (expectedDraftVersion !== Number(existing.draftVersion)) {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
       }
+      const plan = planCreateCategory(tenant.category, body?.categoryKey);
+      if (!plan.ok) {
+        return NextResponse.json(
+          { error: plan.error, code: plan.code, businessCategory: plan.businessCategory },
+          { status: plan.status },
+        );
+      }
+      const categoryKey = plan.categoryKey;
       const previous = validateExperienceJson(existing.draftJson || "{}", existing.categoryKey);
       if (!previous.ok) return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version first.", code: "experience_schema_invalid" }, { status: 409 });
       let document = normalizeExperienceDocument({ ...previous.document, categoryKey, themeKey: body?.themeKey || existing.themeKey }, categoryKey);
@@ -207,6 +221,12 @@ export async function POST(req: Request) {
       if (!updated) {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
       }
+      // The owner explicitly changed their business type. The business record must move with the
+      // draft, or the tenant and its website would disagree about what the business is — the site
+      // would render one business's sections while invoices, admin and the profile said another.
+      if (plan.propagateToBusiness) {
+        await prisma.business.update({ where: { id: businessId }, data: { category: categoryKey } });
+      }
       await recordDraftRevision(prisma, {
         businessId,
         draftVersion: nextVersion,
@@ -224,6 +244,17 @@ export async function POST(req: Request) {
       select: { id: true, name: true, description: true, phone: true, whatsapp: true, location: true, category: true },
     });
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+
+    // A first website may only be created for the kind of business the business record says this is
+    // (or, while onboarding has not yet recorded one, for the owner's first choice).
+    const createPlan = planCreateCategory(business.category, body?.categoryKey);
+    if (!createPlan.ok) {
+      return NextResponse.json(
+        { error: createPlan.error, code: createPlan.code, businessCategory: createPlan.businessCategory },
+        { status: createPlan.status },
+      );
+    }
+    const categoryKey = createPlan.categoryKey;
 
     // The new draft is seeded so later regenerations are reproducible. A brand-new business has no
     // published history to compare against, so the diversity status says so instead of claiming a check.
@@ -244,6 +275,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
 
+    // Same rule on first publication of a website: the tenant's recorded type follows the owner's
+    // choice so the two never disagree.
+    if (createPlan.propagateToBusiness) {
+      await prisma.business.update({ where: { id: businessId }, data: { category: categoryKey } });
+    }
     const experience = await prisma.businessExperience.create({
       data: {
         businessId,
@@ -440,12 +476,26 @@ export async function PATCH(req: Request) {
           return NextResponse.json({ error: "That design direction is not supported. Nothing was changed.", code: "experience_schema_invalid" }, { status: 400 });
         }
       }
+      // A partial edit may not re-categorise the site. The body's category is checked against the
+      // tenant's business record exactly as on create. The read is deliberately here, not at the top
+      // of the handler: the documented refusal order is 428 (no base version) → 409 (stale draft) →
+      // category → validation, so an unversioned or stale request is still refused for that reason
+      // first. Reading the business earlier would have shadowed those safeguards with a 404.
+      const tenantRow = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true } });
+      if (!tenantRow) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+      const patchCategory = planContentCategory(tenantRow.category, body?.categoryKey);
+      if (!patchCategory.ok) {
+        return NextResponse.json(
+          { error: patchCategory.error, code: patchCategory.code, businessCategory: patchCategory.businessCategory },
+          { status: patchCategory.status },
+        );
+      }
       const next = {
         ...document,
         brand: body?.brand ? { ...document.brand, ...body.brand } : document.brand,
         settings: body?.settings ? { ...document.settings, ...body.settings } : document.settings,
         themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : document.themeKey,
-        categoryKey: isCategoryKey(body?.categoryKey) ? body.categoryKey : document.categoryKey,
+        categoryKey: isCategoryKey(body?.categoryKey) ? patchCategory.categoryKey : document.categoryKey,
         // Design intent chosen in the Studio (photography language + direction) is part of the
         // document, so it travels with the draft and drives future AI generation (§44).
         photographyStyle: typeof body?.photographyStyle === "string" ? body.photographyStyle : document.photographyStyle,
