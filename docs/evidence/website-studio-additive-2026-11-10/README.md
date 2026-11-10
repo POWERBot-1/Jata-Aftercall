@@ -43,8 +43,15 @@ same offline-Prisma tests. These are unchanged from #108.
 
 ## CI and delivery status
 
+- `git push --dry-run origin HEAD:refs/heads/arena/website-studio-openpage-cutover` reported
+  `f5e2067..7a12350` and exited 0. GitHub accepts the fast-forward; this is **not** a branch
+  protection refusal.
 - `gh workflow run interactive-business-e2e.yml --ref arena/3ecfbb83-jata-aftercall` returned
   **HTTP 403 Resource not accessible by integration**; this token has no Actions dispatch write.
+- `npm run test:browser:studio-authenticated` refused before starting a server with
+  **exit 2**: first `Isolated browser fixture writes not opted in`, then, with
+  `STUDIO_BROWSER_TEST_WRITE=1`, `Dedicated test database URLs missing or unequal`. No fixtures,
+  browser or passing journey were claimed.
 - Pushing the session branch does not trigger the `pull_request` workflows, and Arena branch policy
   forbids pushing the target PR branch from this session.
 - Therefore the **exact-head authenticated real-database journey is NOT TESTED** on `176b0d8`.
