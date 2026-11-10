@@ -73,7 +73,7 @@ export default async function StudioIndexPage() {
             Build the site your <em>customers</em> actually use.
           </>
         }
-        subtitle="Sections, catalogue, theme, photos and preview — all in one editor. Your public page keeps working while you edit; customers only see a change once you publish it."
+        subtitle="Start with a business brief, compare distinct AI-generated website layouts, refine the design, preview every device and publish when ready. Your existing products, photos, services and live site remain connected."
         photo={WORKSPACE_HERO_PHOTO}
         actions={
           <>
@@ -143,8 +143,8 @@ export default async function StudioIndexPage() {
                   }
                   actions={
                     <>
-                      <Link className="jata-btn jata-btn-primary" href={`/dashboard/businesses/${business.id}`}>
-                        Open studio <ArrowRight size={15} aria-hidden="true" />
+                      <Link className="jata-btn jata-btn-primary" href={`/dashboard/businesses/${business.id}/studio`}>
+                        Open Website Studio <ArrowRight size={15} aria-hidden="true" />
                       </Link>
                       <Link className="jata-btn jata-btn-secondary" href={getBusinessUrl(business.slug)} target="_blank" rel="noopener noreferrer">
                         <ExternalLink size={15} aria-hidden="true" /> {business.isPublished ? "View site" : "Preview"}
