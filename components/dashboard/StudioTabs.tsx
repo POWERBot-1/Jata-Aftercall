@@ -35,7 +35,7 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
   const base = `/dashboard/businesses/${businessId}`;
   const pathname = usePathname() || "";
   const tabs = [
-    { href: base, label: "Home", icon: Home, exact: true },
+    { href: "/dashboard/studio", label: "All businesses", icon: Home },
     // One editing surface: OpenPage-powered prompt generation, refinement, preview and publishing.
     { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
     { href: `${base}/items`, label: "Products & services", icon: Package },
