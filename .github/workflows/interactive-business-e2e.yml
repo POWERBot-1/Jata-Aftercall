@@ -379,7 +379,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$|^ACTIONBAR GUTTER .+$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [
@@ -395,6 +395,7 @@ jobs:
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
+              ['Quick-action-bar containment and edge gutters (Share-edge question)', '/tmp/step-actionbar-browser.log'],
               ['Registered family geometry/SSR/touch browser', '/tmp/step-family-browser.log'],
               ['Local raster pixels (provider/persistence BLOCKED)', '/tmp/step-media-local-browser.log'],
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');

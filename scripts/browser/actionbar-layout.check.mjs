@@ -209,6 +209,11 @@ try {
     check(`${width}px: the action bar is horizontally symmetric on screen`,
       m.symmetry !== null && m.symmetry.screen <= SYMMETRY_TOLERANCE,
       m.symmetry ? `left/right delta=${m.symmetry.screen}px (bar delta=${m.symmetry.bar}px)` : "no actions");
+
+    // A compact machine-readable line so the numbers survive into the PR evidence comment: the
+    // workflow publishes only lines matching its summary pattern, and "PASS" alone cannot be
+    // inspected later. This is the durable answer to the Share-edge question.
+    console.log(`ACTIONBAR GUTTER ${width}px innermost=${m.innermostViewportGutter}px symmetry=${m.symmetry?.screen}px pageOverflowX=${m.pageOverflowX}px outermostRight=${m.edgeGutters.at(-1)?.toViewportRight}px`);
     check(`${width}px: every action is a 44px touch target`,
       m.actions.every((a) => a.rect.height >= 43.5), `heights=${m.actions.map((a) => a.rect.height.toFixed(0)).join(",")}`);
 
