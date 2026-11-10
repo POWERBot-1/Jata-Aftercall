@@ -300,6 +300,31 @@ rewritten. `git diff origin/main -- docs/agents/PROGRAMME_READINESS.json` adds R
 - **Website Studio / OpenPage:** untouched by this cycle. No route, component, API, schema or pricing
   file was modified; the additive Studio restoration from the previous cycle is intact.
 
+## 8a. Full-resolution evidence — attempted and blocked at the network boundary
+
+The six captures retrieved through the annotation channel are thumbnails (~100 px). Full-resolution
+PNGs and WebM recordings **do** exist as artifacts *(`motion-partial-…`, 29,698,027 bytes;
+`motion-routes-…`, 2,410,941 bytes; `motion-families-…`, 20,991,332 bytes at `b9dd943`)*, but the
+download is refused:
+
+```
+gh api repos/POWERBot-1/Jata-Aftercall/actions/artifacts/13808972579/zip
+→ Get "https://productionresultssa31.blob.core.windows.net/actions-results/…": TLS/connection blocked
+```
+
+Only `github.com`, `codeload.github.com`, `api.github.com`, `registry.npmjs.org`, `pypi.org` and
+`files.pythonhosted.org` are reachable from this environment, so `productionresultssa*.blob.core.windows.net`
+cannot be read. This is the documented egress limit, not a missing capability of the workflow.
+
+**Consequence, stated plainly:** requirement 1 of this cycle's directive — "retrieve all six
+full-resolution captures and inspect them at native resolution" — is **BLOCKED**, not done. What was
+achieved is the next best thing that is honest: all six viewports now publish *whole* (previously one),
+and the `ACTIONBAR GUTTER` line puts the edge question into numbers so it does not depend on pixels.
+
+There is exactly one working full-resolution channel in this repository: `premium-screenshots.yml`
+commits full-page PNGs to the branch when the PR carries the `visual-evidence` label. That rewrites
+the branch under review, so it is left for the owner to authorise (see `OWNER-DECISIONS.md`).
+
 ## 9. Recommended next action
 
 1. **Read the six captured viewports** produced by the next `motion-evidence` run
