@@ -18,7 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { rateLimit } from "@/lib/rate-limit";
 import { enhanceStudioImage } from "@/lib/ai/imageLab";
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-  const guard = await guardTenantMutation(session, businessId, "configure");
+  const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const imageDataUrl = typeof body?.imageDataUrl === "string" ? body.imageDataUrl : "";

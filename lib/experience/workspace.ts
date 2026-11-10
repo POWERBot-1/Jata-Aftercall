@@ -9,9 +9,10 @@
 import { getSession, type SessionPayload } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { requestCache } from "@/lib/request-cache";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { ensureDefaultStudioWebsite } from "./ensure-default-website";
 import { createExperienceDocument, normalizeExperienceDocument } from "./document";
 import { getExperienceProfile } from "./categories";
+import { categoryForRead } from "./category-authority";
 import type { ExperienceProfile } from "./types";
 import { getInteractiveEntitlement, type EntitlementState } from "./entitlement";
 import { validateForPublication, findInvalidCatalogueItems, type PublishValidation } from "./validate";
@@ -92,7 +93,7 @@ async function loadWorkspaceImpl(businessId: string): Promise<Workspace | null> 
   const session = await getSession();
   if (!session) return null;
   try {
-    await assertBusinessOwnership(businessId, session);
+    await ensureDefaultStudioWebsite(businessId, session);
   } catch {
     return null;
   }
@@ -129,7 +130,10 @@ async function loadWorkspaceImpl(businessId: string): Promise<Workspace | null> 
   const publishedJson = readJson(experience?.publishedJson);
   const draft = draftJson ? normalizeExperienceDocument(draftJson, experience?.categoryKey ?? business.category) : null;
   const published = publishedJson ? normalizeExperienceDocument(publishedJson, experience?.categoryKey ?? business.category) : null;
-  const categoryKey = experience?.categoryKey || (draft?.categoryKey as string) || business.category || "other";
+  const categoryKey = categoryForRead(
+    business.category,
+    experience?.categoryKey || (draft?.categoryKey as string) || null,
+  ).categoryKey;
   const profile = getExperienceProfile(categoryKey);
 
   const document =

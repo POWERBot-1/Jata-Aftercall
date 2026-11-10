@@ -10,6 +10,7 @@ import { WORKSPACE_HERO_PHOTO } from "@/lib/workspaceImagery";
 import { getExtendedAIConfig } from "@/lib/ai-config";
 import { getBusinessBrain } from "@/lib/ai-business-brain";
 import { getAIPackageStatus, AI_FRONT_DESK_PLAN_KEY } from "@/lib/ai-entitlement";
+import { isFrontDeskTierKey } from "@/lib/frontDeskTiers";
 import { evaluateAIReadiness } from "@/lib/ai-readiness";
 import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { formatOpeningHours } from "@/lib/openingHours";
@@ -88,14 +89,22 @@ export default async function AIDashboardPage({
     );
   }
 
-  const [aiConfig, brain, entitlement, readiness, publication, plan] = await Promise.all([
+  const [aiConfig, brain, entitlement, readiness, publication] = await Promise.all([
     prisma.aIConfiguration.findUnique({ where: { businessId } }).catch(() => null),
     getBusinessBrain(businessId).catch(() => null),
     getAIPackageStatus(businessId).catch(() => null),
     evaluateAIReadiness(businessId).catch(() => null),
     getAIFrontDeskPublication(businessId).catch(() => null),
-    prisma.planConfig.findUnique({ where: { key: AI_FRONT_DESK_PLAN_KEY } }).catch(() => null),
   ]);
+  // Price card shows the tier the business actually holds (any of the four Front Desk tiers),
+  // falling back to the Starter row when no tier is active yet — never a browser-supplied price.
+  const heldTierKey =
+    entitlement?.packageKey && isFrontDeskTierKey(entitlement.packageKey)
+      ? entitlement.packageKey
+      : AI_FRONT_DESK_PLAN_KEY;
+  const plan = await prisma.planConfig
+    .findUnique({ where: { key: heldTierKey } })
+    .catch(() => null);
 
   const extended = brain?.extendedConfig ?? (await getExtendedAIConfig(businessId, aiConfig));
   const hours = formatOpeningHours(business.openingHours);

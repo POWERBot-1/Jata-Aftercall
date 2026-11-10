@@ -20,6 +20,14 @@ const nextNumber = String([...baseline.matchAll(/^#{2,3} (\d{3}) — /gm)].lengt
 const nextAdmin = String(Math.max(...[...baseline.matchAll(/^#{2,3} \d{3} — ADMIN-(\d{3}):/gm)].map((m) => Number(m[1]))) + 1).padStart(3, "0");
 const section = (id = `ADMIN-${nextAdmin}`, number = nextNumber, correction = "") => `\n## ${number} — ${id}: Fixture\n- **Date / approval / status:** 2026-10-31; approved; PENDING.\n- **Owner instruction:** Fixture.\n- **Purpose / function:** Fixture.\n- **Security/privacy / UX:** Fixture.\n- **Affected:** Fixture.\n- **Acceptance:** Fixture. **Dependencies:** Fixture. **Evidence/commit:** Fixture.\n${correction}`;
 
+test("accepts AUTHORIZED as a status for an explicit owner approval record", () => {
+  const f = fixture(); try {
+    appendFileSync(f.doc, section().replace("approved; PENDING.", "approved; AUTHORIZED."));
+    f.commit();
+    const r = f.check();
+    assert.equal(r.status, 0, r.stderr);
+  } finally { f.clean(); }
+});
 test("first introduction is verified and a committed append is accepted", () => {
   const f = fixture(); try { let r = f.check(); assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, /first introduction [a-f0-9]{40}/); appendFileSync(f.doc, section()); f.commit(); r = f.check(); assert.equal(r.status, 0, r.stderr); assert.match(r.stdout, new RegExp(`${Number(nextNumber)} sequential requirements`)); } finally { f.clean(); }
 });

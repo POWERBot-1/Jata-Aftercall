@@ -11,10 +11,12 @@ import { historyBasisFor, seedNewDocument } from "@/lib/experience/variant";
 import { diversityReport } from "@/lib/experience/diversity";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, guardTenantMutation, TenantError } from "@/lib/tenant";
+import { TenantError, guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { getExperienceProfile, isCategoryKey } from "@/lib/experience/categories";
+import { categoryForRead, planCreateCategory, planContentCategory } from "@/lib/experience/category-authority";
 import {
   addSection,
   createExperienceDocument,
@@ -27,6 +29,7 @@ import {
 } from "@/lib/experience/document";
 import { moveSectionTo } from "@/lib/studio/canvas";
 import { isValidThemeKey } from "@/lib/experience/themes";
+import { parseArtDirection } from "@/lib/experience/templateFamilies";
 import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
 import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
@@ -64,7 +67,8 @@ export async function GET(req: Request) {
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
 
   try {
-    await assertBusinessOwnership(businessId, session);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "read");
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -85,7 +89,10 @@ export async function GET(req: Request) {
 
     const draft = parseDocument(experience?.draftJson, experience?.categoryKey ?? business.category);
     const published = parseDocument(experience?.publishedJson, experience?.categoryKey ?? business.category);
-    const categoryKey = experience?.categoryKey || (draft?.categoryKey as string) || business.category || "other";
+    // The business record is authoritative. A legacy draft may still hold a different category;
+    // reading never refuses, but the mismatch is reported so the editor can explain it.
+    const readCategory = categoryForRead(business.category, experience?.categoryKey || (draft?.categoryKey as string) || null);
+    const categoryKey = readCategory.categoryKey;
     const profile = getExperienceProfile(categoryKey);
     const entitlement = await getInteractiveEntitlement(businessId);
     const paidPayment = await prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } });
@@ -132,6 +139,8 @@ export async function GET(req: Request) {
         : null,
       document,
       publishedDocument: published,
+      categoryKey,
+      categoryMismatch: readCategory.mismatch,
       hasDraft: Boolean(experience),
       hasUnpublishedChanges: hasUnpublishedChanges(experience?.draftJson, experience?.publishedJson),
       entitlement,
@@ -153,12 +162,17 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-    const categoryKey = isCategoryKey(body?.categoryKey) ? body.categoryKey : null;
-    if (!categoryKey) return NextResponse.json({ error: "Choose the type of business you run." }, { status: 400 });
-
+    // The business record, not the request body, decides which kind of business this site is.
+    // Changing a business's type is `PATCH /api/business`, which updates that record; letting a
+    // website request name its own category would let an owner silently switch this site to a
+    // different set of sections, catalogue rules and customer flow. The check itself runs after the
+    // existing-draft version guards below, so an unversioned or stale request is refused for that
+    // reason first and keeps its documented status code.
+    const tenant = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true } });
+    if (!tenant) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
     const existing = await prisma.businessExperience.findUnique({ where: { businessId } });
     if (existing) {
       // A change of business type rewrites the draft, so it follows the same rule as PATCH: a
@@ -173,6 +187,14 @@ export async function POST(req: Request) {
       if (expectedDraftVersion !== Number(existing.draftVersion)) {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE, currentDraftVersion: existing.draftVersion }, { status: 409 });
       }
+      const plan = planCreateCategory(tenant.category, body?.categoryKey);
+      if (!plan.ok) {
+        return NextResponse.json(
+          { error: plan.error, code: plan.code, businessCategory: plan.businessCategory },
+          { status: plan.status },
+        );
+      }
+      const categoryKey = plan.categoryKey;
       const previous = validateExperienceJson(existing.draftJson || "{}", existing.categoryKey);
       if (!previous.ok) return NextResponse.json({ error: "This draft could not be opened safely. Restore a supported version first.", code: "experience_schema_invalid" }, { status: 409 });
       let document = normalizeExperienceDocument({ ...previous.document, categoryKey, themeKey: body?.themeKey || existing.themeKey }, categoryKey);
@@ -186,22 +208,53 @@ export async function POST(req: Request) {
       }
       const profile = getExperienceProfile(categoryKey);
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
-      const updated = await prisma.businessExperience
-        .update({
-          where: { businessId, draftVersion: existing.draftVersion },
-          data: {
-            categoryKey,
-            themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
-            draftJson: JSON.stringify(document),
-            draftVersion: nextVersion,
-            historyCursor: nextVersion,
-          },
+      // The draft, the business record and the revision are ONE unit. Writing the draft and then
+      // moving the business record as a second statement would leave exactly the divergence this
+      // change exists to remove if the second write failed: the site would render the new type's
+      // sections while the tenant profile still said the old one. Both rows are also claimed with
+      // compare-and-swaps, so a concurrent type change cannot interleave between the read above and
+      // these writes.
+      const written = await prisma
+        .$transaction(async (tx: any) => {
+          const draft = await tx.businessExperience.updateMany({
+            where: { businessId, draftVersion: existing.draftVersion },
+            data: {
+              categoryKey,
+              themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
+              draftJson: JSON.stringify(document),
+              draftVersion: nextVersion,
+              historyCursor: nextVersion,
+            },
+          });
+          // A transaction must THROW to roll back. Returning a conflict after the draft update
+          // would commit that write while the business record kept its old type — exactly the
+          // divergence this transaction exists to prevent.
+          if (draft.count !== 1) {
+            throw Object.assign(new Error("DRAFT_CONFLICT"), { code: "DRAFT_CONFLICT" });
+          }
+
+          if (plan.propagateToBusiness) {
+            // Claim the exact category observed when planning. A concurrent change of type means
+            // this request is stale, not that it should win.
+            const businessRow = await tx.business.updateMany({
+              where: { id: businessId, category: plan.previousCategory ?? null },
+              data: { category: categoryKey },
+            });
+            if (businessRow.count !== 1) {
+              throw Object.assign(new Error("CATEGORY_CONFLICT"), { code: "CATEGORY_CONFLICT" });
+            }
+          }
+          return "ok" as const;
         })
         .catch((error: unknown) => {
-          if ((error as { code?: string })?.code === "P2025") return null;
+          const code = (error as { code?: string })?.code;
+          if (code === "P2025" || code === "DRAFT_CONFLICT" || code === "CATEGORY_CONFLICT") {
+            return "conflict" as const;
+          }
           throw error;
         });
-      if (!updated) {
+
+      if (written === "conflict") {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
       }
       await recordDraftRevision(prisma, {
@@ -213,6 +266,7 @@ export async function POST(req: Request) {
         source: "EDIT",
         createdById: session.userId,
       });
+      const updated = await prisma.businessExperience.findUnique({ where: { businessId } });
       return NextResponse.json({ experience: updated, document, idempotent: true });
     }
 
@@ -221,6 +275,17 @@ export async function POST(req: Request) {
       select: { id: true, name: true, description: true, phone: true, whatsapp: true, location: true, category: true },
     });
     if (!business) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+
+    // A first website may only be created for the kind of business the business record says this is
+    // (or, while onboarding has not yet recorded one, for the owner's first choice).
+    const createPlan = planCreateCategory(business.category, body?.categoryKey);
+    if (!createPlan.ok) {
+      return NextResponse.json(
+        { error: createPlan.error, code: createPlan.code, businessCategory: createPlan.businessCategory },
+        { status: createPlan.status },
+      );
+    }
+    const categoryKey = createPlan.categoryKey;
 
     // The new draft is seeded so later regenerations are reproducible. A brand-new business has no
     // published history to compare against, so the diversity status says so instead of claiming a check.
@@ -241,16 +306,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
 
-    const experience = await prisma.businessExperience.create({
-      data: {
-        businessId,
-        categoryKey,
-        themeKey: document.themeKey,
-        draftJson: JSON.stringify(document),
-        draftVersion: 1,
-        status: "DRAFT",
-      },
-    });
+    // Same rule on the first website: the tenant's recorded type follows the owner's choice, in the
+    // SAME transaction as the draft. Creating one without the other would leave the site and the
+    // business profile describing different businesses.
+    let experience;
+    try {
+      experience = await prisma.$transaction(async (tx: any) => {
+        if (createPlan.propagateToBusiness) {
+          const businessRow = await tx.business.updateMany({
+            where: { id: businessId, category: createPlan.previousCategory ?? null },
+            data: { category: categoryKey },
+          });
+          if (businessRow.count !== 1) throw Object.assign(new Error("CATEGORY_CONFLICT"), { code: "CATEGORY_CONFLICT" });
+        }
+        return tx.businessExperience.create({
+          data: {
+            businessId,
+            categoryKey,
+            themeKey: document.themeKey,
+            draftJson: JSON.stringify(document),
+            draftVersion: 1,
+            status: "DRAFT",
+          },
+        });
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code === "CATEGORY_CONFLICT") {
+        return NextResponse.json(
+          {
+            error: "Your business profile changed while this website was being created. Reload and try again. Nothing was changed.",
+            code: "business_category_conflict",
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
     await logAudit({ actorId: session.userId, action: "EXPERIENCE_CREATED", targetType: "BUSINESS_EXPERIENCE", targetId: experience.id, metadata: { businessId, categoryKey } });
     await recordDraftRevision(prisma, {
       businessId,
@@ -426,19 +517,58 @@ export async function PATCH(req: Request) {
       }
       document = schema.document;
     } else {
-      // Partial updates: brand, settings, theme, category.
+      // Partial updates: brand, settings, theme, category, art direction.
+      // An unsupported art direction is a client error, not a server fault, so it is refused with a
+      // 400 before anything is written instead of surfacing parseArtDirection's throw as a 500.
+      let artDirection = document.artDirection;
+      if (body?.artDirection !== undefined) {
+        try {
+          artDirection = parseArtDirection(body.artDirection);
+        } catch {
+          return NextResponse.json({ error: "That design direction is not supported. Nothing was changed.", code: "experience_schema_invalid" }, { status: 400 });
+        }
+      }
+      // A partial edit may not re-categorise the site. The body's category is checked against the
+      // tenant's business record exactly as on create. The read is deliberately here, not at the top
+      // of the handler: the documented refusal order is 428 (no base version) → 409 (stale draft) →
+      // category → validation, so an unversioned or stale request is still refused for that reason
+      // first. Reading the business earlier would have shadowed those safeguards with a 404.
+      const tenantRow = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true } });
+      if (!tenantRow) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
+      const patchCategory = planContentCategory(tenantRow.category, body?.categoryKey, document.categoryKey);
+      if (!patchCategory.ok) {
+        return NextResponse.json(
+          { error: patchCategory.error, code: patchCategory.code, businessCategory: patchCategory.businessCategory },
+          { status: patchCategory.status },
+        );
+      }
       const next = {
         ...document,
         brand: body?.brand ? { ...document.brand, ...body.brand } : document.brand,
         settings: body?.settings ? { ...document.settings, ...body.settings } : document.settings,
         themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : document.themeKey,
-        categoryKey: isCategoryKey(body?.categoryKey) ? body.categoryKey : document.categoryKey,
+        categoryKey: isCategoryKey(body?.categoryKey) ? patchCategory.categoryKey : document.categoryKey,
         // Design intent chosen in the Studio (photography language + direction) is part of the
         // document, so it travels with the draft and drives future AI generation (§44).
         photographyStyle: typeof body?.photographyStyle === "string" ? body.photographyStyle : document.photographyStyle,
         designDirectionKey: typeof body?.designDirectionKey === "string" ? body.designDirectionKey : document.designDirectionKey,
+        // The chosen template family lives here, and it is what makes one family render differently
+        // from another. It used to be dropped by this branch: the request returned 200 and the draft
+        // version advanced, but the stored family never changed, so a design-family edit looked saved
+        // and had no effect. An unsupported value is refused rather than ignored.
+        artDirection,
       };
-      document = normalizeExperienceDocument(next, next.categoryKey);
+      // Art direction is a format-2 concept. A format-1 draft cannot carry one, and normalize
+      // refuses rather than transforming it — turn that refusal into a client error so the caller
+      // learns why nothing changed instead of getting a 500.
+      try {
+        document = normalizeExperienceDocument(next, next.categoryKey);
+      } catch (error) {
+        return NextResponse.json(
+          { error: (error as Error)?.message || "This change is not supported. Nothing was changed.", code: "experience_schema_invalid" },
+          { status: 400 },
+        );
+      }
     }
 
     const checked = validateExperienceDocument(document);

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
@@ -11,7 +14,10 @@ export const dynamic = "force-dynamic";
 const PLAN_SCOPE: Record<string, string> = {
   MONTHLY: "Public Business Page · per business",
   ANNUAL: "Public Business Page · per business",
-  AI_BUSINESS_FRONT_DESK: "AI Front Desk add-on · per business",
+  AI_BUSINESS_FRONT_DESK: "AI Front Desk Starter · per business",
+  AI_FRONT_DESK_STANDARD: "AI Front Desk Standard · per business",
+  AI_FRONT_DESK_PRO: "AI Front Desk Pro · per business",
+  AI_FRONT_DESK_VOICE: "AI Front Desk Voice · per business",
   INTERACTIVE_BUSINESS: "Website Studio · per business",
   BUSINESS_POS: "Owner-only POS · per business",
   ERP_PRO: "JATA BOS PRO · per business",
@@ -27,6 +33,9 @@ const PLAN_KIND: Record<string, string> = {
   MONTHLY: "Subscription · pay from your dashboard",
   ANNUAL: "Subscription · pay from your dashboard",
   AI_BUSINESS_FRONT_DESK: "Subscription · pay from your dashboard",
+  AI_FRONT_DESK_STANDARD: "Subscription · pay from your dashboard",
+  AI_FRONT_DESK_PRO: "Subscription · pay from your dashboard",
+  AI_FRONT_DESK_VOICE: "Subscription · pay from your dashboard",
   INTERACTIVE_BUSINESS: "Subscription · pay from your dashboard",
   BUSINESS_POS: "Separate product · purchased in the Business POS workspace",
   ERP_PRO: "Separate product · purchased in the ERP workspace",
@@ -36,7 +45,10 @@ const PLAN_KIND: Record<string, string> = {
 const PLAN_DESCRIPTIONS: Record<string, string> = {
   MONTHLY: "Your public business page at /b/your-business with WhatsApp, Call, Directions and Share actions, services, prices, an offer and opening hours.",
   ANNUAL: "The same public business page paid once for a full year — 365 days of access with the same dashboard and the same Paystack confirmation.",
-  AI_BUSINESS_FRONT_DESK: "An AI front desk on your business page that answers customer questions from your own services and offer, and records the questions it could not answer.",
+  AI_BUSINESS_FRONT_DESK: "Front Desk Starter — an AI front desk on your business page that answers customer questions from your own services and offer, and records the questions it could not answer.",
+  AI_FRONT_DESK_STANDARD: "Front Desk Standard — the same AI front desk for your business page, on the Standard package tier. The amount is charged from the stored plan catalogue on the server.",
+  AI_FRONT_DESK_PRO: "Front Desk Pro — the same AI front desk for your business page, on the Pro package tier. The amount is charged from the stored plan catalogue on the server.",
+  AI_FRONT_DESK_VOICE: "Front Desk Voice — the same AI front desk for your business page, on the top Voice package tier. The amount is charged from the stored plan catalogue on the server.",
   INTERACTIVE_BUSINESS: "Website Studio: build, edit and preview a full business website with a priced catalogue, stock, bookings, orders and checkout on your own page.",
   BUSINESS_POS: "An owner-only point of sale — sales, stock, credit and reports — configured around how your business actually works. Separate from your page plan.",
   ERP_PRO: "JATA BOS PRO — Business Operating System Pro: accounting, invoicing, inventory, purchasing and business operations with supported messaging tools. Broader than the separate Business POS till, which covers counter sales only.",
@@ -47,6 +59,9 @@ const PLAN_ROUTE: Record<string, string> = {
   MONTHLY: "/products/business-page",
   ANNUAL: "/products/business-page",
   AI_BUSINESS_FRONT_DESK: "/products/ai-front-desk",
+  AI_FRONT_DESK_STANDARD: "/products/ai-front-desk",
+  AI_FRONT_DESK_PRO: "/products/ai-front-desk",
+  AI_FRONT_DESK_VOICE: "/products/ai-front-desk",
   INTERACTIVE_BUSINESS: "/products/website-studio",
   BUSINESS_POS: "/products/business-pos",
   ERP_PRO: "/products/erp-pro",
@@ -62,6 +77,16 @@ export default async function PricingPage() {
   }
   const plans = homepagePlanCards(stored.length > 0 ? stored : FALLBACK_PLANS);
 
+  // Every approved package, including Standard, Pro and Voice: the seven marketing cards
+  // above are the owner-order grid, and the family block below always renders all four
+  // AI Front Desk tiers at their approved prices with honest catalogue/provider
+  // availability — even when a stored PlanConfig row is missing or Voice is gated.
+  // Presentation only; nothing here changes checkout, entitlement or Paystack guards.
+  const voiceReadiness = getVoiceReadiness();
+  const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
+    frontDeskFamilyCard(key, stored, voiceReadiness.canSell),
+  );
+
   return (
     <MarketingLayout
       eyebrow="Pricing"
@@ -73,7 +98,11 @@ export default async function PricingPage() {
             horizontal scrolling. Each card is one offer in the marketing order from the single
             catalogue helper, so this page can never drift from the homepage grid. */}
         <div className="mk-grid">
-          {plans.map((plan) => (
+          {/* Tier cards display the approved tier price so this grid and the family block
+              below can never disagree; every other card keeps its stored price. */}
+          {plans.map((raw) => {
+            const plan = displayTierPricing(raw);
+            return (
             <article key={plan.key} className="mk-card" data-plan={plan.key} aria-label={planDisplayName(plan)}>
               <h3>{planDisplayName(plan)}</h3>
               <p className="mk-card__price">
@@ -84,7 +113,8 @@ export default async function PricingPage() {
               <p>{PLAN_DESCRIPTIONS[plan.key] || ""}</p>
               <Link href={PLAN_ROUTE[plan.key] || "/products"}>What is included →</Link>
             </article>
-          ))}
+            );
+          })}
         </div>
         <div className="mk-prose">
           <p>
@@ -103,6 +133,40 @@ export default async function PricingPage() {
         <div className="mk-btn-row">
           <Link href="/register" className="mk-btn">Create an account</Link>
           <Link href="/dashboard/subscription" className="mk-btn mk-btn--ghost">Plans in my dashboard</Link>
+        </div>
+      </MarketingSection>
+
+      <MarketingSection title="AI Front Desk 2.0 — all four packages" id="ai-front-desk">
+        <p className="mk-prose">
+          One AI front desk, four package levels. Prices shown are the approved package prices.
+          A package is purchasable only when its matching active catalogue record and service
+          readiness checks are present — until every one of those conditions is satisfied the
+          card says so plainly. These cards are informational and do not start checkout.
+        </p>
+        <div className="mk-grid">
+          {frontDeskFamily.map((tier) => (
+            <article key={tier.key} className="mk-card" data-tier={tier.key}>
+              <h3>{tier.name}</h3>
+              <p className="mk-card__price">KES {formatNumber(tier.priceKES)} / 30 days</p>
+              <p className="mk-card__scope">AI Front Desk tier · per business</p>
+              <p className="mk-card__kind">
+                {tier.available
+                  ? PLAN_KIND[tier.key] || "Subscription · pay from your dashboard"
+                  : "Not yet for sale — listed at the approved price; checkout stays fail-closed until its catalogue and readiness gates pass"}
+              </p>
+              <p>{PLAN_DESCRIPTIONS[tier.key] || ""}</p>
+              <p><strong>{tier.status}</strong></p>
+              <Link
+                href={
+                  tier.key === AI_FRONT_DESK_VOICE_KEY
+                    ? "/products/ai-front-desk#voice"
+                    : PLAN_ROUTE[tier.key] || "/products/ai-front-desk"
+                }
+              >
+                {tier.key === AI_FRONT_DESK_VOICE_KEY ? "View Voice readiness →" : "What is included →"}
+              </Link>
+            </article>
+          ))}
         </div>
       </MarketingSection>
 

@@ -1,0 +1,131 @@
+name: Website Studio 2.0 — tenant and content acceptance
+# This release workflow is paired with the scoped, evidence-verified programme gate.
+# PostgreSQL-only tests run under a separate Vitest module registry.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - arena/website-studio-2-0-p1-tenant-foundation
+    paths:
+      - "app/api/studio/websites/**"
+      - "lib/experience/**"
+      - "lib/db.ts"
+      - "prisma/schema.prisma"
+      - "prisma/migrations/**"
+      - "tests/integration/website-studio-*.test.ts"
+      - "tests/integration/storefront-per-site-publication-postgres.test.ts"
+      - "tests/integration/studio-publication-state-machine-postgres.test.ts"
+      - "tests/unit/website-studio-*.test.ts"
+      - "tests/unit/publication-state-machine.test.ts"
+      - "tests/unit/storefront-public-content.test.ts"
+      - "tests/unit/storefront-motion-inheritance.test.ts"
+      - "app/b/**"
+      - "components/storefront/**"
+      - "tests/helpers/website-studio-setup.ts"
+      - "vitest.config.ts"
+      - "vitest.website-studio-postgres.config.ts"
+      - "tests/helpers/server-only-setup.ts"
+      - "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+      - "scripts/browser/studio-authenticated.check.mjs"
+      - "scripts/browser/studio-journey-safety.mjs"
+      - ".github/workflows/website-studio-2-0.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  website-studio-2-0:
+    name: Prisma, tenant tests, typecheck and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jata -d jata_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      DIRECT_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      PRISMA_TEST_DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      NODE_ENV: test
+      JATA_ALLOW_FIXTURE_SEED: "true"
+      AUTH_SECRET: interactive-business-e2e-test-secret
+      NEXTAUTH_SECRET: interactive-business-e2e-test-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate Prisma schema
+        run: npx prisma validate
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations to disposable PostgreSQL
+        run: npx prisma migrate deploy
+      - name: Verify Website Studio migration idempotency on disposable PostgreSQL
+        run: npx prisma db execute --file prisma/migrations/20261108020000_website_studio_2_0_multi_site_content/migration.sql --schema prisma/schema.prisma
+      - name: Generate and mask ephemeral fixture password
+        run: |
+          fixture_password="$(openssl rand -base64 48)"
+          echo "::add-mask::$fixture_password"
+          printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$fixture_password" >> "$GITHUB_ENV"
+      - name: Seed disposable test database
+        run: npm run seed
+      # Legacy route tests use the shared guard mock; the two real PostgreSQL Studio suites run under their isolated config below.
+      - name: Run full no-database and database-backed test suite
+        run: |
+          set -o pipefail
+          npx vitest run --exclude tests/e2e \
+            --exclude tests/integration/website-studio-tenant-postgres.test.ts \
+            --exclude tests/integration/website-studio-multisite-api.test.ts \
+            --exclude tests/integration/storefront-per-site-publication-postgres.test.ts \
+            --exclude tests/integration/studio-publication-state-machine-postgres.test.ts \
+            2>&1 | tee /tmp/website-studio-vitest.log
+          WEBSITE_STUDIO_POSTGRES_TESTS=1 npx vitest run --config vitest.website-studio-postgres.config.ts 2>&1 | tee -a /tmp/website-studio-vitest.log
+          plain="$(sed -e 's/\\x1b\\[[0-9;]*m//g' /tmp/website-studio-vitest.log)"
+          if printf '%s' "$plain" | grep -qE "[1-9][0-9]* skipped"; then
+            echo "Website Studio/database acceptance reported skipped tests — not a pass." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$plain" | grep -qE "[0-9]+ passed"; then
+            echo "Website Studio/database acceptance reported no passing tests." >&2
+            exit 1
+          fi
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Authenticated Website Studio browser acceptance
+        run: |
+          set -euo pipefail
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$CHROME_PATH" ] || [ ! -x "$CHROME_PATH" ]; then
+            echo "Chrome executable missing — Website Studio browser acceptance NOT RUN, not passed." >&2
+            exit 1
+          fi
+          STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated
+
+      - name: Upload Website Studio acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-studio-2-0-acceptance-${{ github.sha }}
+          path: |
+            /tmp/website-studio-vitest.log
+            .cache/verification/studio-authenticated/
+          if-no-files-found: warn
+          retention-days: 30

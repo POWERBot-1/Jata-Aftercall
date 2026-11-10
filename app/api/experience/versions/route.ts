@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { validateExperienceJson } from "@/lib/experience/schema";
@@ -23,7 +23,8 @@ export async function GET(req: Request) {
   const businessId = new URL(req.url).searchParams.get("businessId")?.trim() || "";
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
   try {
-    await assertBusinessOwnership(businessId, session);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "read");
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   } catch (error) {
     const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
     return NextResponse.json({ error: mapped.message }, { status: mapped.status });
@@ -56,7 +57,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Choose a version to restore." }, { status: 400 });
     }
     try {
-      await assertBusinessOwnership(businessId, session);
+      const guard = await guardStudioWebsiteMutation(session, businessId, "edit");
+      if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     } catch (error) {
       const mapped = publicErrorMessage(error, SAFE_ERRORS.noAccess);
       return NextResponse.json({ error: mapped.message }, { status: mapped.status });

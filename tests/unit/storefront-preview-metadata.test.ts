@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createExperienceDocument } from "@/lib/experience/document";
 
 const h = vi.hoisted(() => ({ session: null as null | { userId: string; role: string }, business: null as any, load: vi.fn(), find: vi.fn() }));
-vi.mock("@/lib/db", () => ({ default: { business: { findUnique: h.find } } }));
+vi.mock("@/lib/db", () => ({ default: { business: { findUnique: h.find }, studioWebsite: { findFirst: async () => null } } }));
 vi.mock("@/lib/auth", () => ({ getSession: async () => h.session }));
 vi.mock("@/lib/experience/storefront", () => ({ loadStorefront: h.load }));
 import { generateMetadata } from "@/app/b/[slug]/page";

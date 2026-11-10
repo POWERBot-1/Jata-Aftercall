@@ -9,6 +9,11 @@
 
 import prisma from "./db";
 import { hasTeamFreeAccessForBusiness, TEAM_FREE_ACCESS_LABEL } from "./team-access";
+import {
+  AI_FRONT_DESK_STARTER_KEY,
+  frontDeskTierPricing,
+  isFrontDeskTierKey,
+} from "./frontDeskTiers";
 
 export const AI_FRONT_DESK_PLAN_KEY = "AI_BUSINESS_FRONT_DESK";
 export const AI_FRONT_DESK_PRICE_KES = 499;
@@ -100,11 +105,16 @@ export function deriveAIEntitlement(input: {
     entitlement?.packageKey ||
     entitlement?.packageName ||
     AI_FRONT_DESK_PLAN_KEY;
+  // The tier this evaluation is about. Any key outside the four-tier family falls back to the
+  // Starter key for reporting only — non-family keys are denied below before they can grant.
+  const tierKey = isFrontDeskTierKey(resolvedPlanKey) ? resolvedPlanKey : AI_FRONT_DESK_STARTER_KEY;
+  const tierPricing = frontDeskTierPricing(tierKey);
 
   const baseFields = {
-    priceKES: entitlement?.priceKES ?? AI_FRONT_DESK_PRICE_KES,
+    priceKES: entitlement?.priceKES ?? tierPricing?.priceKES ?? AI_FRONT_DESK_PRICE_KES,
     currency: entitlement?.currency ?? "KES",
-    billingCycleDays: entitlement?.billingCycleDays ?? AI_FRONT_DESK_DURATION_DAYS,
+    billingCycleDays:
+      entitlement?.billingCycleDays ?? tierPricing?.durationDays ?? AI_FRONT_DESK_DURATION_DAYS,
     packageKey: resolvedPlanKey,
     historicalAccessAllowed: true,
     // Pure derivation over rows the caller already read: the verification question was answered
@@ -126,17 +136,21 @@ export function deriveAIEntitlement(input: {
   // package is not what is currently paid for — whatever a leftover AI entitlement row still
   // says. Without this, buying AI once and then a cheaper plan would keep live AI on for the
   // cheaper plan's whole window (stale-entitlement / plan-substitution bypass).
+  //
+  // AI Front Desk 2.0: the family is the four approved tiers. A subscription on any non-Front-
+  // Desk plan (page plans, Website Studio, POS, Autopilot, ERP…) still denies the entitlement,
+  // while a subscription on any tier of the family grants that tier's window.
   const subscriptionPlanKey = input.planKey || subscription?.plan?.key || null;
   const subscriptionIsOtherProduct = Boolean(
-    subscription && subscriptionPlanKey && subscriptionPlanKey !== AI_FRONT_DESK_PLAN_KEY,
+    subscription && subscriptionPlanKey && !isFrontDeskTierKey(subscriptionPlanKey),
   );
 
   if (
     subscriptionIsOtherProduct ||
     (resolvedPlanKey &&
-      resolvedPlanKey !== AI_FRONT_DESK_PLAN_KEY &&
-      entitlement?.packageKey !== AI_FRONT_DESK_PLAN_KEY &&
-      entitlement?.packageName !== AI_FRONT_DESK_PLAN_KEY)
+      !isFrontDeskTierKey(resolvedPlanKey) &&
+      !isFrontDeskTierKey(entitlement?.packageKey ?? null) &&
+      !isFrontDeskTierKey(entitlement?.packageName ?? null))
   ) {
     return {
       ...baseFields,
@@ -155,7 +169,7 @@ export function deriveAIEntitlement(input: {
       status: "SUSPENDED",
       expiresAt: subscription?.expiresAt ?? entitlement?.expiresAt ?? undefined,
       graceUntil: subscription?.graceUntil ?? undefined,
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason: "AI Business Front Desk is suspended. Historical records remain accessible.",
     };
   }
@@ -168,7 +182,7 @@ export function deriveAIEntitlement(input: {
       status: "CANCELLED",
       expiresAt: subscription?.expiresAt ?? entitlement?.expiresAt ?? undefined,
       graceUntil: subscription?.graceUntil ?? undefined,
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason: "AI Business Front Desk subscription was cancelled. Renew to re-enable live AI.",
     };
   }
@@ -186,7 +200,7 @@ export function deriveAIEntitlement(input: {
       active: false,
       entitled: false,
       status: "PENDING",
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason: "Complete server-verified payment (KES 499/month) to activate AI Business Front Desk.",
     };
   }
@@ -198,7 +212,7 @@ export function deriveAIEntitlement(input: {
       entitled: false,
       status: "PENDING",
       expiresAt: subscription?.expiresAt ?? entitlement?.expiresAt ?? undefined,
-      packageKey: entitlement.packageKey || entitlement.packageName || AI_FRONT_DESK_PLAN_KEY,
+      packageKey: entitlement?.packageKey || entitlement?.packageName || tierKey,
       reason: "AI package entitlement is pending payment verification.",
     };
   }
@@ -214,7 +228,7 @@ export function deriveAIEntitlement(input: {
       active: Boolean(entitlement?.status === "ACTIVE" && !subscription),
       entitled: Boolean(entitlement?.status === "ACTIVE" && !subscription),
       status: entitlement?.status === "ACTIVE" && !subscription ? "ACTIVE" : "PENDING",
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason:
         entitlement?.status === "ACTIVE" && !subscription
           ? "Active"
@@ -230,7 +244,7 @@ export function deriveAIEntitlement(input: {
       status: "EXPIRED",
       expiresAt,
       graceUntil: graceUntil ?? undefined,
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason: "Your AI Business Front Desk subscription has expired. Historical records remain accessible.",
     };
   }
@@ -243,7 +257,7 @@ export function deriveAIEntitlement(input: {
       status: isBillingActive ? "PAST_DUE" : "EXPIRED",
       expiresAt,
       graceUntil,
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason: "Subscription is within the JATA grace period. Renew to prevent interruption.",
     };
   }
@@ -256,7 +270,7 @@ export function deriveAIEntitlement(input: {
       status: "PENDING",
       expiresAt,
       graceUntil: graceUntil ?? undefined,
-      packageKey: AI_FRONT_DESK_PLAN_KEY,
+      packageKey: tierKey,
       reason: "Subscription is not active yet.",
     };
   }
@@ -268,7 +282,7 @@ export function deriveAIEntitlement(input: {
     status: "ACTIVE",
     expiresAt,
     graceUntil: graceUntil ?? undefined,
-    packageKey: entitlement?.packageKey || entitlement?.packageName || AI_FRONT_DESK_PLAN_KEY,
+    packageKey: entitlement?.packageKey || entitlement?.packageName || tierKey,
     reason: "Active",
   };
 }
@@ -387,18 +401,21 @@ export async function syncAIPackageEntitlement(businessId: string): Promise<AIPa
   // about this business — writing it would downgrade a paying customer's entitlement row during
   // an outage. Nothing is written; the caller still gets the honest UNAVAILABLE result.
   if (state.verification === "UNAVAILABLE") return state;
+  // Persist the tier the billing state actually resolved (never force the Starter key onto a
+  // Standard/Pro/Voice customer). Non-family states fall back to the Starter key.
+  const syncPackageKey = isFrontDeskTierKey(state.packageKey) ? state.packageKey : AI_FRONT_DESK_STARTER_KEY;
   if (prisma.aIPackageEntitlement?.upsert) {
     await prisma.aIPackageEntitlement.upsert({
       where: { businessId },
       update: {
-        packageKey: AI_FRONT_DESK_PLAN_KEY,
+        packageKey: syncPackageKey,
         status: state.active ? "ACTIVE" : state.status === "NONE" ? "PENDING" : state.status,
         ...(state.active ? { activatedAt: new Date() } : {}),
         expiresAt: state.expiresAt ?? null,
       },
       create: {
         businessId,
-        packageKey: AI_FRONT_DESK_PLAN_KEY,
+        packageKey: syncPackageKey,
         status: state.active ? "ACTIVE" : "PENDING",
         activatedAt: state.active ? new Date() : null,
         expiresAt: state.expiresAt ?? null,

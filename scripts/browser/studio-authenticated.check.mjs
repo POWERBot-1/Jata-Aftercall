@@ -267,10 +267,38 @@ async function publishUI(page, fixture, expectedStatus) {
   return response.json();
 }
 async function preview(page, fixture, marker) {
+  const stored = await snapshot(fixture.id);
+  const storedDraft = JSON.parse(stored.draftJson);
+  check(`${fixture.category}: preview marker exists in authoritative draft`,
+    [storedDraft.brand?.tagline, storedDraft.brand?.description, ...storedDraft.sections.map((section) => section.title), ...storedDraft.sections.map((section) => section.subtitle)]
+      .some((value) => typeof value === "string" && value.includes(marker)),
+    `draftVersion=${stored.draftVersion}; marker=${marker}`);
   await page.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
   for (const [device, width] of [["Mobile", 390], ["Desktop", 1280]]) {
     await clickText(page, '[aria-label="Device"] button', device);
-    await page.waitForFunction((marker) => document.querySelector('iframe[title="Draft preview"]')?.contentDocument?.body?.textContent.includes(marker), {}, marker);
+    try {
+      await page.waitForFunction((expected) => {
+        const frame = document.querySelector('iframe[title="Draft preview"]');
+        const body = frame?.contentDocument?.body;
+        return Boolean(body && body.textContent.includes(expected));
+      }, { timeout: 12000 }, marker);
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => {
+        const frame = document.querySelector('iframe[title="Draft preview"]');
+        const doc = frame?.contentDocument;
+        return {
+          framePresent: Boolean(frame),
+          frameSrc: frame?.getAttribute("src") || null,
+          frameReadyState: doc?.readyState || null,
+          frameTitle: doc?.title || null,
+          frameBodyText: (doc?.body?.textContent || "").slice(0, 1800),
+          frameUrl: frame?.contentWindow?.location?.href || null,
+          topUrl: location.href,
+          topText: (document.body?.textContent || "").slice(0, 900),
+        };
+      }).catch((diagnosticError) => ({ diagnosticError: String(diagnosticError) }));
+      throw new Error(`Draft preview marker did not render: ${marker}; ${JSON.stringify(diagnostic)}; cause=${String(error)}`);
+    }
     const state = await page.evaluate(() => {
       const iframe = document.querySelector('iframe[title="Draft preview"]');
       const doc = iframe.contentDocument;
@@ -315,7 +343,31 @@ async function publicState(page, fixture, marker, visible, suffix = "") {
 }
 async function cleanup() {
   for (const fixture of created) {
-    // Exact IDs from this run only, no broad prefix/global table cleanup.
+    // Exact run-owned tenant graph only. Delete Studio dependants before the business/owner.
+    const link = await prisma.studioWorkspaceBusiness.findUnique({
+      where: { businessId: fixture.id },
+      select: { workspaceId: true },
+    });
+    const websites = await prisma.studioWebsite.findMany({
+      where: { businessId: fixture.id },
+      select: { id: true },
+    });
+    const websiteIds = websites.map((website) => website.id);
+    if (websiteIds.length) {
+      await prisma.studioWebsiteDraftRevision.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteVersion.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteContent.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteMember.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsite.deleteMany({ where: { id: { in: websiteIds }, businessId: fixture.id } });
+    }
+    await prisma.studioWorkspaceBusiness.deleteMany({ where: { businessId: fixture.id } });
+    if (link?.workspaceId) {
+      const remainingLinks = await prisma.studioWorkspaceBusiness.count({ where: { workspaceId: link.workspaceId } });
+      if (remainingLinks === 0) {
+        await prisma.studioWorkspaceMember.deleteMany({ where: { workspaceId: link.workspaceId } });
+        await prisma.studioWorkspace.deleteMany({ where: { id: link.workspaceId, ownerUserId: fixture.ownerId } });
+      }
+    }
     await prisma.payment.deleteMany({ where: { businessId: fixture.id } });
     await prisma.business.deleteMany({ where: { id: fixture.id, ownerId: fixture.ownerId } });
     await prisma.auditEvent.deleteMany({ where: { actorId: fixture.ownerId } });

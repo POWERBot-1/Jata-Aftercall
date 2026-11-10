@@ -1,0 +1,212 @@
+import { NextResponse } from "next/server";
+import prisma from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { assertStudioPublicationAccess, StudioPublicationRefused } from "@/lib/experience/publication-access";
+import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
+import { validateExperienceJson } from "@/lib/experience/schema";
+import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
+import { getInteractiveEntitlement, syncInteractiveEntitlement } from "@/lib/experience/entitlement";
+import { findInvalidCatalogueItems, validateForPublication } from "@/lib/experience/validate";
+import { hasVerifiedPublicationRight, canSetPublished } from "@/lib/publication";
+import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
+import { logAudit } from "@/lib/audit";
+import { canTransitionStudioSite } from "@/lib/experience/publication-state";
+
+export const dynamic = "force-dynamic";
+
+function statusOf(error: unknown) {
+  const status = Number((error as { status?: unknown })?.status);
+  return status >= 400 && status <= 599 ? status : 500;
+}
+
+/** Publish only the exact authorized site's reviewed draft; siblings and legacy sites are untouched. */
+export async function POST(request: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });
+
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+  const websiteId = typeof body.websiteId === "string" ? body.websiteId.trim() : "";
+  const expectedDraftVersion = Number(body.expectedDraftVersion);
+  const expectedPublishedVersion = Number(body.expectedPublishedVersion);
+  const action = body.action === "unpublish" ? "unpublish" : "publish";
+  if (!websiteId) return NextResponse.json({ error: "Choose a website first." }, { status: 400 });
+
+  try {
+    const access = await assertStudioPublicationAccess(websiteId, session);
+    const [website, business] = await Promise.all([
+      prisma.studioWebsite.findUnique({ where: { id: websiteId }, select: { id: true, slug: true, status: true, isDefault: true } }),
+      prisma.business.findUnique({
+        where: { id: access.businessId },
+        select: { id: true, name: true, slug: true, category: true, phone: true, whatsapp: true, location: true, logoUrl: true, isPublished: true, status: true },
+      }),
+    ]);
+    if (!website || !business) return NextResponse.json({ error: "Studio website not found." }, { status: 404 });
+
+    if (action === "unpublish") {
+      if (!Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 0 ||
+          !Number.isSafeInteger(expectedPublishedVersion) || expectedPublishedVersion < 0) {
+        return NextResponse.json({
+          error: "Reload the website and confirm the draft and publication versions before unpublishing.",
+          code: "website_unpublish_version_required",
+        }, { status: 428 });
+      }
+      await ensureStudioWebsiteContent(websiteId, business.id);
+      let conflict = false;
+      let transitioned = false;
+      try {
+        await prisma.$transaction(async (tx: any) => {
+          // The website-state compare-and-swap serializes concurrent unpublish requests.
+          // UNPUBLISHED (not DRAFT) is what makes the takedown explicit: the public loader
+          // only permits the legacy fallback for a site that has NEVER published, so a
+          // taken-down default site can no longer resurface its old legacy snapshot.
+          const siteChanged = await tx.studioWebsite.updateMany({
+            where: { id: websiteId, status: "PUBLISHED" },
+            data: { status: "UNPUBLISHED" },
+          });
+          if (siteChanged.count !== 1) return;
+          const contentChanged = await tx.studioWebsiteContent.updateMany({
+            where: { websiteId, draftVersion: expectedDraftVersion, publishedVersion: expectedPublishedVersion },
+            data: { updatedAt: new Date() },
+          });
+          if (contentChanged.count !== 1) throw new Error("STUDIO_WEBSITE_UNPUBLISH_CONFLICT");
+          // The tenant flag is an outer kill switch shared by every site, so it is only
+          // cleared when NO site of this tenant is still published. Clearing it
+          // unconditionally would blank the tenant's still-live sibling websites.
+          const stillPublished = await tx.studioWebsite.count({
+            where: { businessId: business.id, status: "PUBLISHED" },
+          });
+          if (stillPublished === 0) {
+            await tx.business.update({ where: { id: business.id }, data: { isPublished: false } });
+          }
+          // The legacy row is only a pre-cutover stand-in for the default site. Once the
+          // default site has published, retire it so it can never be rendered again.
+          if (website.isDefault) {
+            await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
+          }
+          transitioned = true;
+        });
+      } catch (error) {
+        if ((error as { message?: string })?.message === "STUDIO_WEBSITE_UNPUBLISH_CONFLICT") conflict = true;
+        else throw error;
+      }
+      if (conflict || !transitioned) {
+        return NextResponse.json({ error: "This website changed while you were unpublishing it. Reload and try again.", code: "website_unpublish_conflict" }, { status: 409 });
+      }
+      await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_UNPUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id, expectedDraftVersion, expectedPublishedVersion } });
+      return NextResponse.json({ published: false, websiteId, status: "UNPUBLISHED" });
+    }
+
+    if (business.status === "SUSPENDED") {
+      return NextResponse.json({
+        error: "This business is suspended. An authorized operator must reinstate it before publication.",
+        code: "business_suspended",
+      }, { status: 409 });
+    }
+
+    if (!Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 1) {
+      return NextResponse.json({ error: "Reload the website and publish the exact draft version you reviewed.", code: "draft_version_required" }, { status: 428 });
+    }
+
+    const content = await ensureStudioWebsiteContent(websiteId, business.id);
+    if (content.draftVersion !== expectedDraftVersion || !content.draftJson) {
+      return NextResponse.json({ error: "This website changed. Reload the latest draft before publishing.", code: "website_draft_version_conflict", currentDraftVersion: content.draftVersion }, { status: 409 });
+    }
+    let categoryKey: string | undefined;
+    try {
+      const parsed = JSON.parse(content.draftJson) as { categoryKey?: unknown };
+      if (typeof parsed?.categoryKey === "string") categoryKey = parsed.categoryKey;
+    } catch { /* schema validation below returns the safe failure */ }
+    const schema = validateExperienceJson(content.draftJson, categoryKey);
+    if (!schema.ok) return NextResponse.json({ error: "The website draft failed validation.", code: "experience_schema_invalid", issues: schema.issues }, { status: 422 });
+    if (containsInlineImageDataUrl(schema.document)) {
+      return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
+    }
+
+    const [productCount, serviceCount, products, paidPayment, subscription] = await Promise.all([
+      prisma.product.count({ where: { businessId: business.id, isActive: true } }),
+      prisma.service.count({ where: { businessId: business.id, isActive: true } }),
+      prisma.product.findMany({ where: { businessId: business.id, isActive: true }, select: { id: true, name: true, basePriceKES: true, salePriceKES: true, salePriceStartsAt: true, salePriceEndsAt: true } }),
+      prisma.payment.findFirst({ where: { businessId: business.id, status: "PAID" }, select: { status: true } }),
+      prisma.subscription.findUnique({ where: { businessId: business.id }, select: { status: true, expiresAt: true, graceUntil: true, plan: { select: { key: true, name: true } } } }),
+    ]);
+    const isAdmin = session.role === "ADMIN";
+    const teamFreeAccess = isAdmin ? false : await hasTeamFreeAccessForBusiness(business.id);
+    const entitlement = await getInteractiveEntitlement(business.id);
+    const validation = validateForPublication({
+      document: schema.document, business, productCount, serviceCount,
+      invalidItems: findInvalidCatalogueItems(products), entitlement, paidPayment, subscription, teamFreeAccess,
+    });
+    const verifiedPayment = hasVerifiedPublicationRight({ paidPayment, subscription }, new Date(), { teamFreeAccess });
+    if (!canSetPublished(true, { isAdmin, verifiedPayment, teamFreeAccess })) {
+      return NextResponse.json({ error: "A verified publication payment or approved access is required.", requires: "PAYMENT", validation }, { status: 403 });
+    }
+    if (!entitlement.entitled) return NextResponse.json({ error: entitlement.reason, requires: "ENTITLEMENT", validation }, { status: 403 });
+    if (!validation.ready) return NextResponse.json({ error: "This website is not ready to publish.", requires: "VALIDATION", validation }, { status: 409 });
+
+    const snapshotJson = JSON.stringify(schema.document);
+    const nextVersion = Math.max(1, content.publishedVersion + 1);
+    const publishedAt = new Date();
+    const result = await prisma.$transaction(async (tx: any) => {
+      const changed = await tx.studioWebsiteContent.updateMany({
+        where: { websiteId, draftVersion: expectedDraftVersion, draftJson: content.draftJson, publishedVersion: content.publishedVersion },
+        data: { publishedJson: snapshotJson, publishedVersion: nextVersion, publishedAt, publishedById: session.userId },
+      });
+      if (changed.count !== 1) return false;
+      await tx.studioWebsiteVersion.create({
+        data: {
+          // A deterministic id would collide with a version migrated from the legacy row
+          // (lib/experience/site-content.ts seeds `swv_<site>_<n>`), turning a legal
+          // publication into a unique-constraint failure. Let the database name it.
+          websiteId, version: nextVersion,
+          snapshotJson, themeKey: schema.document.themeKey, categoryKey: schema.document.categoryKey,
+          note: typeof body.note === "string" ? body.note.slice(0, 160) : "Published from Website Studio",
+          publishedById: session.userId, publishedAt,
+        },
+      });
+      // Only a legal state transition may reach PUBLISHED. A SUSPENDED site must be
+      // reinstated by the operator, never silently republished by its owner. The status
+      // predicate is also a compare-and-swap: an operator suspension or another publish
+      // that lands after the read above must not be overwritten by this stale request.
+      if (!canTransitionStudioSite(website.status, "PUBLISHED")) {
+        throw new Error("STUDIO_WEBSITE_STATE_TRANSITION_DENIED");
+      }
+      const siteChanged = await tx.studioWebsite.updateMany({
+        where: { id: websiteId, status: website.status },
+        data: { status: "PUBLISHED" },
+      });
+      if (siteChanged.count !== 1) throw new Error("STUDIO_WEBSITE_STATE_CONFLICT");
+      // Public business visibility is the outer gate for all /b routes. A first
+      // secondary-site publication must make that tenant publicly routable too.
+      const businessChanged = await tx.business.updateMany({
+        where: { id: business.id, status: business.status },
+        data: { isPublished: true, status: "ACTIVE" },
+      });
+      if (businessChanged.count !== 1) throw new Error("STUDIO_BUSINESS_STATE_CONFLICT");
+      if (website.isDefault) {
+        await tx.businessExperience.updateMany({ where: { businessId: business.id }, data: { status: "UNPUBLISHED" } });
+      }
+      return true;
+    });
+    if (!result) return NextResponse.json({ error: "The draft or publication changed during publish. Reload and try again.", code: "website_publish_conflict" }, { status: 409 });
+
+    await logAudit({ actorId: session.userId, action: "STUDIO_WEBSITE_PUBLISHED", targetType: "STUDIO_WEBSITE", targetId: websiteId, metadata: { businessId: business.id, websiteId, version: nextVersion, slug: website.slug } });
+    await syncInteractiveEntitlement(business.id);
+    return NextResponse.json({ published: true, websiteId, version: nextVersion, publishedAt, url: website.isDefault ? `/b/${business.slug}` : `/b/${business.slug}/${website.slug}` });
+  } catch (error) {
+    if (error instanceof StudioPublicationRefused) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    const status = statusOf(error);
+    const code = (error as { message?: string })?.message;
+    if (code === "STUDIO_WEBSITE_STATE_TRANSITION_DENIED") {
+      return NextResponse.json({ error: "A suspended website must be reinstated before its owner can publish it.", code: "website_state_transition_denied" }, { status: 409 });
+    }
+    if (code === "STUDIO_WEBSITE_STATE_CONFLICT" || code === "STUDIO_BUSINESS_STATE_CONFLICT") {
+      return NextResponse.json({ error: "The website or business state changed. Reload before publishing again.", code: "website_state_conflict" }, { status: 409 });
+    }
+    return NextResponse.json({ error: status === 403 ? "You do not have permission to publish this website." : status === 404 ? "Studio website not found." : "We could not publish this website." }, { status });
+  }
+}

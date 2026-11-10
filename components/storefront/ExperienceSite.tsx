@@ -15,7 +15,7 @@ import { themeOf } from "@/lib/experience/document";
 import { templateForDocument } from "@/lib/experience/templateFamilies";
 import { ItemCard } from "./ItemCard";
 
-export function ExperienceSite({ data: incoming, previewNotice }: { data: StorefrontData; previewNotice?: string | null }) {
+export function ExperienceSite({ data: incoming, previewNotice, shell = true, trackViews = true }: { data: StorefrontData; previewNotice?: string | null; shell?: boolean; trackViews?: boolean }) {
   const data = incoming.document.version === 2 ? { ...incoming, theme: themeOf(incoming.document) } : incoming;
   const { document, theme, profile, business } = data;
   const family = templateForDocument(document);
@@ -36,8 +36,8 @@ export function ExperienceSite({ data: incoming, previewNotice }: { data: Storef
     services: data.services.map((service) => ({ title: service.name, priceFrom: service.price, description: service.description })),
   });
 
-  return (
-    <StorefrontShell data={data} previewNotice={previewNotice} structuredData={structuredData}>
+  const content = (
+    <>
       {hero ? (
         <section className={`eb-hero eb-hero--${theme.treatment.heroStyle}${family ? ` eb-hero-treatment--${family.heroTreatment}` : ""}${heroImage ? " eb-hero--has-media" : " eb-hero--text"}`}>
           {heroImage && theme.treatment.heroStyle !== "split" ? (
@@ -97,6 +97,10 @@ export function ExperienceSite({ data: incoming, previewNotice }: { data: Storef
           </div>
         </section>
       ) : null}
-    </StorefrontShell>
+    </>
   );
+
+  return shell
+    ? <StorefrontShell data={data} previewNotice={previewNotice} structuredData={structuredData} trackViews={trackViews}>{content}</StorefrontShell>
+    : content;
 }

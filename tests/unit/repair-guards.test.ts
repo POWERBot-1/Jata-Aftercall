@@ -89,7 +89,16 @@ describe("runtime and schema guards", () => {
     // foreign keys only), and POS / ERP - PRO (38 new tenant-scoped ERP, accounting, messaging and
     // storefront tables that
     // sit beside the existing POS without touching it; every statement is CREATE TABLE, CREATE INDEX
-    // or a guarded foreign key on a table the same migration creates).
+    // or a guarded foreign key on a table the same migration creates), and the Front Desk Voice
+    // call foundation (six additive tenant-scoped Voice* tables keyed by plain businessId columns
+    // plus their unique/index constraints; every statement is CREATE TABLE or CREATE INDEX —
+    // no foreign keys, no ALTERs, no data rewrite), and the JATA Business Hub (nine additive
+    // tenant-scoped tables — OrderRequest, OrderRequestItem, CustomerEnquiry, Promotion,
+    // LoyaltyProgram, LoyaltyCard, LoyaltyStampEvent, LoyaltyRedemption, BusinessHubActivity —
+    // two enum types, their indexes and guarded foreign keys; it is the customer-conversion
+    // half of the EXISTING KES149 / KES999 Business Page subscription, so no pricing, plan,
+    // subscription, payment or entitlement table is touched and no existing row is read or
+    // rewritten), and Website Studio 2.0 (workspace/site tenant foundation plus independent per-site content and history; additive tables, indexes, composite foreign keys and a bounded default-site backfill only; no payment, subscription, POS or non-Studio plan rows are changed).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -136,6 +145,8 @@ describe("runtime and schema guards", () => {
       "20261106000000_meta_whatsapp_webhooks",
       "20261107000000_agent_activation_review",
       "20261108000000_agent_referral_registration",
+      "20261108010000_website_studio_2_0_workspace_foundation",
+      "20261108020000_website_studio_2_0_multi_site_content",
       "20261109000000_agent_referral_source",
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",
@@ -166,6 +177,12 @@ describe("runtime and schema guards", () => {
       // Additive and NOT VALID on purpose: new writes are enforced immediately, and an existing
       // database can be repaired before the constraint is validated instead of failing the deploy.
       "20261127000002_ledger_line_integrity",
+      "20261127000000_voice_call_foundation",
+      "20261128000000_business_hub_conversion",
+      // Loyalty 2.0: six NEW tables and five NEW enum types for the points programme. Additive
+      // only — no existing table (including the four stamp-card tables) is altered, read or
+      // rewritten, and no column is added to one.
+      "20261129000000_loyalty_points_rewards",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -242,6 +259,9 @@ describe("runtime and schema guards", () => {
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
       "20261126000000_control_plane_foundation",
+      "20261127000000_voice_call_foundation",
+      "20261128000000_business_hub_conversion",
+      "20261129000000_loyalty_points_rewards",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

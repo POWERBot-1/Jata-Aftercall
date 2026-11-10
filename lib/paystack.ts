@@ -9,6 +9,7 @@ import { isAutopilotPlanKey } from "./autopilot/entitlement";
 import { settleAutopilotPayment } from "./autopilot/settlement";
 import { MJENGO_PLAN_KEY } from "./mjengo/entitlement";
 import { settleMjengoPayment } from "./mjengo/settlement";
+import { isFrontDeskTierKey } from "./frontDeskTiers";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "./media/persistence-policy";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
@@ -182,6 +183,32 @@ export async function activateSubscriptionForPayment(
     const now = new Date();
     const { startAt, expiresAt } = subscriptionWindow(now, plan.durationDays, current);
 
+    // Fail-safe for the checkout downgrade gate: if a lower Front Desk tier somehow reaches
+    // settlement while the business still holds an unexpired higher tier (a status race such
+    // as ACTIVE → EXPIRING between checkout and webhook), refuse the state change before any
+    // write. The checkout refuses these purchases up front; this guard only exists so a race
+    // can never silently repoint a customer's live entitlement downwards mid-term.
+    if (
+      isFrontDeskTierKey(plan.key) &&
+      current &&
+      (current.status === "ACTIVE" || current.status === "EXPIRING") &&
+      current.expiresAt &&
+      current.expiresAt > now
+    ) {
+      const currentPlan = await tx.planConfig.findUnique({ where: { id: current.planId }, select: { key: true } });
+      const tierRank: Record<string, number> = {
+        AI_BUSINESS_FRONT_DESK: 1,
+        AI_FRONT_DESK_STANDARD: 2,
+        AI_FRONT_DESK_PRO: 3,
+        AI_FRONT_DESK_VOICE: 4,
+      };
+      const currentRank = currentPlan?.key ? tierRank[currentPlan.key] : undefined;
+      const requestedRank = tierRank[plan.key];
+      if (currentRank !== undefined && requestedRank < currentRank) {
+        throw new Error("DOWNGRADE_AT_PERIOD_END");
+      }
+    }
+
     if (!repairingLegacyPaidPayment) {
       const rawForStorage = verification?.raw === undefined
         ? undefined
@@ -225,18 +252,21 @@ export async function activateSubscriptionForPayment(
       },
     });
     await tx.business.update({ where: { id: payment.businessId }, data: { status: "ACTIVE" } });
-    if (plan.key === "AI_BUSINESS_FRONT_DESK") {
+    // AI Front Desk 2.0 (§41): every tier of the family activates the shared Front Desk
+    // entitlement row, stamped with the tier actually purchased (Starter reuses the legacy key,
+    // so existing rows are untouched; a Standard/Pro/Voice purchase records its own key).
+    if (isFrontDeskTierKey(plan.key)) {
       await tx.aIPackageEntitlement?.upsert?.({
         where: { businessId: payment.businessId },
         update: {
-          packageKey: "AI_BUSINESS_FRONT_DESK",
+          packageKey: plan.key,
           status: "ACTIVE",
           activatedAt: startAt,
           expiresAt,
         },
         create: {
           businessId: payment.businessId,
-          packageKey: "AI_BUSINESS_FRONT_DESK",
+          packageKey: plan.key,
           status: "ACTIVE",
           activatedAt: startAt,
           expiresAt,

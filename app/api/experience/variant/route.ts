@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { guardTenantMutation } from "@/lib/tenant";
+import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-website";
 import { SAFE_ERRORS } from "@/lib/safeError";
 import { validateExperienceJson } from "@/lib/experience/schema";
 import { parseDesignBrief, rankTemplateFamilies, defaultDesignGoal } from "@/lib/experience/artDirector";
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardStudioWebsiteMutation(session, businessId, "read");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const experience = await prisma.businessExperience.findUnique({

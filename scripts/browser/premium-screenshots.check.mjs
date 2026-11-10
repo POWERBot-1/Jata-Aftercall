@@ -80,10 +80,19 @@ const MEMBER_ROUTES = [
 
 // Owner-mandated 2026-10-29 homepage sequence (mobile reading order): Autopilot moved to last
 // and JATA BOS PRO (ERP_PRO) inserted sixth when the full subscription catalogue shipped.
+// The seeded catalogue includes the AI Front Desk 2.0 tiers, but Voice stays out of every
+// customer-facing plan list until inbound voice reception passes its readiness gates
+// (publiclyListedPlans + checkout both fail closed), so the disposable database renders nine
+// homepage cards: the owner's seven-offer sequence with Standard/Pro slotted directly
+// after the Starter (legacy AI_BUSINESS_FRONT_DESK) card — the same order
+// `orderHomepagePlans()` produces in `lib/pricing.ts`. Against production's pre-migration
+// 8-row catalogue the grid still renders exactly the original seven (no tier rows exist yet).
 const EXPECTED_PLAN_ORDER = [
   "MONTHLY",
   "ANNUAL",
   "AI_BUSINESS_FRONT_DESK",
+  "AI_FRONT_DESK_STANDARD",
+  "AI_FRONT_DESK_PRO",
   "INTERACTIVE_BUSINESS",
   "BUSINESS_POS",
   "ERP_PRO",
@@ -248,7 +257,13 @@ function measureFacts() {
     tel: Array.from(document.querySelectorAll('a[href^="tel:"]')).map((a) => a.getAttribute("href")),
     directions: Array.from(document.querySelectorAll('a[href*="google.com/maps"]')).map((a) => a.getAttribute("href")),
     hasShare: Array.from(document.querySelectorAll("button")).some((b) => (b.textContent || "").trim() === "Share"),
-    comingSoon: Boolean(Array.from(document.querySelectorAll("p")).find((p) => (p.textContent || "").includes("coming soon"))),
+    // The CONTACT block's honest fallback, "Contact details for this business are coming soon." —
+    // a demo page with real WhatsApp and Call actions must never show it. The test is scoped to
+    // that wording: a different section may legitimately announce a feature that this business has
+    // not switched on (the Loyalty Rewards "coming soon" state), which is not a contact fallback.
+    contactComingSoon: Boolean(
+      Array.from(document.querySelectorAll("p")).find((p) => /contact details[\s\S]{0,60}coming soon/i.test(p.textContent || "")),
+    ),
   };
   // Image health for every RENDERED image (hidden panels have zero-size boxes and are skipped).
   // A blank/broken photograph reports naturalWidth 0 or complete=false after the scroll pass.
@@ -801,8 +816,9 @@ for (const width of ["320x568", "390x844"]) {
   }
 }
 
-// Homepage design gates: palette really applies in a real browser, and the seven cards keep the
-// owner-mandated order at a phone width and at desktop width.
+// Homepage design gates: palette really applies in a real browser, and the catalogue cards keep
+// the owner-mandated order (with the Front Desk tiers after Starter) at a phone width and at
+// desktop width.
 for (const width of ["390x844", "1366x768"]) {
   const home = evidence.results.find((r) => r.viewport === width && r.route === "home");
   if (!home) {
@@ -810,9 +826,11 @@ for (const width of ["390x844", "1366x768"]) {
     continue;
   }
   const keys = home.planCards.map((c) => c.key);
-  record(keys.length === 7 && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
-    `homepage plan order at ${width}: Monthly, Annual, AI Front Desk, Website Studio, POS, BOS PRO, Autopilot`,
-    keys.join(" > "));
+  record(
+    keys.length === EXPECTED_PLAN_ORDER.length && keys.every((k, i) => k === EXPECTED_PLAN_ORDER[i]),
+    `homepage plan order at ${width}: Monthly, Annual, AI Front Desk Starter/Standard/Pro (Voice gated until operational), Website Studio, POS, BOS PRO, Autopilot`,
+    keys.join(" > "),
+  );
   // Original design tokens, scoped where the original stylesheet declares them.
   record(home.tokens.jataAccent === "#d97706", `root accent is the original amber at ${width}`, String(home.tokens.jataAccent));
   record(home.tokens.lpInk === "#14110f", `landing espresso ink token applies at ${width}`, String(home.tokens.lpInk));
@@ -853,9 +871,9 @@ for (const width of ["390x844", "1366x768"]) {
     `demo page renders only valid Google Maps Directions links at ${width}`,
     `${c.directions.length} link(s): ${c.directions.join(" | ")}`,
   );
-  record(c.hasShare && !c.comingSoon,
-    `demo page shows Share and no "coming soon" placeholder at ${width}`,
-    `share=${c.hasShare} comingSoon=${c.comingSoon}`);
+  record(c.hasShare && !c.contactComingSoon,
+    `demo page shows Share and no contact "coming soon" placeholder at ${width}`,
+    `share=${c.hasShare} contactComingSoon=${c.contactComingSoon}`);
 }
 
 writeFileSync(`${shotDir}/evidence.json`, JSON.stringify(evidence, null, 2));

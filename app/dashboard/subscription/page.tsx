@@ -4,6 +4,9 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { getSession } from "@/lib/auth";
 import { getCheckoutUrl } from "@/lib/subscriptionFlow";
 import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, publiclyListedPlans, type HomepagePlanCard } from "@/lib/pricing";
+import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { PLAN_BADGES, PLAN_INCLUDES, POS_PLAN_CARD, AUTOPILOT_PLAN_CARD, ERP_PRO_PLAN_CARD } from "@/lib/landing";
 import { paymentStatusLabel, subscriptionStatusLabel, type StatusLabel } from "@/lib/statusLabels";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -19,9 +22,10 @@ export const dynamic = "force-dynamic";
 type Props = { searchParams: Promise<{ businessId?: string }> };
 
 /**
- * Factual catalogue copy for the complete offer list. The four page plans keep the same wording
- * the payable cards use (`PLAN_INCLUDES`); the three separate products carry their own card copy
- * from `lib/landing.ts`. No price is written here — every price comes from `PlanConfig`.
+ * Factual catalogue copy for the complete offer list. The public page plans (including every AI
+ * Front Desk tier) keep the same wording the payable cards use (`PLAN_INCLUDES`); the three
+ * separate products carry their own card copy from `lib/landing.ts`. No price is written here —
+ * every price comes from `PlanConfig`.
  */
 type SubscriptionOfferCopy = {
   kind: string;
@@ -47,7 +51,25 @@ const OFFER_COPY: Record<string, SubscriptionOfferCopy> = {
   },
   AI_BUSINESS_FRONT_DESK: {
     kind: "Add-on · ordinary subscription",
-    blurb: "An AI front desk that answers customer questions from your own services and offer.",
+    blurb: "Front Desk Starter — an AI front desk that answers customer questions from your own services and offer.",
+    detailsHref: "/products/ai-front-desk",
+    icon: <Bot size={16} aria-hidden="true" />,
+  },
+  AI_FRONT_DESK_STANDARD: {
+    kind: "Add-on · ordinary subscription",
+    blurb: "Front Desk Standard — the AI front desk, on the Standard package tier.",
+    detailsHref: "/products/ai-front-desk",
+    icon: <Bot size={16} aria-hidden="true" />,
+  },
+  AI_FRONT_DESK_PRO: {
+    kind: "Add-on · ordinary subscription",
+    blurb: "Front Desk Pro — the AI front desk, on the Pro package tier.",
+    detailsHref: "/products/ai-front-desk",
+    icon: <Bot size={16} aria-hidden="true" />,
+  },
+  AI_FRONT_DESK_VOICE: {
+    kind: "Add-on · ordinary subscription",
+    blurb: "Front Desk Voice — the AI front desk, on the top Voice package tier.",
     detailsHref: "/products/ai-front-desk",
     icon: <Bot size={16} aria-hidden="true" />,
   },
@@ -148,6 +170,15 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   // row always wins; the canonical fallback rows fill only genuinely missing slots.
   const catalogue: HomepagePlanCard[] = homepagePlanCards(plansResult.all.length > 0 ? plansResult.all : FALLBACK_PLANS);
 
+  // The complete AI Front Desk 2.0 family for the catalogue section: all four tiers at their
+  // approved prices with the same catalogue/provider availability the public surfaces show,
+  // rendered whether or not a stored row exists. Read-only presentation — it subscribes to
+  // nothing and starts no checkout.
+  const voiceReadiness = getVoiceReadiness();
+  const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
+    frontDeskFamilyCard(key, plansResult.all, voiceReadiness.canSell),
+  );
+
   const selectedSub = selected?.subscription ? subscriptionStatusLabel(selected.subscription.status) : null;
   const paidCount = payments.filter((payment) => payment.status === "PAID").length;
 
@@ -218,6 +249,9 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           <>
             <Link href="#plans" className="ws-btn-amber">
               <CreditCard size={16} aria-hidden="true" /> Choose a plan
+            </Link>
+            <Link href="#catalogue" className="ws-btn-outline">
+              <BookOpen size={16} aria-hidden="true" /> Complete catalogue
             </Link>
             <Link href="#payments" className="ws-btn-outline">
               <Receipt size={16} aria-hidden="true" /> Payment history
@@ -298,7 +332,12 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             ) : (
               <>
                 <div className="ws-plans">
-                  {plansResult.list.map((plan) => (
+                  {/* Tier cards display the approved tier price (displayTierPricing) so the
+                      payable list, the catalogue below and the family block never disagree;
+                      every other plan keeps its stored price. */}
+                  {plansResult.list.map((raw) => {
+                    const plan = displayTierPricing(raw);
+                    return (
                     <PlanCard
                       key={plan.id}
                       plan={{ id: plan.id, key: plan.key, name: planDisplayName(plan), priceKES: plan.priceKES, durationDays: plan.durationDays }}
@@ -308,7 +347,8 @@ export default async function SubscriptionPage({ searchParams }: Props) {
                       href={selected ? getCheckoutUrl(selected.id, plan.id) : undefined}
                       current={selected?.subscription?.planId === plan.id}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <MiniNote icon={<Smartphone size={15} />} title="M-Pesa or card" text="Pay on Paystack with the method you already use." />
@@ -335,12 +375,14 @@ export default async function SubscriptionPage({ searchParams }: Props) {
         />
         <WorkspacePanel>
           <p className="ws-muted ws-small">
-            All seven offers in one list, with prices and billing periods from the same stored plan catalogue checkout
-            uses. Ordinary subscriptions are paid from the plan list above; the separate products are bought inside their
-            own workspaces. Status appears only where your account actually holds a row for the selected business.
+            Every offer in one list, with prices and billing periods from the same stored plan catalogue checkout uses —
+            including all four AI Front Desk tiers when they are present in the catalogue. Ordinary subscriptions are paid
+            from the plan list above; the separate products are bought inside their own workspaces. Status appears only
+            where your account actually holds a row for the selected business.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {catalogue.map((offer) => {
+            {catalogue.map((raw) => {
+              const offer = displayTierPricing(raw);
               const copy: SubscriptionOfferCopy = OFFER_COPY[offer.key] ?? {
                 kind: "Subscription",
                 blurb: "",
@@ -384,6 +426,58 @@ export default async function SubscriptionPage({ searchParams }: Props) {
             })}
           </div>
         </WorkspacePanel>
+
+        {/* The complete AI Front Desk 2.0 family inside the catalogue section: all four tiers
+            at the approved prices, with the same catalogue/provider availability the public
+            surfaces show — visible whether or not a stored row exists. Status here is public
+            availability (never a claim that this business holds the tier); business-specific
+            status stays on the payable list and the status section above. */}
+        <div
+          className="mt-4 rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] p-4"
+          data-tier-family="ai-front-desk"
+        >
+          <h3 className="text-base font-semibold">AI Front Desk 2.0 — all four packages</h3>
+          <p className="ws-muted ws-small mt-1">
+            The approved tier prices, straight from the same plan catalogue checkout uses. A tier
+            reads available only when its catalogue record and readiness checks are satisfied —
+            Voice stays provider-gated until its verification is complete. Viewing this block
+            subscribes to nothing and never starts checkout.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {frontDeskFamily.map((tier) => (
+              <article
+                key={tier.key}
+                data-tier={tier.key}
+                aria-label={tier.name}
+                className="flex flex-col gap-1.5 rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] p-4"
+              >
+                <p className="font-semibold [overflow-wrap:anywhere]">{tier.name}</p>
+                <p className="text-sm">
+                  <span className="font-bold">KES {formatNumber(tier.priceKES)}</span>{" "}
+                  <span className="ws-muted">per {tier.durationDays} days</span>
+                </p>
+                <p className="ws-muted ws-tiny">
+                  {tier.available
+                    ? "Ordinary subscription · catalogue-ready"
+                    : "Not yet for sale — activation stays fail-closed until its catalogue and readiness gates pass"}
+                </p>
+                <p className="text-sm font-semibold">{tier.status}</p>
+                <div className="mt-1">
+                  <Link
+                    href={
+                      tier.key === AI_FRONT_DESK_VOICE_KEY
+                        ? "/products/ai-front-desk#voice"
+                        : "/products/ai-front-desk"
+                    }
+                    className="jata-btn jata-btn-secondary jata-btn-sm"
+                  >
+                    {tier.key === AI_FRONT_DESK_VOICE_KEY ? "View Voice readiness" : "View details"}
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
 
       <WorkspacePanel title="Subscription status" meta="Every business on your account">

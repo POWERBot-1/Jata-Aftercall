@@ -1,0 +1,385 @@
+{
+  "scope": "Website Studio 2.0 only",
+  "statusVocabulary": [
+    "PASS",
+    "FAIL",
+    "BLOCKED",
+    "NOT TESTED"
+  ],
+  "phases": {
+    "p1": [
+      {
+        "id": "tenant-foundation",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "prisma/schema.prisma",
+          "lib/experience/tenant.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42512747695,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "authorization",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/tenant.ts",
+          "app/api/experience/route.ts"
+        ],
+        "acceptanceTest": "tests/unit/repair-guards.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42512747695,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "public-business-regression",
+        "severity": "high",
+        "status": "PASS",
+        "implementation": [
+          "scripts/browser/studio-authenticated.check.mjs"
+        ],
+        "acceptanceTest": "tests/e2e/interactive-business-journey.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42512747557,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Interactive Business E2E"
+          }
+        ]
+      },
+      {
+        "id": "migration",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "prisma/migrations"
+        ],
+        "acceptanceTest": "scripts/ci/rehearse-candidate-migrations.mjs",
+        "evidence": [
+          {
+            "workflowRunId": 42512747513,
+            "commitSha": "a713d849e49c1a2f106cd31f92323b31cb8bfffd",
+            "workflow": "Candidate migration rehearsal"
+          }
+        ]
+      }
+    ],
+    "p2": [
+      {
+        "id": "tenant-foundation",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/tenant.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "multi-site",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "app/api/studio/websites/route.ts",
+          "prisma/schema.prisma"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "content-management",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "app/api/studio/websites/content/route.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "version-history",
+        "severity": "high",
+        "status": "PASS",
+        "implementation": [
+          "app/api/studio/websites/revisions/route.ts",
+          "lib/experience/site-content.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "authorization",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/tenant.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "public-business-regression",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/storefront.ts",
+          "app/api/experience/publish/route.ts"
+        ],
+        "acceptanceTest": "tests/e2e/interactive-business-journey.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256223,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Interactive Business E2E"
+          }
+        ]
+      },
+      {
+        "id": "design-experience",
+        "severity": "high",
+        "status": "PASS",
+        "implementation": [
+          "scripts/browser/studio-authenticated.check.mjs"
+        ],
+        "acceptanceTest": "scripts/browser/studio-authenticated.check.mjs",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "media",
+        "severity": "medium",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "Tenant-scoped upload and media lifecycle acceptance is deferred from this data-plane phase; no new upload transport is claimed.",
+        "implementation": [
+          "app/api/media/route.ts"
+        ],
+        "acceptanceTest": "tests/security/media-authorization.test.ts",
+        "evidence": []
+      },
+      {
+        "id": "ai-assistance",
+        "severity": "medium",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "Verified knowledge grounding and user-controlled AI application are not implemented by the multi-site data-plane PR and are deferred to a separately accepted Studio capability phase.",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+        ],
+        "acceptanceTest": "tests/security/experience-tenant-isolation.test.ts",
+        "evidence": []
+      },
+      {
+        "id": "commerce",
+        "severity": "high",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/storefront.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-multisite-api.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          },
+          {
+            "workflowRunId": 42517256223,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Interactive Business E2E"
+          }
+        ]
+      },
+      {
+        "id": "seo-domains",
+        "severity": "low",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "Custom domains, DNS and advanced SEO are explicitly deferred; no domain or DNS changes are part of this release.",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+        ],
+        "acceptanceTest": "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md",
+        "evidence": []
+      },
+      {
+        "id": "analytics",
+        "severity": "medium",
+        "status": "NOT TESTED",
+        "scopeDecision": "DEFERRED",
+        "deferredReason": "A Studio analytics surface and tenant-scoped measurement are deferred; no analytics feature is claimed as delivered by this data-plane phase.",
+        "implementation": [
+          "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
+        ],
+        "acceptanceTest": "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md",
+        "evidence": []
+      },
+      {
+        "id": "entitlements",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/studio-plan-entitlements.ts"
+        ],
+        "acceptanceTest": "tests/unit/website-studio-plan-entitlements.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "operations",
+        "severity": "high",
+        "status": "PASS",
+        "implementation": [
+          "scripts/ci/rehearse-candidate-migrations.mjs"
+        ],
+        "acceptanceTest": "scripts/ci/rehearse-candidate-migrations.mjs",
+        "evidence": [
+          {
+            "workflowRunId": 42517255985,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Candidate migration rehearsal"
+          }
+        ]
+      },
+      {
+        "id": "security",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          "lib/experience/tenant.ts",
+          "app/api/studio/websites/content/route.ts"
+        ],
+        "acceptanceTest": "tests/integration/website-studio-tenant-postgres.test.ts",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          }
+        ]
+      },
+      {
+        "id": "release",
+        "severity": "critical",
+        "status": "PASS",
+        "implementation": [
+          ".github/workflows/website-studio-2-0.yml"
+        ],
+        "acceptanceTest": ".github/workflows/website-studio-2-0.yml",
+        "evidence": [
+          {
+            "workflowRunId": 42517256070,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Website Studio 2.0 — tenant and content acceptance"
+          },
+          {
+            "workflowRunId": 42517256223,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Interactive Business E2E"
+          },
+          {
+            "workflowRunId": 42517255985,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Candidate migration rehearsal"
+          },
+          {
+            "workflowRunId": 42517256048,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Release Validation"
+          },
+          {
+            "workflowRunId": 42517256049,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Full no-database test suite"
+          },
+          {
+            "workflowRunId": 42517256046,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "POS / ERP - PRO verify"
+          },
+          {
+            "workflowRunId": 42517256093,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Motion isolated browser evidence"
+          },
+          {
+            "workflowRunId": 42517256010,
+            "commitSha": "8776ad90161e3b5463a91a8316728d6268e90988",
+            "workflow": "Premium Screenshots (visual evidence)"
+          }
+        ]
+      }
+    ]
+  },
+  "phaseExclusions": {
+    "p2": [
+      {
+        "id": "public-content-cutover",
+        "severity": "critical",
+        "status": "DEFERRED",
+        "reason": "This PR delivers the multi-site data plane only. Public customer rendering remains on the existing BusinessExperience source; switching it to per-site Studio content requires a separately reviewed migration and rollout."
+      }
+    ]
+  },
+  "postMergeVerification": {
+    "status": "PENDING",
+    "checks": [
+      "Vercel production deployment reaches READY from the merged main commit",
+      "Production migration target guard permits only the enrolled Production Neon database and the additive P2 migration completes",
+      "jataaftercall.co.ke and www.jataaftercall.co.ke resolve to the new Production deployment",
+      "Independent HTTP verification of the public site and public Business route",
+      "Post-deployment Studio access and tenant-isolation smoke checks"
+    ]
+  }
+}

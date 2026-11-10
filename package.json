@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run tests/e2e/interactive-business-journey.test.ts",
     "test:e2e:pos": "vitest run tests/e2e/business-pos-journey.test.ts",
+    "test:e2e:hub": "vitest run tests/e2e/business-hub-journey.test.ts",
     "test:db:migrations": "node scripts/test-local-postgres-migrations.mjs",
     "seed": "tsx prisma/seed.ts",
     "demo:restore": "tsx scripts/restore-demo-businesses.ts",
@@ -53,7 +54,9 @@
     "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
     "verify:mjengo:pg": "node scripts/verify/mjengo-postgres-verify.mjs",
     "test:mjengo": "vitest run tests/unit/mjengo-*.test.ts",
-    "verify:mjengo:nav": "node scripts/verify/mjengo-nav-audit.mjs"
+    "verify:mjengo:nav": "node scripts/verify/mjengo-nav-audit.mjs",
+    "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs",
+    "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
@@ -70,7 +73,8 @@
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "sonner": "^2.0.8",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.14",
@@ -80,14 +84,17 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.2",
     "jsdom": "^26.1.0",
+    "jsqr": "^1.4.0",
     "pg": "8.23.1",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",
     "prisma": "5.22.0",
     "puppeteer-core": "^25.13.0",
+    "qrcode": "^1.5.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.19.1",
     "typescript": "^5.5.4",

@@ -42,6 +42,9 @@ model User {
   controlGrantsProvisioned ControlRoleGrant[] @relation("ControlRoleGrantProvisioner")
   controlMfaCredential ControlMfaCredential?
   controlAuditEvents ControlAuditEvent[] @relation("ControlAuditActor")
+  studioWorkspacesOwned StudioWorkspace[] @relation("StudioWorkspaceOwner")
+  studioWorkspaceMemberships StudioWorkspaceMember[]
+  studioWebsiteMemberships StudioWebsiteMember[]
 }
 
 // An application is not an agent entitlement. No activation is possible until a trusted,
@@ -610,6 +613,23 @@ model Business {
   autopilotIngestions      AutopilotIngestionRecord[]
   autopilotActionProposals AutopilotActionProposal[]
   autopilotAuditEvents     AutopilotAuditEvent[]
+
+  // ── JATA Business Hub: conversion & retention (additive back-relations) ──
+  orderRequests      OrderRequest[]
+  orderRequestItems  OrderRequestItem[]
+  customerEnquiries  CustomerEnquiry[]
+  promotions         Promotion[]
+  loyaltyProgram     LoyaltyProgram?
+  loyaltyCards       LoyaltyCard[]
+  loyaltyStampEvents LoyaltyStampEvent[]
+  loyaltyRedemptions LoyaltyRedemption[]
+  loyaltyPointsProgramme LoyaltyPointsProgramme?
+  loyaltyPointsAccounts  LoyaltyPointsAccount[]
+  loyaltyPointsLedger    LoyaltyPointsLedger[]
+  loyaltyRewards         LoyaltyReward[]
+  loyaltyRewardRedemptions LoyaltyRewardRedemption[]
+  hubActivities      BusinessHubActivity[]
+  studioWorkspaceLink StudioWorkspaceBusiness?
 
   @@index([ownerId])
   @@index([slug])
@@ -4029,4 +4049,774 @@ model MsgLedgerEntry {
   @@unique([businessId, idempotencyKey])
   @@index([businessId, createdAt])
   @@index([businessId, campaignId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI FRONT DESK VOICE — durable telephony foundation (Telnyx call-event pipeline).
+// Plain businessId columns (no @relation) keep this migration purely additive with
+// no FK back to Business: tenant isolation is enforced in the service layer and
+// every query filters by businessId, so no existing table or customer row changes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Telnyx inbound DID → JATA business routing (tenant-safe call entry point).
+model VoiceInboundNumber {
+  id         String   @id @default(cuid())
+  e164       String   @unique
+  businessId String
+  label      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+/// Every provider webhook event, persisted exactly once (provider event id is unique).
+model VoiceCallEvent {
+  id              String    @id @default(cuid())
+  providerEventId String    @unique
+  eventType       String
+  callControlId   String?
+  callSessionId   String?
+  calledNumber    String?
+  callingNumber   String?
+  businessId      String?
+  status          String    @default("RECEIVED") // RECEIVED | PROCESSED | REJECTED | RETRY
+  rejectReason    String? // UNKNOWN_NUMBER | CROSS_TENANT | UNROUTABLE
+  sequence        Int?
+  attempts        Int       @default(0)
+  payload         String    @db.Text
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  lastError       String?
+
+  @@index([callControlId, receivedAt])
+  @@index([status, receivedAt])
+  @@index([businessId])
+}
+
+/// Durable per-call state. One row per Telnyx call_control_id (tenant-stamped at creation).
+model VoiceCall {
+  id             String    @id @default(cuid())
+  callControlId  String    @unique
+  callSessionId  String?
+  businessId     String
+  direction      String    @default("INBOUND")
+  callerNumber   String
+  calledNumber   String
+  language       String    @default("en") // en | sw — caller-switchable
+  state          String    @default("INITIATED") // INITIATED | RINGING | ANSWERED | IN_CALL | HANDING_OFF | COMPLETED | FAILED
+  answeredAt     DateTime?
+  endedAt        DateTime?
+  hangupCause    String?
+  failoverReason String?
+  handoffTarget  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([businessId, createdAt])
+  @@index([state])
+}
+
+/// Outbound Call Control commands with dedupe keys: a command is issued at most once
+/// per dedupe key, retried only under policy, and every attempt is durable.
+model VoiceCallCommand {
+  id              String   @id @default(cuid())
+  callControlId   String
+  command         String
+  dedupeKey       String   @unique
+  status          String   @default("PENDING") // PENDING | SENT | SUCCEEDED | FAILED
+  attempts        Int      @default(0)
+  requestPayload  String?  @db.Text
+  responsePayload String?  @db.Text
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([callControlId, createdAt])
+  @@index([status])
+}
+
+/// One row per completed/answered call — the single metering source for a call.
+/// providerCost stays NULL until the provider reports real usage: never invented.
+model VoiceUsageRecord {
+  id                   String    @id @default(cuid())
+  callId               String    @unique
+  businessId           String
+  startedAt            DateTime
+  answeredAt           DateTime?
+  endedAt              DateTime?
+  durationSeconds      Int       @default(0)
+  providerCostMinor    Int?
+  providerCostCurrency String?
+  status               String    @default("OPEN") // OPEN | FINALIZED | RECONCILED | DISPUTED
+  reconcileBatchId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([businessId, startedAt])
+  @@index([status])
+}
+
+/// Per-business commercial safety policy: hard spend cap, concurrency cap, max call
+/// length and emergency kill switch. Global defaults come from environment variables.
+model VoiceBusinessPolicy {
+  id                   String   @id @default(cuid())
+  businessId           String   @unique
+  dailySpendLimitMinor Int?
+  concurrencyLimit     Int?
+  maxCallSeconds       Int?
+  hardDisabled         Boolean  @default(false)
+  disabledReason       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════
+// JATA BUSINESS HUB — CUSTOMER CONVERSION & RETENTION (KES149 / KES999 BUSINESS PAGE)
+// ──────────────────────────────────────────────────────────────────────────────────────────
+// Native capabilities included in the EXISTING KES149 monthly / KES999 annual Business Page
+// subscription. No new plan, no add-on charge, no change to billing or entitlement logic.
+//
+// Design rules (see docs/business-hub/BUSINESS_HUB_IMPLEMENTATION.md):
+//   • Every table is additive. No existing table is altered by the migration.
+//   • Every customer-owned row carries `businessId`; reads are always scoped by it.
+//   • Public (unauthenticated) endpoints can only INSERT, never read another tenant's rows.
+//   • Loyalty stamp events and redemptions are append-only: the unique indexes below are the
+//     duplicate-award guard, not an application-level check that can be raced.
+// ══════════════════════════════════════════════════════════════════════════════════════════
+
+/// An order request is an ENQUIRY, never a payment and never a confirmed sale.
+/// It becomes a sale only when the owner says so — the status column is the owner's record.
+enum OrderRequestStatus {
+  NEW
+  REVIEWING
+  CONFIRMED
+  DECLINED
+  COMPLETED
+  CANCELLED
+}
+
+model OrderRequest {
+  id                String             @id @default(cuid())
+  businessId        String
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Human-quotable reference shown to the customer, e.g. JATA-REQ-20261106-4F9K2Q.
+  reference         String             @unique
+  /// Client-generated per-draft key. The (businessId, requestKey) unique index is the
+  /// double-tap / retry guard: a replayed form returns the original request, never a second one.
+  requestKey        String
+  customerName      String
+  contactMethod     String // PHONE | WHATSAPP | EMAIL | IN_PERSON
+  contactValue      String
+  message           String?            @db.Text
+  status            OrderRequestStatus @default(NEW)
+  itemCount         Int                @default(0)
+  estimatedTotalKES Int                @default(0)
+  source            String             @default("BUSINESS_PAGE")
+  /// Internal-only note. Never returned to a public caller.
+  ownerNotes        String?            @db.Text
+  ipHash            String?
+  sessionHash       String?
+  statusChangedAt   DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  items OrderRequestItem[]
+
+  @@unique([businessId, requestKey])
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+  @@index([businessId, contactValue])
+}
+
+model OrderRequestItem {
+  id               String       @id @default(cuid())
+  orderRequestId   String
+  orderRequest     OrderRequest @relation(fields: [orderRequestId], references: [id], onDelete: Cascade)
+  /// Denormalised tenant key for direct, request-independent queries. It is a real
+  /// relation so the database — not only the application — enforces tenant integrity.
+  businessId       String
+  business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  productId        String?
+  /// Authoritative snapshot at request time: the owner's catalogue may change afterwards.
+  name             String
+  imageUrl         String?      @db.Text
+  quantity         Int          @default(1)
+  unitPriceKES     Int          @default(0)
+  lineTotalKES     Int          @default(0)
+  createdAt        DateTime     @default(now())
+
+  @@index([orderRequestId])
+  @@index([businessId])
+}
+
+/// A general customer enquiry (no product lines) — the other half of the Smart Customer Hub.
+enum CustomerEnquiryStatus {
+  NEW
+  REVIEWING
+  CONTACTED
+  CLOSED
+  DECLINED
+}
+
+model CustomerEnquiry {
+  id            String                @id @default(cuid())
+  businessId    String
+  business      Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  reference     String                @unique
+  requestKey    String
+  customerName  String
+  contactMethod String
+  contactValue  String
+  subject       String?
+  message       String
+  status        CustomerEnquiryStatus @default(NEW)
+  source        String                @default("BUSINESS_PAGE")
+  ownerNotes    String?               @db.Text
+  ipHash        String?
+  sessionHash   String?
+  statusChangedAt DateTime            @default(now())
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@unique([businessId, requestKey])
+  @@index([businessId, status])
+  @@index([businessId, createdAt])
+  @@index([businessId, contactValue])
+}
+
+/// Promotional Spotlight. `startsAt` / `endsAt` are stored in UTC; Africa/Nairobi
+/// (UTC+3, no DST) is the owner's entry and display zone. A promotion is live only while
+/// `isActive` AND startsAt <= now < endsAt — expiry is evaluated on every read, so an
+/// expired promotion can never be presented as active.
+model Promotion {
+  id            String    @id @default(cuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title         String
+  subtitle      String?
+  body          String?   @db.Text
+  badge         String?
+  discountLabel String?
+  imageUrl      String?   @db.Text
+  ctaLabel      String?
+  /// ORDER_REQUEST | WHATSAPP | CALL | NONE
+  ctaKind       String    @default("NONE")
+  ctaValue      String?
+  /// JSON array of product ids this promotion spotlights; empty means "the whole business".
+  productIds    String?   @db.Text
+  startsAt      DateTime
+  endsAt        DateTime
+  isActive      Boolean   @default(true)
+  priority      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([businessId, isActive, endsAt])
+  @@index([businessId, startsAt])
+}
+
+/// Owner-verified loyalty: the first release has NO automatic purchase verification.
+/// A stamp exists only because an owner pressed "Verify & award".
+model LoyaltyProgram {
+  id                 String   @id @default(cuid())
+  businessId         String   @unique
+  business           Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  isEnabled          Boolean  @default(true)
+  /// Stamps needed before a reward can be redeemed.
+  stampGoal          Int      @default(8)
+  /// Stamps an owner may award for one verified transaction.
+  maxStampsPerVisit  Int      @default(1)
+  rewardDescription  String   @default("Free reward — ask the business for details")
+  terms              String?  @db.Text
+  cardPrefix         String   @default("JATA")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  cards LoyaltyCard[]
+}
+
+model LoyaltyCard {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  programId      String
+  program        LoyaltyProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  /// Opaque, unguessable code the customer quotes (printed/carded by the owner). It is the
+  /// only thing a public caller needs to read progress, and it is never derived from contact data.
+  code           String   @unique
+  customerName   String
+  contactMethod  String?
+  contactValue   String?
+  /// Monotonic totals: `stampsEarned - stampsRedeemed` is the customer's live balance.
+  stampsEarned   Int      @default(0)
+  stampsRedeemed Int      @default(0)
+  status         String   @default("ACTIVE") // ACTIVE | BLOCKED
+  ownerNotes     String?  @db.Text
+  lastStampAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stampEvents LoyaltyStampEvent[]
+  redemptions LoyaltyRedemption[]
+  /// The customer's points wallet, if they have been enrolled in the points programme. Stamps and
+  /// points are separate records with separate balances; the card is what identifies the customer.
+  pointsAccount LoyaltyPointsAccount?
+
+  @@index([businessId, contactValue])
+  @@index([businessId, createdAt])
+}
+
+/// Append-only. The (businessId, transactionRef) unique index is what makes duplicate
+/// verification impossible: the owner's receipt/transaction reference can be stamped once.
+model LoyaltyStampEvent {
+  id              String      @id @default(cuid())
+  businessId      String
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  cardId          String
+  card            LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  /// Owner-supplied reference for the qualifying transaction (receipt no., order ref, date+pick).
+  transactionRef  String
+  stamps          Int         @default(1)
+  note            String?     @db.Text
+  awardedByUserId String?
+  awardedByLabel  String?
+  createdAt       DateTime    @default(now())
+
+  @@unique([businessId, transactionRef])
+  @@index([cardId, createdAt])
+}
+
+/// Append-only. (cardId, cycleIndex) is unique, so the same reward cycle can never pay out twice.
+model LoyaltyRedemption {
+  id                String      @id @default(cuid())
+  businessId        String
+  business          Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  cardId            String
+  card              LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cycleIndex        Int
+  stampsRedeemed    Int
+  rewardDescription String
+  reference         String      @unique
+  verifiedByUserId  String?
+  verifiedByLabel   String?
+  createdAt         DateTime    @default(now())
+
+  @@unique([cardId, cycleIndex])
+  @@index([businessId, createdAt])
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+// Loyalty 2.0 — configurable points and rewards (Business Hub, additive to the stamp card).
+//
+// The stamp card above is untouched. Points are a SECOND, independent mechanism: their own
+// programme, their own account per customer, their own ledger and their own redemptions. Nothing
+// here reads or writes LoyaltyCard.stampsEarned / stampsRedeemed, so a business can run either
+// mechanism, or both, and the two balances are never combined.
+// ───────────────────────────────────────────────────────────────────────────────────────────────
+
+/// What happened to a points balance. Every movement in `LoyaltyPointsLedger` carries one of these.
+enum PointsTransactionType {
+  EARNED
+  REDEEMED
+  EXPIRED
+  REVERSED
+  MANUAL_ADJUSTMENT
+}
+
+/// Whether a ledger entry adds to the balance or takes from it. Stored alongside the magnitude so
+/// the ledger stays additive: a correction is a new entry, never an edit of an old one.
+enum PointsDirection {
+  CREDIT
+  DEBIT
+}
+
+/// Where the instruction came from. `OWNER_VERIFIED` is a human confirming a purchase in the hub;
+/// `PAYMENT_PROVIDER` is reserved for authoritative payment verification, which is NOT implemented
+/// in this release — no code path may claim it.
+enum PointsSource {
+  OWNER_VERIFIED
+  PAYMENT_PROVIDER
+  CUSTOMER_REDEMPTION
+  SYSTEM_EXPIRY
+  OWNER_ADJUSTMENT
+  REVERSAL
+}
+
+/// What a reward is worth when it is redeemed.
+enum RewardKind {
+  FIXED_POINTS
+  DISCOUNT
+  PRODUCT
+  SERVICE
+}
+
+/// Life cycle of one redemption. A redemption is `PENDING` until the business hands over the
+/// reward; cancelling it returns the points through a compensating ledger entry.
+enum RedemptionStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
+
+/// One business's points configuration.
+///
+/// Earning is OFF until an owner configures it: `isActive` defaults to false, and the activation
+/// validator refuses to turn it on while the earning rate is unset. No default earning rate,
+/// redemption rate, expiry period or reward value is invented anywhere in this system.
+model LoyaltyPointsProgramme {
+  id        String   @id @default(cuid())
+  businessId String  @unique
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Off until the owner configures and activates the programme.
+  isActive  Boolean  @default(false)
+
+  /// Earning rule: `pointsPerUnit` points for every whole `kesPerPoint` KES of eligible spend.
+  /// Both are NULL until the owner sets them, and activation is refused while either is NULL.
+  kesPerPoint   Int?
+  pointsPerUnit Int?
+  /// A purchase below this amount earns nothing. Zero means every qualifying purchase earns.
+  minPurchaseKES Int @default(0)
+  /// Optional ceiling per transaction. NULL means no cap.
+  maxPointsPerTransaction Int?
+
+  /// A customer may only redeem once their available balance reaches this figure.
+  minRedeemPoints Int @default(0)
+  /// What one point is worth, when the owner chooses to state it. Display and discount maths only —
+  /// points are never cash and are never paid out.
+  pointValueKES Int?
+  /// NULL = points never expire. Otherwise whole months from the earning date.
+  expiryMonths Int?
+  /// Whether a reversal may take the balance below zero when the points were already spent.
+  /// Off by default: the safe behaviour is to reverse only the unspent portion and report the rest.
+  allowNegativeBalanceOnReversal Boolean @default(false)
+
+  /// Customer-facing copy. `terms` and `redemptionRules` are shown in the wallet.
+  description     String? @db.Text
+  terms           String? @db.Text
+  redemptionRules String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts      LoyaltyPointsAccount[]
+  rewards       LoyaltyReward[]
+  eligibleItems LoyaltyPointsEligibleItem[]
+}
+
+/// Products and services that earn points. An empty list means every qualifying purchase earns;
+/// a non-empty list restricts earning to the listed items only.
+model LoyaltyPointsEligibleItem {
+  id          String @id @default(cuid())
+  programmeId String
+  programme   LoyaltyPointsProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  /// PRODUCT | SERVICE — a plain column rather than a foreign key, so a catalogue row can be
+  /// withdrawn without rewriting loyalty history.
+  itemKind    String
+  itemId      String
+  createdAt   DateTime @default(now())
+
+  @@unique([programmeId, itemKind, itemId])
+  @@index([programmeId])
+}
+
+/// One customer's points wallet. Separate from the stamp card it belongs to: the card identifies
+/// the customer, the account holds the points.
+model LoyaltyPointsAccount {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   LoyaltyPointsProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  /// One wallet per stamp card, so the customer's code works for both mechanisms.
+  cardId      String   @unique
+  card        LoyaltyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  /// Cached balance. It is always reconcilable with the ledger: sum(CREDIT) - sum(DEBIT).
+  availablePoints  Int @default(0)
+  lifetimeEarned   Int @default(0)
+  lifetimeRedeemed Int @default(0)
+  lifetimeExpired  Int @default(0)
+  pointsPending    Int @default(0)
+  /// ACTIVE | BLOCKED. A blocked wallet can neither earn nor redeem.
+  status      String   @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledger      LoyaltyPointsLedger[]
+  redemptions LoyaltyRewardRedemption[]
+
+  @@index([businessId, availablePoints])
+  @@index([businessId, status])
+}
+
+/// Append-only points ledger. Rows are never updated except to consume an EARNED lot's remaining
+/// points, and never deleted. A correction is a new compensating row.
+model LoyaltyPointsLedger {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     LoyaltyPointsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  type        PointsTransactionType
+  direction   PointsDirection
+  /// Magnitude, always positive. The direction field carries the sign.
+  points      Int
+  /// Balance snapshot after this entry, for audit.
+  balanceAfter Int     @default(0)
+
+  reference      String @unique
+  /// The replay guard. One idempotency key per business can only ever produce one entry, so a
+  /// retried request, a double tap or a replayed payment event cannot award points twice.
+  idempotencyKey String
+  source         PointsSource
+  /// The business's own transaction reference (receipt, order or date) for an earning entry.
+  sourceReference String?
+  /// Set on EARNED rows by an EXPIRED or REVERSED row that consumes them.
+  reversalOfId  String?
+  reversalOf    LoyaltyPointsLedger?  @relation("PointsReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversedBy    LoyaltyPointsLedger[] @relation("PointsReversal")
+
+  explanation   String? @db.Text
+  actorUserId   String?
+  actorLabel    String?
+
+  /// Earning lots. `expiresAt` is set only when the programme has expiry enabled at the time of
+  /// the award; `remainingPoints` is the unused portion, consumed by redemptions and expiry.
+  expiresAt       DateTime?
+  remainingPoints Int?
+
+  createdAt DateTime @default(now())
+
+  @@unique([businessId, idempotencyKey])
+  @@index([accountId, createdAt])
+  @@index([businessId, type, createdAt])
+  @@index([businessId, expiresAt])
+  @@index([businessId, sourceReference])
+}
+
+/// A reward the business offers in exchange for points.
+model LoyaltyReward {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   LoyaltyPointsProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?  @db.Text
+  kind        RewardKind @default(FIXED_POINTS)
+  pointsCost  Int
+  /// DISCOUNT rewards: the value taken off, in KES.
+  discountKES Int?
+  /// PRODUCT / SERVICE rewards: what is handed over. Plain columns, not foreign keys.
+  itemKind    String?
+  itemId      String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  redemptions LoyaltyRewardRedemption[]
+
+  @@unique([businessId, title])
+  @@index([programmeId, isActive, sortOrder])
+}
+
+/// One redemption. `reference` is quoted to the customer; `idempotencyKey` makes a double tap safe.
+model LoyaltyRewardRedemption {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     LoyaltyPointsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  rewardId    String
+  reward      LoyaltyReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  pointsSpent Int
+  status      RedemptionStatus @default(PENDING)
+  reference   String @unique
+  idempotencyKey String
+
+  rewardTitleSnapshot  String
+  rewardKindSnapshot   String
+  channel              String @default("CUSTOMER") // CUSTOMER | OWNER_ASSISTED
+
+  customerNote     String? @db.Text
+  fulfilledByUserId String?
+  fulfilledByLabel String?
+  cancelledAt      DateTime?
+  cancelReason     String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId, status, createdAt])
+  @@index([accountId, createdAt])
+}
+
+/// Shared activity/audit trail for the Business Hub: order requests, enquiries, promotions and
+/// loyalty. Append-only; written by owner actions and by public submissions alike.
+model BusinessHubActivity {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// ORDER_REQUEST | CUSTOMER_ENQUIRY | PROMOTION | LOYALTY
+  subjectType String
+  subjectId   String
+  /// CREATED | STATUS_CHANGED | NOTE_ADDED | STAMP_AWARDED | REWARD_REDEEMED |
+  /// PROMOTION_CREATED | PROMOTION_UPDATED | PROMOTION_DELETED
+  kind        String
+  fromStatus  String?
+  toStatus    String?
+  summary     String
+  note        String?  @db.Text
+  /// Null for public (customer) submissions; set for authenticated owner/staff actions.
+  actorId     String?
+  actorLabel  String?
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([businessId, subjectType, subjectId])
+}
+
+
+model StudioWorkspace {
+  id          String   @id @default(cuid())
+  name        String
+  ownerUserId String
+  owner       User     @relation("StudioWorkspaceOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  status      String   @default("ACTIVE")
+  members     StudioWorkspaceMember[]
+  businesses  StudioWorkspaceBusiness[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerUserId, status])
+  @@index([updatedAt])
+}
+
+model StudioWorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String   @default("VIEWER")
+  status      String   @default("ACTIVE")
+  workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([userId, status])
+  @@index([workspaceId, status])
+}
+
+model StudioWorkspaceBusiness {
+  id          String   @id @default(cuid())
+  workspaceId String
+  businessId  String   @unique
+  workspace   StudioWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  websites    StudioWebsite[]
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, businessId])
+  @@index([workspaceId])
+}
+
+model StudioWebsite {
+  id          String   @id @default(cuid())
+  workspaceId String
+  businessId  String
+  slug        String
+  name        String
+  status      String   @default("DRAFT")
+  isDefault   Boolean  @default(false)
+  workspaceBusiness StudioWorkspaceBusiness @relation(fields: [workspaceId, businessId], references: [workspaceId, businessId], onDelete: Cascade)
+  members     StudioWebsiteMember[]
+  content     StudioWebsiteContent?
+  versions    StudioWebsiteVersion[]
+  draftRevisions StudioWebsiteDraftRevision[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([businessId, slug])
+  @@index([workspaceId, updatedAt])
+  @@index([businessId, isDefault])
+  @@index([businessId, status])
+}
+
+
+/// Independent per-site content state. Draft and published snapshots are never conflated.
+model StudioWebsiteContent {
+  id               String   @id @default(cuid())
+  websiteId        String   @unique
+  website          StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  draftJson        String?  @db.Text
+  publishedJson    String?  @db.Text
+  draftVersion     Int      @default(0)
+  historyCursor    Int      @default(0)
+  publishedVersion Int      @default(0)
+  publishedAt      DateTime?
+  publishedById    String?
+  updatedAt        DateTime @updatedAt
+
+  @@index([websiteId, updatedAt])
+}
+
+/// Immutable per-website publication history. A site can roll back without affecting siblings.
+model StudioWebsiteVersion {
+  id          String   @id @default(cuid())
+  websiteId   String
+  website     StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  version     Int
+  snapshotJson String  @db.Text
+  themeKey    String?
+  categoryKey String?
+  note        String?
+  publishedById String?
+  publishedAt DateTime @default(now())
+
+  @@unique([websiteId, version])
+  @@index([websiteId, publishedAt])
+}
+
+
+/// Recoverable draft snapshots, isolated per website.
+model StudioWebsiteDraftRevision {
+  id           String   @id @default(cuid())
+  websiteId    String
+  website      StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  draftVersion Int
+  source       String   @default("EDIT")
+  label        String?
+  snapshotJson String   @db.Text
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  @@unique([websiteId, draftVersion])
+  @@index([websiteId, createdAt])
+}
+
+model StudioWebsiteMember {
+  id        String   @id @default(cuid())
+  websiteId String
+  userId    String
+  role      String   @default("VIEWER")
+  status    String   @default("ACTIVE")
+  website   StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, userId])
+  @@index([userId, status])
+  @@index([websiteId, status])
 }

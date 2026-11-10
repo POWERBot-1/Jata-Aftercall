@@ -5,16 +5,22 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   CalendarCheck,
+  Coins,
   Eye,
+  Gift,
   Home,
   Image as ImageIcon,
   LayoutTemplate,
+  Megaphone,
   Package,
   Palette,
   PanelsTopLeft,
+  QrCode,
   Receipt,
   Settings2,
+  Sparkles,
   UploadCloud,
+  Users,
   Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/ui";
@@ -36,7 +42,9 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
   const pathname = usePathname() || "";
   const tabs = [
     { href: base, label: "Home", icon: Home, exact: true },
-    // The Canvas is the editing surface; it sits second so "edit my website" is one tap from Home.
+    // Prompt-first Website Studio. The Canvas and classic tabs remain until the replacement
+    // has passed acceptance, so no owner loses access to the editor they already know.
+    { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
     { href: `${base}/canvas`, label: "Canvas", icon: PanelsTopLeft },
     { href: `${base}/sections`, label: "Website", icon: LayoutTemplate },
     { href: `${base}/create`, label: "Create", icon: Wand2 },
@@ -49,6 +57,16 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
       : []),
     ...(capabilities.includes("booking") ? [{ href: `${base}/bookings`, label: "Bookings", icon: CalendarCheck }] : []),
     { href: `${base}/insights`, label: "Analytics", icon: BarChart3 },
+    // Business Hub: customer conversion and retention on the KES149 / KES999 Business Page.
+    // These four are available to every business — they do not depend on an Interactive Business
+    // experience, because the Business Page subscription is what they extend.
+    { href: `${base}/customers`, label: "Customers", icon: Users },
+    { href: `${base}/promotions`, label: "Promotions", icon: Megaphone },
+    // Loyalty has two independent mechanisms: the stamp card and the points programme. Each is
+    // exact-matched so the two tabs never both light up.
+    { href: `${base}/loyalty`, label: "Loyalty", icon: Gift, exact: true },
+    { href: `${base}/loyalty/points`, label: "Points", icon: Coins },
+    { href: `${base}/qr`, label: "QR code", icon: QrCode },
     { href: `${base}/preview`, label: "Preview", icon: Eye },
     { href: `${base}#publish`, label: "Publish", icon: UploadCloud },
   ];

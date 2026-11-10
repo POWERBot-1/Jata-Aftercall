@@ -12,10 +12,15 @@ import { requestCache } from "@/lib/request-cache";
 import { seoMetadataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 import { DemoShowcaseBand } from "@/components/storefront/DemoShowcaseBand";
-import { buildDemoShowcase } from "@/lib/demoShowcase";
+import { buildDemoShowcase, DEMO_SHOWCASES } from "@/lib/demoShowcase";
 import { DEMO_BUSINESSES, DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
 import { isCurrentPublicOffer, isVerifiedDemoRecord } from "@/lib/demoContent";
 import { resolveDemoContacts, isPublicDemoRow } from "@/lib/demoContact";
+import { loadRequestableCatalogue } from "@/lib/business-hub/catalogue";
+import { listLivePromotions } from "@/lib/business-hub/promotions";
+import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
+import { publicLoyaltyRewards } from "@/lib/business-hub/loyaltyPoints";
+import { accentForLegacyTheme, resolveHeroImage, storefrontThemeFor } from "@/lib/storefront/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +44,15 @@ const getBusiness = requestCache(async (slug: string) => {
       subscription: true,
       members: { select: { userId: true, role: true } },
     },
+  });
+});
+
+// Once a default Studio site exists, its per-site publication state is authoritative.
+// Do not fall through to the classic BusinessPage when that Studio site is unpublished.
+const getDefaultStudioWebsite = requestCache(async (businessId: string) => {
+  return prisma.studioWebsite.findFirst({
+    where: { businessId, isDefault: true, status: "UNPUBLISHED" },
+    select: { id: true, status: true },
   });
 });
 
@@ -86,6 +100,31 @@ const classicPageExtras = requestCache(async (businessId: string) => {
   return { code, aiFrontDeskLive };
 });
 
+/**
+ * Business Hub data for the classic page (§A–§E), loaded once per request and shared by
+ * `generateMetadata` and the body.
+ *
+ * Every call is scoped by the business id and returns only public data:
+ *   • the catalogue a customer may request from — the product catalogue plus the services the
+ *     page itself lists, priced by the platform's own pricing rule,
+ *   • LIVE promotions only — an expired promotion never reaches this page,
+ *   • whether the owner has enabled loyalty (a read; nothing is created by a page view).
+ * A failure here degrades the page to its previous behaviour rather than blanking it.
+ */
+const businessHubExtras = requestCache(async (businessId: string) => {
+  const [products, promotions, loyaltyEnabled, points] = await Promise.all([
+    loadRequestableCatalogue(businessId, { take: 24 }).catch(() => []),
+    listLivePromotions(businessId).catch(() => []),
+    isLoyaltyEnabled(businessId).catch(() => false),
+    // The Loyalty Rewards section is rendered in every state, so this returns the STATE rather
+    // than a boolean: `active` publishes the configured programme, `inactive` announces that
+    // points are not available yet, and `unknown` — a lookup that failed — keeps the section with
+    // a neutral message. It fails closed: only `active` offers a customer the card-code lookup.
+    publicLoyaltyRewards(businessId),
+  ]);
+  return { products, promotions, loyaltyEnabled, points };
+});
+
 function canPreviewDraft(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>, viewer: PublicViewer): boolean {
   if (!viewer) return false;
   if (viewer.role === "ADMIN") return true;
@@ -115,11 +154,20 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   } catch {
     experience = null;
   }
+  if (!experience && await getDefaultStudioWebsite(business.id)) {
+    return { title: "Page not found", robots: { index: false, follow: false } };
+  }
   if (experience) {
     return seoMetadataFor({ business, document: experience.document, isPreview: experience.isPreview }) as Metadata;
   }
-  // Share the classic-fallback tail with the body (M11 #418): one per-request load total.
-  if (decision === "public") await classicPageExtras(business.id);
+  // Share the classic-fallback tail with the body (M11 #418): one per-request load total. The
+  // Business Hub read is shared for the same reason, and it is awaited on every classic render
+  // (not only the public one) because the body awaits it on every classic render too — a
+  // body-only await is what lags the root segment behind the head.
+  await Promise.all([
+    decision === "public" ? classicPageExtras(business.id) : Promise.resolve(null),
+    businessHubExtras(business.id),
+  ]);
 
   const title = `${business.name} | ${business.location || business.category}`;
   const demoFixture = verifiedDemoFixture(business);
@@ -165,6 +213,8 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
     experience = null;
   }
 
+  if (!experience && await getDefaultStudioWebsite(business.id)) notFound();
+
   if (experience) {
     return (
       <ExperienceSite
@@ -189,7 +239,26 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
     }
   }
 
+  // The public storefront inherits the JATA AFTERCALL platform identity from ONE place: the
+  // business keeps its name, imagery, copy and (validated) accent; the platform keeps the
+  // structure. `resolveTheme` stays the legacy business theme for the classic panels; the page's
+  // chrome now comes from the storefront tokens so the page belongs to the product.
   const theme = resolveTheme(business.theme);
+  const storefront = storefrontThemeFor({
+    businessName: business.name,
+    category: business.category,
+    accentHex: accentForLegacyTheme(business.theme),
+  });
+  // IMAGE IS EVERYTHING — with nothing invented. Only imagery the platform actually holds for this
+  // business is used. First choice is the business's own uploaded cover. A verified demo fixture
+  // falls back to its own illustrative photograph, always captioned as illustrative — it is the
+  // platform's asset for that fixture, never a generated stand-in for a real business. Every other
+  // page without a cover gets the intentional fallback composition, not a stock photograph.
+  const demoHero = verifiedDemoFixture(business) ? DEMO_SHOWCASES[business.slug] : undefined;
+  const hero = resolveHeroImage({
+    coverUrl: business.coverUrl,
+    demoImage: demoHero ? { path: demoHero.image, alt: demoHero.imageAlt } : null,
+  });
 
   // Stage 2: the referral CTA is shown to public visitors of an eligible (published, not
   // suspended) page. The code is minted lazily on first eligible use. Shared with
@@ -233,6 +302,9 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
         };
       })
     : activeServices;
+  // Business Hub: catalogue, live promotions and the loyalty switch (§A, §C, §D).
+  const hub = await businessHubExtras(business.id);
+
   const currentOffer = isCurrentPublicOffer(business.offer) ? business.offer : null;
   const demoOffer =
     demoFixture && !isPropertyDemo && currentOffer
@@ -286,13 +358,21 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
           aftercallMsg: business.aftercallMsg,
           openingHours: business.openingHours,
           socialLinks: business.socialLinks,
+          logoUrl: business.logoUrl,
         }}
         services={displayedServices}
         offer={displayedOffer}
-        theme={theme}
+        theme={storefront.tokens}
+        artLabel={storefront.art.label}
+        hero={hero}
         referralHref={referralHref}
         aiFrontDeskLive={aiFrontDeskLive}
         demoPage={isDemoBusiness}
+        products={hub.products}
+        promotions={hub.promotions}
+        loyaltyEnabled={hub.loyaltyEnabled}
+        pointsEnabled={hub.points.status === "active"}
+        loyaltyRewards={hub.points}
       />
     </>
   );

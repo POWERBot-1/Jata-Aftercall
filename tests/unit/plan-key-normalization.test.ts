@@ -11,11 +11,18 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { normalizePlanKey, PLAN_KEY_MAX_LENGTH } from "@/lib/planKey";
 import { FALLBACK_PLANS } from "@/lib/pricing";
+import { FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 
 const root = path.resolve(__dirname, "../..");
 
-/** Every plan key the repository ships as a product (FALLBACK_PLANS plus the ERP/Oro product). */
-const CANONICAL_KEYS = [...FALLBACK_PLANS.map((plan) => plan.key), "ERP_PRO"];
+/**
+ * Every plan key the repository ships as a product: FALLBACK_PLANS, the AI Front Desk 2.0 tiers
+ * (three of which are deliberately absent from FALLBACK_PLANS — they are DB-authoritative) and
+ * the ERP/Oro product.
+ */
+const CANONICAL_KEYS = [
+  ...new Set([...FALLBACK_PLANS.map((plan) => plan.key), ...FRONT_DESK_TIER_KEYS, "ERP_PRO"]),
+];
 
 describe("normalizePlanKey", () => {
   it("returns every canonical plan key exactly, including the two longer than the old 20-character limit", () => {

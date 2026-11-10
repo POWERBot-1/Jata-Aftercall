@@ -1,0 +1,635 @@
+
+> jata-aftercall@1.0.0 lint
+> eslint app components lib
+
+The prop value with an expression type of TSNonNullExpression could not be resolved. Please file an issue ( https://github.com/jsx-eslint/jsx-ast-utils/issues/new ) to get this fixed immediately.
+
+/home/user/Jata-Aftercall/app/admin/subscriptions/page.tsx
+  26:78  warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/app/admin/subscriptions/page.tsx:26:78
+  24 |   ]);
+  25 |   const entitlementByBusiness = new Map(entitlements.map((e) => [e.businessId, e]));
+> 26 |   const expiring = subs.filter((s) => s.expiresAt && s.expiresAt.getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14).length;
+     |                                                                              ^^^^^^^^^^ Cannot call impure function
+  27 |
+  28 |   return (
+  29 |     <AdminPage  react-hooks/purity
+
+/home/user/Jata-Aftercall/app/checkout/callback/page.tsx
+  60:26  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/app/checkout/callback/page.tsx:60:26
+  58 |   }, [reference, testMock]);
+  59 |
+> 60 |   useEffect(() => { void verify(); }, [verify]);
+     |                          ^^^^^^ Avoid calling setState() directly within an effect
+  61 |
+  62 |   // Automatic re-checks with backoff while the payment is still processing.
+  63 |   useEffect(() => {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/app/dashboard/businesses/[id]/page.tsx
+  62:16  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+
+/home/user/Jata-Aftercall/app/dashboard/erp/[businessId]/accounting/page.tsx
+  45:121  warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/app/dashboard/erp/[businessId]/accounting/page.tsx:45:121
+  43 |
+  44 |       <dl className="erp-grid erp-grid-4">
+> 45 |         <Kpi label="Assets" value={formatCentsShort(bs.totalAssetsCents)} hint={`as at ${formatDate(new Date(bs.asOf ?? Date.now()))}`} />
+     |                                                                                                                         ^^^^^^^^^^ Cannot call impure function
+  46 |         <Kpi label="Liabilities" value={formatCentsShort(bs.totalLiabilitiesCents)} hint="Including VAT output and deposits" />
+  47 |         <Kpi label="Net profit (YTD)" value={formatCentsShort(pnl.netProfitCents)} hint={`${formatCentsShort(pnl.totalIncomeCents)} income`} />
+  48 |         <Kpi label="Journals posted" value={String(data.journals.length)} hint={`${tb.rows.length} accounts with movement`} />  react-hooks/purity
+
+/home/user/Jata-Aftercall/app/dashboard/erp/[businessId]/procurement/page.tsx
+  186:100  warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/app/dashboard/erp/[businessId]/procurement/page.tsx:186:100
+  184 |           <form action={createPurchaseOrderAction}>
+  185 |             <input type="hidden" name="businessId" value={businessId} />
+> 186 |             <input type="hidden" name="requestKey" value={`${businessId}:${centre.orders.length}:${Date.now()}`} />
+      |                                                                                                    ^^^^^^^^^^ Cannot call impure function
+  187 |             <div className="erp-row">
+  188 |               <div className="erp-field" style={{ flex: "2:1 240px" }}>
+  189 |                 <label className="erp-label" htmlFor="supplierId">Supplier</label>  react-hooks/purity
+
+/home/user/Jata-Aftercall/app/dashboard/erp/[businessId]/requisitions/page.tsx
+  161:102  warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/app/dashboard/erp/[businessId]/requisitions/page.tsx:161:102
+  159 |           <form action={createRequisitionAction}>
+  160 |             <input type="hidden" name="businessId" value={businessId} />
+> 161 |             <input type="hidden" name="requestKey" value={`${businessId}:${centre.requests.length}:${Date.now()}`} />
+      |                                                                                                      ^^^^^^^^^^ Cannot call impure function
+  162 |             <div className="erp-row">
+  163 |               <div className="erp-field" style={{ flex: "2:1 260px" }}>
+  164 |                 <label className="erp-label" htmlFor="title">What do you need?</label>  react-hooks/purity
+
+/home/user/Jata-Aftercall/app/dashboard/pos/[businessId]/credit/page.tsx
+  48:49   warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/app/dashboard/pos/[businessId]/credit/page.tsx:48:49
+  46 |   const owing = (debtors as any[])
+  47 |     .filter((party) => Number(party.balanceKES ?? 0) > 0)
+> 48 |     .sort((a, b) => new Date(a.oldestEntryAt ?? Date.now()).getTime() - new Date(b.oldestEntryAt ?? Date.now()).getTime());
+     |                                                 ^^^^^^^^^^ Cannot call impure function
+  49 |
+  50 |   const exposure = creditExposure(
+  51 |     (debtors as any[]).map((party) => ({ balanceKES: Number(party.balanceKES ?? 0), limitKES: Number(party.creditLimitKES ?? 0) })),                                                       react-hooks/purity
+  48:101  warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/app/dashboard/pos/[businessId]/credit/page.tsx:48:101
+  46 |   const owing = (debtors as any[])
+  47 |     .filter((party) => Number(party.balanceKES ?? 0) > 0)
+> 48 |     .sort((a, b) => new Date(a.oldestEntryAt ?? Date.now()).getTime() - new Date(b.oldestEntryAt ?? Date.now()).getTime());
+     |                                                                                                     ^^^^^^^^^^ Cannot call impure function
+  49 |
+  50 |   const exposure = creditExposure(
+  51 |     (debtors as any[]).map((party) => ({ balanceKES: Number(party.balanceKES ?? 0), limitKES: Number(party.creditLimitKES ?? 0) })),  react-hooks/purity
+
+/home/user/Jata-Aftercall/app/dashboard/pos/page.tsx
+  7:1  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+
+/home/user/Jata-Aftercall/app/dashboard/studio/page.tsx
+  7:1  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+
+/home/user/Jata-Aftercall/components/AIDashboardClient.tsx
+  121:10  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/AIDashboardClient.tsx:121:10
+  119 |
+  120 |   useEffect(() => {
+> 121 |     void loadDashboard();
+      |          ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  122 |   }, [loadDashboard]);
+  123 |
+  124 |   const publication: PublicationSummary | null = dashboard?.frontDesk || initialPublication || null;  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/AIFrontDeskCustomerClient.tsx
+  142:16  warning  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/home/user/Jata-Aftercall/components/AIFrontDeskCustomerClient.tsx:142:16
+  140 |
+  141 |     const userMsg: ChatMessage = {
+> 142 |       id: `u_${Date.now()}`,
+      |                ^^^^^^^^^^ Cannot call impure function
+  143 |       role: "customer",
+  144 |       text,
+  145 |     };  react-hooks/purity
+
+/home/user/Jata-Aftercall/components/OnboardingForm.tsx
+  79:18  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/OnboardingForm.tsx:79:18
+  77 |   useEffect(() => {
+  78 |     const saved = parseDraft(storage()?.getItem(key) ?? null);
+> 79 |     if (saved) { setDraft(saved); setRestored(true); }
+     |                  ^^^^^^^^ Avoid calling setState() directly within an effect
+  80 |     else setDraft(createDraft(newDraftKey()));
+  81 |   }, [key]);
+  82 |  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/ProductThemeProvider.tsx
+  86:21  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/ProductThemeProvider.tsx:86:21
+  84 |   useEffect(() => {
+  85 |     const preference = readProductThemePreference(getBrowserStorage());
+> 86 |     if (preference) setTheme(preference);
+     |                     ^^^^^^^^ Avoid calling setState() directly within an effect
+  87 |   }, []);
+  88 |
+  89 |   // Keep <html data-jata-theme> (set before first paint by the boot script) in sync with state  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/business-hub/PointsWallet.tsx
+  145:10  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/business-hub/PointsWallet.tsx:145:10
+  143 |
+  144 |   useEffect(() => {
+> 145 |     void load();
+      |          ^^^^ Avoid calling setState() directly within an effect
+  146 |   }, [load]);
+  147 |
+  148 |   async function redeem(rewardId: string) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/CreativeStudio.tsx
+  82:26  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/CreativeStudio.tsx:82:26
+  80 |   }, [businessId]);
+  81 |
+> 82 |   useEffect(() => { void loadCapabilities(); void loadLibrary(); }, [loadCapabilities, loadLibrary]);
+     |                          ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  83 |
+  84 |   function toggleSpeech() {
+  85 |     if (listening) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/DesignPanel.tsx
+  47:19  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/DesignPanel.tsx:47:19
+  45 |   const [version, setVersion] = useState<number | null>(draftVersion);
+  46 |   // A fresh server render (after router.refresh) carries the newest version; adopt it.
+> 47 |   useEffect(() => setVersion(draftVersion), [draftVersion]);
+     |                   ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  48 |   const [undoSnapshot, setUndoSnapshot] = useState<ExperienceDocument | null>(null);
+  49 |   const [busy, setBusy] = useState("");
+  50 |   const [message, setMessage] = useState<{ tone: "ok" | "error" | "saving"; text: string } | null>(null);  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/EnquiryBoard.tsx
+  20:26  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/EnquiryBoard.tsx:20:26
+  18 |     finally { setLoading(false); }
+  19 |   }, [businessId]);
+> 20 |   useEffect(() => { void load(); }, [load]);
+     |                          ^^^^ Avoid calling setState() directly within an effect
+  21 |   return <section className="jata-card" aria-labelledby="professional-enquiries" data-enquiry-board="professional">
+  22 |     <div className="jata-toolbar"><h2 id="professional-enquiries" className="text-sm font-bold">Professional enquiries</h2>
+  23 |       <button type="button" className="jata-btn jata-btn-secondary" onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh enquiries"}</button></div>  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/LayoutVariantPanel.tsx
+  49:5  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/LayoutVariantPanel.tsx:49:5
+  47 |   useEffect(() => {
+  48 |     const capabilities = getExperienceProfile(current.categoryKey).capabilities;
+> 49 |     setGoal(current.artDirection?.goal || (capabilities.includes("commerce") ? "sell" : capabilities.includes("booking") ? "book" : "enquire"));
+     |     ^^^^^^^ Avoid calling setState() directly within an effect
+  50 |     setResult(null); setFamily("");
+  51 |   }, [businessId, current.categoryKey, current.artDirection?.goal]);
+  52 |  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/MediaLibrary.tsx
+   98:10  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/MediaLibrary.tsx:98:10
+   96 |
+   97 |   useEffect(() => {
+>  98 |     void load();
+      |          ^^^^ Avoid calling setState() directly within an effect
+   99 |   }, [load]);
+  100 |
+  101 |   useEffect(() => {                                                                                                           react-hooks/set-state-in-effect
+  102:27  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/MediaLibrary.tsx:102:27
+  100 |
+  101 |   useEffect(() => {
+> 102 |     if (showHistory) void loadHistory();
+      |                           ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  103 |   }, [showHistory, loadHistory]);
+  104 |
+  105 |   async function saveAlt(asset: Asset, value: string) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/MediaPicker.tsx
+  83:20  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/MediaPicker.tsx:83:20
+  81 |
+  82 |   useEffect(() => {
+> 83 |     if (open) void load();
+     |                    ^^^^ Avoid calling setState() directly within an effect
+  84 |   }, [open, load]);
+  85 |
+  86 |   async function handleFile(file: File) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/PhotoLab.tsx
+  101:10  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/PhotoLab.tsx:101:10
+   99 |
+  100 |   useEffect(() => {
+> 101 |     void loadStatus();
+      |          ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  102 |     void loadLibrary();
+  103 |     // eslint-disable-next-line react-hooks/exhaustive-deps
+  104 |   }, [businessId]);  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/SectionEditor.tsx
+  34:19  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/SectionEditor.tsx:34:19
+  32 |   const [version, setVersion] = useState<number | null>(draftVersion ?? null);
+  33 |   // After a refresh the server's document and version replace the local copy, so a conflict never leaves stale sections on screen.
+> 34 |   useEffect(() => setDocument(initial), [initial]);
+     |                   ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  35 |   useEffect(() => setVersion(draftVersion ?? null), [draftVersion]);
+  36 |   const [editingId, setEditingId] = useState<string | null>(null);
+  37 |   const [state, setState] = useState<SaveState>({ tone: "idle" });  react-hooks/set-state-in-effect
+  35:19  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/SectionEditor.tsx:35:19
+  33 |   // After a refresh the server's document and version replace the local copy, so a conflict never leaves stale sections on screen.
+  34 |   useEffect(() => setDocument(initial), [initial]);
+> 35 |   useEffect(() => setVersion(draftVersion ?? null), [draftVersion]);
+     |                   ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  36 |   const [editingId, setEditingId] = useState<string | null>(null);
+  37 |   const [state, setState] = useState<SaveState>({ tone: "idle" });
+  38 |   const [addType, setAddType] = useState("");                                    react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/StudioCopilot.tsx
+  64:19  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/StudioCopilot.tsx:64:19
+  62 |     try {
+  63 |       const stored = window.sessionStorage.getItem(`${OPEN_STORAGE_PREFIX}${businessId}`);
+> 64 |       if (stored) setTurns(JSON.parse(stored) as Turn[]);
+     |                   ^^^^^^^^ Avoid calling setState() directly within an effect
+  65 |     } catch {
+  66 |       // Session history is a nicety; losing it must not break the assistant.
+  67 |     }                  react-hooks/set-state-in-effect
+  90:48  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/StudioCopilot.tsx:90:48
+  88 |
+  89 |   useEffect(() => {
+> 90 |     if (open && suggestions.length === 0) void loadSuggestions();
+     |                                                ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  91 |   }, [open, suggestions.length, loadSuggestions]);
+  92 |
+  93 |   async function send(message: string, apply = false, expectedDraftVersion: number | null = null) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/StudioHistory.tsx
+  72:10  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/StudioHistory.tsx:72:10
+  70 |
+  71 |   useEffect(() => {
+> 72 |     void load();
+     |          ^^^^ Avoid calling setState() directly within an effect
+  73 |   }, [load, pathname]);
+  74 |
+  75 |   async function move(payload: { direction?: "undo" | "redo"; version?: number }) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/ThemeEditor.tsx
+  37:19  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/ThemeEditor.tsx:37:19
+  35 |   const [document, setDocument] = useState<ExperienceDocument>(initial);
+  36 |   const [version, setVersion] = useState<number | null>(draftVersion);
+> 37 |   useEffect(() => setVersion(draftVersion), [draftVersion]);
+     |                   ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  38 |   const [message, setMessage] = useState<{ tone: "ok" | "error" | "saving"; text: string } | null>(null);
+  39 |
+  40 |   async function save(patch: { themeKey?: string; brand?: Partial<ExperienceDocument["brand"]>; settings?: Partial<ExperienceSettings> }) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/dashboard/WebsiteHealth.tsx
+  72:10  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/dashboard/WebsiteHealth.tsx:72:10
+  70 |
+  71 |   useEffect(() => {
+> 72 |     void load();
+     |          ^^^^ Avoid calling setState() directly within an effect
+  73 |   }, [load]);
+  74 |
+  75 |   async function applyFix(id: string, label: string) {  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/pos/CategoryPhotos.tsx
+  77:14  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/Jata-Aftercall/components/pos/NewOrderPanel.tsx
+  103:7  warning  Do not use `window.location.href` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/home/user/Jata-Aftercall/components/pos/PaymentsClient.tsx
+  204:36  warning  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/home/user/Jata-Aftercall/components/pos/PaymentsClient.tsx:204:36
+  202 |           <p className="jata-kicker">Payments</p>
+  203 |           <h2 className="text-xl font-bold">JATA Payment Wallet</h2>
+> 204 |           <p className="pos-note">{walletRef.current.headline}</p>
+      |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  205 |         </div>
+  206 |         <div className="pos-row-values">
+  207 |           {testMode ? <span className="pos-pill" data-tone="warn">Practice records — not counted as real money</span> : null}  react-hooks/refs
+  305:24  warning  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/home/user/Jata-Aftercall/components/pos/PaymentsClient.tsx:305:24
+  303 |         <DestinationsTab
+  304 |           businessId={businessId}
+> 305 |           wallet={{ ...walletRef.current, destinations } as never}
+      |                        ^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  306 |           destinations={destinations}
+  307 |           history={history}
+  308 |           canManage={permissions.canManageDestinations}                                                                                                                                               react-hooks/refs
+  305:24  warning  Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+/home/user/Jata-Aftercall/components/pos/PaymentsClient.tsx:305:24
+  303 |         <DestinationsTab
+  304 |           businessId={businessId}
+> 305 |           wallet={{ ...walletRef.current, destinations } as never}
+      |                        ^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  306 |           destinations={destinations}
+  307 |           history={history}
+  308 |           canManage={permissions.canManageDestinations}                                                                                                                                               react-hooks/refs
+
+/home/user/Jata-Aftercall/components/pos/QuestionnaireClient.tsx
+  87:7  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/pos/QuestionnaireClient.tsx:87:7
+  85 |   useEffect(() => {
+  86 |     if (currentId && !view.questions.some((question) => question.id === currentId)) {
+> 87 |       setCurrentId(view.nextId ?? view.questions[0]?.id ?? null);
+     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  88 |     }
+  89 |   }, [view, currentId]);
+  90 |  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/pos/RecordBoard.tsx
+  326:42  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  360:68  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/home/user/Jata-Aftercall/components/pos/RepaymentPanel.tsx
+  45:9  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/pos/RepaymentPanel.tsx:45:9
+  43 |         const saved = JSON.parse(raw) as PendingRepayment;
+  44 |         if (!saved.key || !Number.isFinite(saved.amountKES) || typeof saved.method !== "string" || typeof saved.reference !== "string") throw new Error("Invalid pending repayment");
+> 45 |         setPending(saved);
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  46 |         setAmountKES(saved.amountKES);
+  47 |         setMethod(saved.method);
+  48 |         setReference(saved.reference);  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/pos/TillClient.tsx
+  351:5   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/pos/TillClient.tsx:351:5
+  349 |   // Keep the tendered amount in step with the total while the cart changes.
+  350 |   useEffect(() => {
+> 351 |     setPayments((current) =>
+      |     ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  352 |       current.map((payment) => ({
+  353 |         ...payment,
+  354 |         amountKES: payment.method === "credit" ? Math.max(0, total - current.filter((entry) => entry.method !== "credit").reduce((sum, entry) => sum + entry.amountKES, 0)) : total,  react-hooks/set-state-in-effect
+  358:5   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+  484:53  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @next/next/no-img-element
+
+/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx
+   81:36  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx:81:36
+  79 |       if (raw) {
+  80 |         const parsed = JSON.parse(raw);
+> 81 |         if (Array.isArray(parsed)) setLines(parsed.slice(0, 40));
+     |                                    ^^^^^^^^ Avoid calling setState() directly within an effect
+  82 |       }
+  83 |     } catch {
+  84 |       /* an unreadable cart simply starts empty */  react-hooks/set-state-in-effect
+  208:21  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+  210:23  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @next/next/no-img-element
+
+/home/user/Jata-Aftercall/components/storefront/CheckoutClient.tsx
+   81:7  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/storefront/CheckoutClient.tsx:81:7
+  79 |     const parsed = JSON.parse(basketKey) as { items: unknown[]; fulfilment: string };
+  80 |     if (parsed.items.length === 0) {
+> 81 |       setQuote(null);
+     |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  82 |       return;
+  83 |     }
+  84 |     let active = true;  react-hooks/set-state-in-effect
+  182:7  warning  Do not use `window.location.href` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @next/next/no-location-assign-relative-destination
+
+/home/user/Jata-Aftercall/components/storefront/immersive/ImmersivePreview.tsx
+  39:7  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/user/Jata-Aftercall/components/storefront/immersive/ImmersivePreview.tsx:39:7
+  37 |   useEffect(() => {
+  38 |     if (preference !== "immersive" || !enabled) {
+> 39 |       setDecision({ use3d: false, reason: preference !== "immersive" ? "not-opted-in" : "immersive-disabled", reducedMotion: true });
+     |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  40 |       return;
+  41 |     }
+  42 |     let media: MediaQueryList;  react-hooks/set-state-in-effect
+
+/home/user/Jata-Aftercall/components/storefront/public/StoreHero.tsx
+  67:16  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+
+/home/user/Jata-Aftercall/lib/db.ts
+   13:3  warning  Unused eslint-disable directive (no problems were reported from 'no-var')
+  714:5  warning  Unused eslint-disable directive (no problems were reported)
+
+✖ 51 problems (0 errors, 51 warnings)
+  0 errors and 8 warnings potentially fixable with the `--fix` option.

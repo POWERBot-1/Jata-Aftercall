@@ -84,6 +84,9 @@ describe("plan icons and order are untouched", () => {
       MONTHLY: "phone",
       ANNUAL: "calendar",
       AI_BUSINESS_FRONT_DESK: "bot",
+      AI_FRONT_DESK_STANDARD: "bot",
+      AI_FRONT_DESK_PRO: "bot",
+      AI_FRONT_DESK_VOICE: "bot",
       INTERACTIVE_BUSINESS: "wand",
     });
   });

@@ -1,9 +1,13 @@
+import { readFileSync } from "fs";
+import path from "path";
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { formatDayLabel, formatOpeningHours } from "@/lib/openingHours";
 import BusinessPage from "@/components/BusinessPage";
 import { THEMES } from "@/lib/themes";
+
+const root = path.resolve(__dirname, "../..");
 
 // Regression: the public page printed JSON.stringify(JSON.parse(openingHours)), so customers saw
 // raw JSON such as {"mon_sat":"8am - 7pm"}. Customers must only ever see readable rows.
@@ -95,7 +99,13 @@ describe("public BusinessPage rendering", () => {
 
   it("uses the AA-compliant WhatsApp colour (emerald-700) instead of emerald-500", () => {
     const html = renderPage({ phone: "0712345678", whatsapp: "0712345678" });
-    expect(html).toContain("bg-emerald-700");
-    expect(html).not.toContain("bg-emerald-500");
+    // The WhatsApp control is now skinned by the public storefront system. The guard is unchanged
+    // in substance: the skin must be the AA-compliant emerald-700, never the lighter emerald-500.
+    expect(html).toContain("st-action--whatsapp");
+    const sheet = readFileSync(path.join(root, "app/storefront.css"), "utf8");
+    const skin = sheet.slice(sheet.indexOf(".st-action--whatsapp"));
+    // emerald-700 = rgb(4 120 87) / #047857; emerald-500 = #10b981.
+    expect(skin.slice(0, 200)).toMatch(/rgb\(4 120 87\)|#047857/i);
+    expect(skin.slice(0, 200)).not.toMatch(/#10b981|rgb\(16 185 129\)/i);
   });
 });

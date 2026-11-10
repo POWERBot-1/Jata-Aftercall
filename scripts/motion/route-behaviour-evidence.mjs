@@ -11,8 +11,8 @@ const base=new URL(process.env.BASE_URL||'http://localhost:4100');
 if(base.protocol!=='http:'||!['localhost','127.0.0.1'].includes(base.hostname)||base.port!=='4100'||base.pathname!=='/'||process.env.CI!=='true'||process.env.MOTION_ISOLATED!=='1'||process.env.DATABASE_URL!=='postgresql://jata:jata@localhost:5432/jata_e2e?schema=public'||process.env.AUTH_SECRET!=='interactive-business-e2e-test-secret') throw Error('Not isolated');
 const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(sha!==process.env.EXPECTED_SHA) throw Error('HEAD mismatch');
 const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
-const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[];let browser;
-const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,limitations:['No published AI fixture','No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
+const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[],aiRows=[];let browser,originalStudioSubscription=null;
+const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,aiRows,limitations:['No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
 let browserVersion='unavailable';
 try {
  const business=await db.business.findUniqueOrThrow({where:{slug:'marys-beauty-studio'},select:{id:true,slug:true}});
@@ -23,6 +23,7 @@ try {
  const api=(url,method='GET',data)=>owner.evaluate(async(url,method,data)=>{const r=await fetch(url,{method,headers:data?{'content-type':'application/json'}:{},body:data?JSON.stringify(data):undefined,cache:'no-store'});return {status:r.status,body:await r.json().catch(()=>null)};},url,method,data);
  async function setPreference(preference){const current=await api(`/api/experience?businessId=${business.id}`);if(current.status!==200)throw Error(`read draft ${current.status}`);const document={...current.body.document,themeKey:'beauty-editorial',renderPreference:preference};const patch=await api('/api/experience','PATCH',{businessId:business.id,expectedDraftVersion:current.body.experience.draftVersion,document});if(patch.status!==200)throw Error(`preference patch ${patch.status}`);}
  await setPreference('motion');
+
  const page=await browser.newPage();const installTrace=()=>{
   const trace=[];window.__routeMotionTrace=trace;
   const emit=(kind,data={})=>trace.push({kind,at:performance.now(),...data});
@@ -45,7 +46,11 @@ try {
    }catch(error){emit('media-query-instrumentation-error',{message:String(error)});}
    return media;
   };
-  try{const observer=new MutationObserver(records=>{for(const record of records){if(record.target.matches?.('.eb-scope'))emit('scope-state-mutation',{attribute:record.attributeName,oldValue:record.oldValue,state:scopeState()});}});observer.observe(document.documentElement,{subtree:true,attributes:true,attributeOldValue:true,attributeFilter:['data-render-mode','data-motion-reason','data-motion-engine']});}catch(error){emit('scope-observer-instrumentation-error',{message:String(error)});}
+  try{
+   const observer=new MutationObserver(records=>{for(const record of records){if(record.target.matches?.('.eb-scope,.jata-ai-motion'))emit('scope-state-mutation',{attribute:record.attributeName,oldValue:record.oldValue,state:scopeState()});}});
+   const observeRoot=()=>{if(document.documentElement){observer.observe(document.documentElement,{subtree:true,attributes:true,attributeOldValue:true,attributeFilter:['data-render-mode','data-motion-reason','data-motion-engine']});return;}document.addEventListener('DOMContentLoaded',observeRoot,{once:true});};
+   observeRoot();
+  }catch(error){emit('scope-observer-instrumentation-error',{message:String(error)});}
   const Native=window.IntersectionObserver;
   window.IntersectionObserver=class extends Native {constructor(cb,opts){const owned=opts?.threshold===0.08;super((entries,obs)=>{if(owned)for(const e of entries)emit('intersection',{in:e.isIntersecting,recipe:e.target.dataset.motionRecipe});cb(entries,obs)},opts);if(owned)emit('observer-create');this.__owned=owned;}observe(el){if(this.__owned)emit('observe',{recipe:el.dataset.motionRecipe});return super.observe(el)}unobserve(el){if(this.__owned)emit('unobserve',{recipe:el.dataset.motionRecipe});return super.unobserve(el)}disconnect(){if(this.__owned)emit('observer-disconnect',{scope:scopeState()});return super.disconnect()}};
   const original=Element.prototype.animate;Element.prototype.animate=function(...args){const anim=original.apply(this,args);if(this.matches('[data-motion-recipe]')){emit('animate-start',{recipe:this.dataset.motionRecipe});anim.addEventListener('finish',()=>emit('animate-finish'));anim.addEventListener('cancel',()=>emit('active-reveal-cancelled',{recipe:this.dataset.motionRecipe}));}return anim;};
@@ -75,6 +80,84 @@ try {
    const row={sha,browser:browserVersion,route:target.route,viewport:`${width}x${height}`,status:response?.status()??null,...data,screenshot:name};rows.push(row);save();
   }
  }
+ // Build a fully synthetic, disposable, server-verified AI Front Desk entitlement. This is
+ // isolated CI data only: no Paystack call, real charge, customer subscription or production row.
+ const ownerUser=await db.user.findUniqueOrThrow({where:{email:'demo@jata.link'},select:{id:true}});
+ const aiPlan=await db.planConfig.findUnique({where:{key:'AI_BUSINESS_FRONT_DESK'}});
+ if(!aiPlan)throw Error('Synthetic AI plan fixture missing from disposable catalogue');
+ originalStudioSubscription=await db.subscription.findUnique({where:{businessId:business.id}});
+ if(!originalStudioSubscription)throw Error('Studio subscription fixture missing before temporary AI entitlement swap');
+ const now=new Date(),expiresAt=new Date(Date.now()+30*864e5),aiPaymentReference=`MOTION-AI-FRONT-DESK-${business.id}`;
+ await db.business.update({where:{id:business.id},data:{status:'ACTIVE',isPublished:true,openingHours:'Mon-Sun 09:00-18:00'}});
+ await db.product.update({where:{id:product.id},data:{basePriceKES:499,isActive:true}});
+ await db.notificationRecipient.upsert({
+  where:{businessId_label:{businessId:business.id,label:'OWNER'}},
+  update:{phone:'0700000000',email:'owner@marysbeauty.test',isActive:true},
+  create:{businessId:business.id,label:'OWNER',phone:'0700000000',email:'owner@marysbeauty.test',isActive:true},
+ });
+ await db.subscription.upsert({
+  where:{businessId:business.id},
+  update:{userId:ownerUser.id,planId:aiPlan.id,status:'ACTIVE',startAt:now,expiresAt,graceUntil:null},
+  create:{businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,status:'ACTIVE',startAt:now,expiresAt},
+ });
+ await db.payment.upsert({
+  where:{reference:aiPaymentReference},
+  update:{businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,amount:49900,currency:'KES',status:'PAID',purpose:'SUBSCRIPTION'},
+  create:{reference:aiPaymentReference,businessId:business.id,userId:ownerUser.id,planId:aiPlan.id,amount:49900,currency:'KES',status:'PAID',purpose:'SUBSCRIPTION'},
+ });
+ await db.aIPackageEntitlement.upsert({
+  where:{businessId:business.id},
+  update:{packageKey:'AI_BUSINESS_FRONT_DESK',status:'ACTIVE',activatedAt:now,expiresAt},
+  create:{businessId:business.id,packageKey:'AI_BUSINESS_FRONT_DESK',status:'ACTIVE',activatedAt:now,expiresAt},
+ });
+ const configDoc=await db.knowledgeDocument.findFirst({where:{businessId:business.id,sourceType:'ai_front_desk_config',isApproved:false}});
+ const aiConfig={
+  businessId:business.id,tone:'friendly',toneOfVoice:'Friendly',language:'mixed',languageBehavior:'English + Swahili',
+  salesBehavior:'informational',orderingAllowed:false,bookingsAllowed:false,preordersAllowed:false,autoReplyEnabled:true,
+  humanEscalation:'uncertain',welcomeMessage:'Welcome to Mary\'s Beauty Studio.',greetingMessage:'Welcome to Mary\'s Beauty Studio.',
+  fallbackMessage:'I will connect you with the business team for confirmation.',
+  escalationRules:'Escalate complaints, uncertain answers, and requests requiring staff confirmation.',
+  operationalStatus:'CONFIGURED',pauseAllOrdering:false,
+  delivery:{mode:'PICKUP',pickupEnabled:true,deliveryEnabled:false,zones:[]},
+  policies:{refundPolicy:'Staff confirms all refund requests.',orderRules:'No order is accepted without staff confirmation.'},
+  escalationTopics:['complaint','uncertain'],walkInsAccepted:true,requiredCustomerFields:['name','phone'],
+  outOfStockBehavior:'state_fact',afterHoursBehavior:'handoff',branches:[],bulkPricing:[],
+  paymentDetails:{cash:true},draftVersion:1,publishedVersion:0,
+ };
+ if(configDoc)await db.knowledgeDocument.update({where:{id:configDoc.id},data:{content:JSON.stringify(aiConfig)}});
+ else await db.knowledgeDocument.create({data:{businessId:business.id,title:'__JATA_AI_FRONT_DESK_CONFIG__',content:JSON.stringify(aiConfig),sourceType:'ai_front_desk_config',isApproved:false}});
+ const aiPublish=await api('/api/ai/publish','POST',{businessId:business.id});
+ if(aiPublish.status!==200||aiPublish.body?.ok!==true)throw Error(`Synthetic published AI fixture refused: HTTP ${aiPublish.status}; ${JSON.stringify(aiPublish.body?.readiness?.missingItems||aiPublish.body?.error||aiPublish.body)}`);
+ events.push({kind:'synthetic-published-ai-fixture',result:'PASS',businessSlug:business.slug,subscriptionPlanKey:aiPlan.key,entitlement:'ACTIVE',payment:'synthetic PAID row in disposable PostgreSQL only',providerInteraction:false,publishedVersion:aiPublish.body.publishedVersion});
+ save();
+
+ // Customer-facing AI route: a genuinely published, entitled synthetic Front Desk, not preview.
+ for(const [width,height] of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
+  await page.bringToFront();await page.setViewport({width,height,deviceScaleFactor:1});await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+  const response=await page.goto(new URL(`${routeBase}/ai`,base).href,{waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>document.querySelector('.jata-ai-motion')?.dataset.renderMode==='motion',{timeout:10000});
+  await page.evaluate(async()=>{for(const e of document.querySelectorAll('.jata-ai-motion [data-motion-recipe]')){e.scrollIntoView({block:'center',behavior:'instant'});await new Promise(r=>setTimeout(r,120));}await new Promise(r=>setTimeout(r,650));});
+  const state=await page.evaluate(()=>{const s=document.querySelector('.jata-ai-motion');return {present:Boolean(s),mode:s?.dataset.renderMode,reason:s?.dataset.motionReason,engine:s?.dataset.motionEngine,mediaMatches:window.matchMedia('(prefers-reduced-motion: reduce)').matches,targets:s?.querySelectorAll('[data-motion-recipe]').length,probes:s?.querySelectorAll('[data-motion-probe]').length,publicationState:document.body.textContent.includes('LIVE')?'LIVE_LABEL_PRESENT':null};});
+  const screenshot=`ai-live-${width}x${height}.jpg`;await page.screenshot({path:path.join(out,screenshot),type:'jpeg',quality:50});
+  aiRows.push({sha,browser:browserVersion,route:`${routeBase}/ai`,viewport:`${width}x${height}`,status:response?.status()??null,setting:'normal',...state,screenshot,syntheticFixture:true});save();
+ }
+ for(const [width,height] of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
+  await page.bringToFront();await page.setViewport({width,height,deviceScaleFactor:1});await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
+  const response=await page.goto(new URL(`${routeBase}/ai`,base).href,{waitUntil:'domcontentloaded',timeout:45000});
+  await page.waitForFunction(()=>document.querySelector('.jata-ai-motion')?.dataset.renderMode==='lite',{timeout:10000});
+  const state=await page.evaluate(()=>{const s=document.querySelector('.jata-ai-motion');return {present:Boolean(s),mode:s?.dataset.renderMode,reason:s?.dataset.motionReason,engine:s?.dataset.motionEngine,mediaMatches:window.matchMedia('(prefers-reduced-motion: reduce)').matches,targets:s?.querySelectorAll('[data-motion-recipe]').length,probes:s?.querySelectorAll('[data-motion-probe]').length};});
+  const screenshot=`ai-live-reduced-${width}x${height}.jpg`;await page.screenshot({path:path.join(out,screenshot),type:'jpeg',quality:50});
+  aiRows.push({sha,browser:browserVersion,route:`${routeBase}/ai`,viewport:`${width}x${height}`,status:response?.status()??null,setting:'reduced',...state,screenshot,syntheticFixture:true});save();
+ }
+ // Restore the disposable Website Studio subscription before the remaining Studio editor
+ // preference tests. The AI publication remains a recorded synthetic fixture, but is no longer
+ // customer-operational once the original non-AI subscription is restored.
+ await db.subscription.update({
+  where:{businessId:business.id},
+  data:{userId:originalStudioSubscription.userId,planId:originalStudioSubscription.planId,status:originalStudioSubscription.status,startAt:originalStudioSubscription.startAt,expiresAt:originalStudioSubscription.expiresAt,graceUntil:originalStudioSubscription.graceUntil},
+ });
+ events.push({kind:'restore-studio-subscription-fixture',result:'PASS',restoredPlanId:originalStudioSubscription.planId,aiFixtureOperationalAfterRestore:false});
+ save();
  // Real published application document, real browser preference change. Do not inject
  // targets, observer notifications or animation implementations. This is a targeted race,
  // not evidence that the eight-slot queue was stressed.
@@ -135,5 +218,6 @@ try {
  }
 
 }catch(e){events.push({kind:'BLOCKED',error:String(e?.stack||e).slice(0,1000)});}finally{save();await browser?.close();await db.$disconnect();}
-const errors=events.filter(x=>x.kind==='BLOCKED');const normalRows=rows.filter(x=>!x.setting),constrainedRows=rows.filter(x=>x.setting),normalMotionRowsPass=normalRows.length===30&&normalRows.every(x=>x.mode==='motion'&&x.reason==='eligible'&&x.mediaMatches===false),initialConstraintRowsPass=constrainedRows.length===12&&constrainedRows.every(x=>x.status===200&&x.probes===1&&x.mode==='lite'&&x.mediaMatches===(x.setting==='os-reduced')&&(x.setting==='owner-lite'?x.reason==='owner-lite':x.setting==='os-reduced'&&x.reason==='reduced-motion'));const summary={sha,browser:browserVersion,rows:rows.length,errors,routeRows:normalRows.length,normalMotionRowsPass,liteRows:constrainedRows.filter(x=>x.mode==='lite').length,initialConstraintRowsPass};console.log(`::notice title=Route behaviour observations::${JSON.stringify(summary)}`);
-if(errors.length||['real-reduced-motion-cancellation','repeated-preference-transitions'].some(kind=>!events.some(x=>x.kind===kind&&x.result==='PASS'))||summary.routeRows!==30||!normalMotionRowsPass||summary.liteRows!==12||!initialConstraintRowsPass||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;
+const errors=events.filter(x=>x.kind==='BLOCKED');const normalRows=rows.filter(x=>!x.setting),constrainedRows=rows.filter(x=>x.setting),normalMotionRowsPass=normalRows.length===30&&normalRows.every(x=>x.mode==='motion'&&x.reason==='eligible'&&x.mediaMatches===false),initialConstraintRowsPass=constrainedRows.length===12&&constrainedRows.every(x=>x.status===200&&x.probes===1&&x.mode==='lite'&&x.mediaMatches===(x.setting==='os-reduced')&&(x.setting==='owner-lite'?x.reason==='owner-lite':x.setting==='os-reduced'&&x.reason==='reduced-motion'));const aiRowsPass=aiRows.length===12&&aiRows.every(x=>x.status===200&&x.present&&x.probes===1&&x.mode===(x.setting==='reduced'?'lite':'motion')&&x.mediaMatches===(x.setting==='reduced')&&(x.setting==='reduced'?x.reason==='reduced-motion':x.reason==='eligible'));
+const summary={sha,browser:browserVersion,rows:rows.length,errors,routeRows:normalRows.length,normalMotionRowsPass,liteRows:constrainedRows.filter(x=>x.mode==='lite').length,initialConstraintRowsPass,aiRows:aiRows.length,aiRowsPass};console.log(`::notice title=Route behaviour observations::${JSON.stringify(summary)}`);
+if(errors.length||['synthetic-published-ai-fixture','restore-studio-subscription-fixture','real-reduced-motion-cancellation','repeated-preference-transitions'].some(kind=>!events.some(x=>x.kind===kind&&x.result==='PASS'))||summary.routeRows!==30||!normalMotionRowsPass||summary.liteRows!==12||!initialConstraintRowsPass||!aiRowsPass||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;

@@ -22,8 +22,13 @@ async function main() {
   const plans = [
     { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365 },
     { key: "MONTHLY", name: "Monthly — KES 149/month", priceKES: 149, durationDays: 30 },
-    // AI Business Front Desk package (§49 — KES 499 / 30 days monthly)
+    // AI Business Front Desk package (§49 — KES 499 / 30 days monthly) — also the AI Front
+    // Desk 2.0 Starter tier: the legacy key is reused so existing subscriptions are preserved.
     { key: "AI_BUSINESS_FRONT_DESK", name: "AI Business Front Desk — KES 499/month", priceKES: 499, durationDays: 30 },
+    // AI Front Desk 2.0 tiers (§41.1) — Standard KES 999, Pro KES 1,999, Voice KES 3,999 (30 days).
+    { key: "AI_FRONT_DESK_STANDARD", name: "Front Desk Standard — KES 999/month", priceKES: 999, durationDays: 30 },
+    { key: "AI_FRONT_DESK_PRO", name: "Front Desk Pro — KES 1,999/month", priceKES: 1999, durationDays: 30 },
+    { key: "AI_FRONT_DESK_VOICE", name: "Front Desk Voice — KES 3,999/month", priceKES: 3999, durationDays: 30 },
     // Interactive Business — premium category-aware website package (KES 999 / 30 days monthly)
     { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30 },
     // Configurable Business POS (POS spec §4, §45 — KES 499 / 30 days, tied to the business).

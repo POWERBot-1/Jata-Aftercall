@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import prisma from "@/lib/db";
+import { formatNumber } from "@/lib/format";
+import { AI_FRONT_DESK_VOICE_KEY, assertFrontDeskTierPricing, FRONT_DESK_TIER_KEYS, FRONT_DESK_TIER_PRICING } from "@/lib/frontDeskTiers";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { VOICE_SELLING_CONDITIONS } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +56,15 @@ const PRODUCTS: Record<string, ProductPage> = {
         "Keeps historical records readable after a plan ends, while live answers require an active entitlement.",
       ] },
       { heading: "Entitlement and price", body: [
-        "AI Business Front Desk — KES 499 / 30 days. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
+        "Available package tiers and prices are loaded from the active server-side catalogue. Live answers are enabled only from the server-verified subscription state, not from a browser flag.",
+        "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
+      ] },
+      { heading: "Voice receptionist — awaiting provider activation", body: [
+        "Front Desk Voice is the planned telephone receptionist tier: KES 3,999 / 30 days. It is shown for product transparency but is not currently available for checkout or live calls.",
+        "The intended public JATA AFTERCALL number is 0724 317 010 (+254 724 317 010), currently on Safaricom. The integration is designed to preserve this number through an owner-approved forwarding arrangement, subject to Safaricom and Telnyx confirmation.",
+        "The service will answer calls only after a Telnyx inbound number, signed call-control webhooks, persistent two-way audio, speech services, human handoff and usage metering are connected and tested.",
+        "Provider telephony and AI usage charges, if applicable, will be disclosed separately before activation. No customer is charged for Voice while provider activation is pending.",
+        "Current status: Awaiting provider activation. No live call service is available yet.",
       ] },
       { heading: "Connectivity", body: [
         "AI answers always require a live connection. The installable app never caches AI responses or private business data.",
@@ -110,7 +123,7 @@ const PRODUCTS: Record<string, ProductPage> = {
       { heading: "How JATA BOS PRO differs from Business POS", body: [
         "The separate Business POS product is the counter till: sales, stock, credit and reports for the front of the business.",
         "JATA BOS PRO runs the records and operations around the counter — the accounts, the buying, the suppliers and the reporting — of which selling at the till is one part.",
-        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the four page plans.",
+        "They are separate products with separate plan keys, subscriptions and entitlement checks. Paying for one never switches on the other, and neither is included in the public page plans.",
       ] },
       { heading: "Price and billing", body: [
         "KES 3,000 per 30 days, billed per business (plan key ERP_PRO). The workspace shows the amount before any payment starts, and that amount always comes from the stored plan catalogue on the server — never from the browser.",
@@ -165,10 +178,81 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { slug } = await params;
   const product = PRODUCTS[slug];
   if (!product) notFound();
+
+  // Visibility and activation stay separate: every approved Front Desk tier is listed from
+  // the approved tier pricing even when its active `PlanConfig` row is missing, and the line
+  // says so plainly. A tier only reads "in the server catalogue" from its real active row
+  // whose price/term also match the approved values (checkout rejects anything else with
+  // PLAN_PRICING_INVALID, so showing it as active would mislead); Voice additionally never
+  // reads sellable until the provider + commercial gates pass. The Voice row is fetched too,
+  // so its catalogue state matches `/products` the moment the gates open.
+  const frontDeskPlans = slug === "ai-front-desk"
+    ? await prisma.planConfig.findMany({
+        where: {
+          isActive: true,
+          key: { in: ["AI_BUSINESS_FRONT_DESK", "AI_FRONT_DESK_STANDARD", "AI_FRONT_DESK_PRO", "AI_FRONT_DESK_VOICE"] },
+        },
+        orderBy: { priceKES: "asc" },
+        select: { key: true, name: true, priceKES: true, durationDays: true },
+      }).catch(() => [])
+    : [];
+  const voiceReadiness = getVoiceReadiness();
+  const sections = slug === "ai-front-desk"
+    ? product.sections.map((section) => {
+        if (section.heading === "Entitlement and price") {
+          return {
+            ...section,
+            body: [
+              ...FRONT_DESK_TIER_KEYS.map((key) => {
+                const approved = FRONT_DESK_TIER_PRICING[key];
+                const row = frontDeskPlans.find((plan) => plan.key === key);
+                // Same fail-closed rule as checkout: a row whose stored price/term differ
+                // from the approved tier values is not sellable (PLAN_PRICING_INVALID), so
+                // the detail page shows the approved amount and the pending status instead
+                // of advertising an unusable price as active.
+                const usableRow = row && assertFrontDeskTierPricing(row).ok ? row : undefined;
+                const price = formatNumber(usableRow ? Number(usableRow.priceKES) : approved.priceKES);
+                const duration = usableRow?.durationDays ?? approved.durationDays;
+                const availability =
+                  key === AI_FRONT_DESK_VOICE_KEY && !voiceReadiness.canSell
+                    ? "awaiting provider activation, not yet for sale"
+                    : usableRow
+                      ? "in the server catalogue"
+                      : "awaiting catalogue activation, not yet for sale";
+                return `${approved.name}: KES ${price} / ${duration} days — ${availability}.`;
+              }),
+              "The amount charged always comes from the stored plan catalogue on the server for the tier you choose — never from the browser.",
+            ],
+          };
+        }
+        if (section.heading.startsWith("Voice receptionist")) {
+          const statusLine = voiceReadiness.canSell
+            ? `Current status: ${voiceReadiness.operatorMessage}`
+            : "Current status: Awaiting provider activation. No live call service is available yet.";
+          return {
+            ...section,
+            body: [
+              ...section.body.filter((paragraph) => !paragraph.startsWith("Current status:")),
+              statusLine,
+              ...(voiceReadiness.canSell ? [] : [
+                `Pending before Voice can be sold: ${VOICE_SELLING_CONDITIONS.join(" · ")}.`,
+              ]),
+            ],
+          };
+        }
+        return section;
+      })
+    : product.sections;
+
   return (
     <MarketingLayout eyebrow={product.eyebrow} title={product.title} intro={product.intro}>
-      {product.sections.map((section, index) => (
-        <MarketingSection key={section.heading} id={`section-${index + 1}`} title={section.heading} tone={index % 2 === 0 ? "paper" : "cream"}>
+      {sections.map((section, index) => (
+        <MarketingSection
+          key={section.heading}
+          id={section.heading.startsWith("Voice receptionist") ? "voice" : `section-${index + 1}`}
+          title={section.heading}
+          tone={index % 2 === 0 ? "paper" : "cream"}
+        >
           <div className="mk-prose">
             {section.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </div>

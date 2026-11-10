@@ -1,3 +1,4 @@
+import { businessAccent } from "@/lib/storefront/tokens";
 /**
  * Theme Engine (§21, §22, §50)
  *
@@ -839,5 +840,34 @@ export function themeStyleVars(theme: ExperienceTheme, brand?: ExperienceBrand |
     const index = pair.indexOf(":");
     if (index > 0) style[pair.slice(0, index).trim()] = pair.slice(index + 1).trim();
   }
-  return style;
+  return Object.assign(style, storefrontBridgeVars(style));
+}
+
+/**
+ * Public-storefront bridge (2026-11-06).
+ *
+ * The Experience engine and the classic Business Page are two rendering paths, but they are one
+ * product. Every shared public component (`.st-*` in `app/storefront.css`) reads the `--st-*`
+ * tokens, so publishing them here means a component dropped into either engine inherits the
+ * right structural surfaces, text colours and accent — with the same contrast guard
+ * (`businessAccent`) that keeps an owner-picked accent legible instead of letting it wreck the
+ * platform's cohesion.
+ */
+function storefrontBridgeVars(style: Record<string, string>): Record<string, string> {
+  const bg = style["--eb-bg"] || "#16181d";
+  const surface = style["--eb-surface"] || bg;
+  return {
+    "--st-canvas": bg,
+    "--st-raised": surface,
+    "--st-structure": surface,
+    "--st-surface": surface,
+    "--st-surface-muted": style["--eb-surface-muted"] || surface,
+    "--st-line": style["--eb-border"] || "rgba(255,255,255,0.12)",
+    "--st-text": style["--eb-heading"] || style["--eb-text"] || "#f4f6f0",
+    "--st-muted": style["--eb-muted"] || "#c2c8d1",
+    "--st-fine": style["--eb-muted"] || "#a8b0bc",
+    // Same rule as the classic page: a business accent is honoured only while it stays legible.
+    "--st-accent": businessAccent(style["--eb-primary"] || style["--eb-accent"], bg).accent,
+    "--st-glow": "0 0 0 1px rgba(255,255,255,0.06)",
+  };
 }

@@ -1,0 +1,953 @@
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   JATA AFTERCALL PUBLIC STOREFRONT
+
+   The public design system, in one place. It sits in its own sheet — not in `app/globals.css`,
+   which is pinned by the original-design-restoration and workspace-token contracts — exactly as
+   `app/erp.css` does for the ERP workspace.
+
+   WHAT THIS FIXES
+   ---------------
+   The public Business Page did not inherit the platform identity: it read a legacy business-theme
+   table whose surfaces, accents and type were defined independently of the JATA AFTERCALL product
+   theme (Lime Spark / Graphite). These tokens are the shared source of truth the public surfaces
+   now inherit, so the platform and the storefront are visibly one product.
+
+   TWO-LAYER BRANDING
+   ------------------
+     • Platform: graphite surfaces, lime highlight, radii, spacing, type scale, motion. Fixed.
+     • Business: logo, name, imagery, copy and ONE validated accent (`--st-accent`). Guest.
+   A business accent is accepted only when it keeps accessible contrast on graphite, and it can
+   never restyle structure — see `lib/storefront/tokens.ts#businessAccent`.
+   ────────────────────────────────────────────────────────────────────────────────────────────── */
+
+.st-root {
+  /* Structure — the platform's. */
+  --st-canvas: #16181d;
+  --st-raised: #1c1f26;
+  --st-structure: #23262f;
+  --st-surface: #2d313b;
+  --st-surface-muted: #383d48;
+  --st-line: rgba(244, 246, 240, 0.12);
+  --st-line-strong: rgba(244, 246, 240, 0.2);
+  /* Ink. */
+  --st-text: #f4f6f0;
+  --st-muted: #c2c8d1;
+  --st-fine: #a8b0bc;
+  /* Highlight — the platform lime, or a validated business accent. */
+  --st-accent: #b6ff2e;
+  --st-accent-soft: rgba(182, 255, 46, 0.14);
+  --st-on-accent: #16181d;
+  /* Category tone: art direction within the platform's language, not a new palette. */
+  --st-tone: #b6ff2e;
+  --st-tone-glow: rgba(182, 255, 46, 0.18);
+  /* Rhythm. */
+  --st-radius: 1.5rem;
+  --st-radius-sm: 1rem;
+  --st-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --st-gap: 1rem;
+
+  background: var(--st-canvas);
+  color: var(--st-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── the hero ───────────────────────────────────────────────────────────────────────────────────
+   IMAGE IS EVERYTHING: when the business has supplied imagery, it leads. The photograph is the
+   full-bleed opening frame; identity and the primary actions sit on a legible scrim over it. When
+   there is no image, the fallback is an intentional composition — a category-toned graphite panel
+   with the business monogram — never a stock photograph passed off as the business's own. */
+
+.st-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--st-radius);
+  border: 1px solid var(--st-line);
+  background: var(--st-raised);
+  isolation: isolate;
+}
+
+.st-hero__media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.st-hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+/* Legibility first: a graded scrim, so text over any photograph keeps AA contrast. */
+.st-hero__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(9, 10, 12, 0.35) 0%, rgba(9, 10, 12, 0.72) 55%, rgba(22, 24, 29, 0.95) 100%),
+    radial-gradient(120% 80% at 100% 0%, var(--st-tone-glow) 0%, rgba(22, 24, 29, 0) 60%);
+}
+
+.st-hero__body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.5rem 1.25rem 1.35rem;
+  min-height: 15rem;
+  align-content: end;
+}
+
+@media (min-width: 640px) {
+  .st-hero__body {
+    min-height: 21rem;
+    padding: 2rem 1.75rem 1.75rem;
+  }
+}
+
+/* The intentional fallback: no photograph, no apology — a composed monogram panel. */
+.st-hero__fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(110% 90% at 88% 6%, var(--st-tone-glow) 0%, rgba(22, 24, 29, 0) 58%),
+    linear-gradient(160deg, var(--st-structure) 0%, var(--st-canvas) 78%);
+}
+
+.st-hero__monogram {
+  position: absolute;
+  right: -1.5rem;
+  top: -1.75rem;
+  font-size: 11rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: rgba(244, 246, 240, 0.05);
+  pointer-events: none;
+  user-select: none;
+}
+
+.st-hero__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  border-radius: 999px;
+  border: 1px solid var(--st-line-strong);
+  background: rgba(9, 10, 12, 0.45);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--st-muted);
+  backdrop-filter: blur(6px);
+}
+
+.st-hero__flagDot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--st-accent);
+  flex: none;
+}
+
+/* The business's own logo, when it has one. Framed on the platform's surface so an arbitrary
+   upload (transparent PNG, odd aspect ratio, light or dark) still sits inside the system. */
+.st-hero__logo {
+  width: 3rem;
+  height: 3rem;
+  flex: none;
+  border-radius: 0.9rem;
+  object-fit: cover;
+  border: 1px solid var(--st-line-strong);
+  background: var(--st-surface);
+}
+
+.st-hero__title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 850;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-wrap: balance;
+}
+
+@media (min-width: 640px) {
+  .st-hero__title {
+    font-size: 2.1rem;
+  }
+}
+
+.st-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--st-muted);
+}
+
+.st-hero__metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.st-hero__lede {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--st-muted);
+}
+
+.st-hero__note {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--st-fine);
+}
+
+/* ── sections: one vocabulary, top to bottom ─────────────────────────────────────────────────────
+   Every block on the page shares these rules, so the page reads as one designed surface instead of
+   a stack of unrelated widgets. */
+
+.st-section {
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-structure);
+  padding: 1.15rem 1.15rem 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .st-section {
+    padding: 1.5rem;
+  }
+}
+
+.st-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--st-accent);
+}
+
+.st-eyebrow svg {
+  flex: none;
+}
+
+.st-sectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--st-text);
+}
+
+.st-sectionLede {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--st-muted);
+}
+
+.st-divider {
+  height: 1px;
+  border: 0;
+  margin: 0.9rem 0;
+  background: var(--st-line);
+}
+
+/* Rows nested inside a section (service rows, reward rows, hour rows). */
+.st-row {
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius-sm);
+  background: var(--st-surface-muted);
+  padding: 0.75rem 0.85rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.st-row:hover {
+  border-color: var(--st-line-strong);
+}
+
+.st-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--st-line-strong);
+  background: var(--st-surface);
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 750;
+  color: var(--st-text);
+  white-space: nowrap;
+}
+
+/* ── contact actions on graphite ─────────────────────────────────────────────────────────────────
+   The four actions are platform furniture: identical affordances on every business page, recoloured
+   only through these skins so they stay legible on a dark canvas. */
+
+.st-action {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--st-radius-sm);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: var(--st-text);
+  transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.st-action:hover:not([data-contact-state="unavailable"]) {
+  transform: translateY(-1px);
+}
+
+.st-action:focus-visible {
+  outline: 3px solid var(--st-accent);
+  outline-offset: 2px;
+}
+
+.st-action--whatsapp {
+  background: rgb(4 120 87);
+  color: #fff;
+}
+
+.st-action--call {
+  background: var(--st-accent);
+  color: var(--st-on-accent);
+}
+
+.st-action--neutral {
+  border-color: var(--st-line-strong);
+  background: rgba(244, 246, 240, 0.06);
+}
+
+.st-action[data-contact-state="unavailable"] {
+  border-style: dashed;
+  border-color: var(--st-line-strong);
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.st-actions__status {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--st-muted);
+}
+
+/* ── the platform footer ─────────────────────────────────────────────────────────────────────────
+   Attribution closes every public page: the customer always knows this is a JATA AFTERCALL page. */
+
+.st-footer {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--st-line);
+  padding-top: 1.1rem;
+  padding-bottom: 0.5rem;
+  text-align: center;
+  color: var(--st-fine);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.st-footer__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--st-text);
+  font-size: 0.7rem;
+}
+
+.st-footer__mark {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.3rem;
+  background: var(--st-accent);
+  flex: none;
+}
+
+.st-footer a {
+  color: var(--st-muted);
+  text-decoration: underline;
+}
+
+/* ── Loyalty Rewards on the storefront ───────────────────────────────────────────────────────────
+   The same states as before (inactive / unavailable / active) — now drawn from the shared tokens so
+   it reads as a native JATA AFTERCALL feature rather than an embedded widget. */
+
+.st-loyalty {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--st-line-strong);
+  border-radius: var(--st-radius);
+  background: linear-gradient(165deg, var(--st-structure) 0%, var(--st-canvas) 82%);
+  padding: 1.15rem;
+}
+
+@media (min-width: 640px) {
+  .st-loyalty {
+    padding: 1.5rem;
+  }
+}
+
+.st-loyalty__glow {
+  position: absolute;
+  right: -4rem;
+  top: -4rem;
+  width: 11rem;
+  height: 11rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--st-accent-soft) 0%, rgba(182, 255, 46, 0) 70%);
+  pointer-events: none;
+}
+
+.st-loyalty__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: var(--st-accent-soft);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--st-accent);
+}
+
+.st-loyalty__title {
+  margin: 0.55rem 0 0;
+  font-size: 1.1rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+@media (min-width: 640px) {
+  .st-loyalty__title {
+    font-size: 1.2rem;
+  }
+}
+
+.st-loyalty__subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--st-accent);
+}
+
+.st-loyalty__pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--st-surface-muted);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--st-text);
+}
+
+.st-loyalty__pill--live {
+  background: var(--st-accent-soft);
+  color: var(--st-accent);
+}
+
+.st-loyalty__lead {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--st-text);
+}
+
+.st-loyalty__note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--st-muted);
+}
+
+.st-loyalty__fine {
+  margin: 0;
+  border-top: 1px solid var(--st-line);
+  padding-top: 0.6rem;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--st-fine);
+}
+
+.st-loyalty__list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.st-loyalty__listItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border-radius: var(--st-radius-sm);
+  background: var(--st-surface);
+  padding: 0.6rem 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--st-text);
+  transition: background-color 0.15s ease;
+}
+
+.st-loyalty__listItem:hover {
+  background: var(--st-surface-muted);
+}
+
+.st-loyalty__card {
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius-sm);
+  background: var(--st-surface);
+  padding: 0.85rem;
+}
+
+.st-loyalty__cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.st-loyalty__cardLead {
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.55;
+  color: var(--st-text);
+}
+
+.st-loyalty__rewards {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.st-loyalty__reward {
+  border-top: 1px solid var(--st-line);
+  padding-top: 0.55rem;
+}
+
+.st-loyalty__reward:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.st-loyalty__rewardTitle {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--st-text);
+}
+
+.st-loyalty__rewardCost {
+  font-size: 0.85rem;
+  font-weight: 850;
+  color: var(--st-accent);
+}
+
+.st-loyalty__lookup {
+  margin-top: 0.9rem;
+  border: 1px solid var(--st-line-strong);
+  border-radius: var(--st-radius-sm);
+  background: rgba(9, 10, 12, 0.35);
+  padding: 0.9rem;
+}
+
+.st-loyalty__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--st-text);
+}
+
+.st-loyalty__input {
+  width: 100%;
+  border: 1px solid var(--st-line-strong);
+  border-radius: var(--st-radius-sm);
+  background: rgba(9, 10, 12, 0.7);
+  padding: 0.7rem 0.8rem;
+  font-size: 0.95rem;
+  color: var(--st-text);
+}
+
+.st-loyalty__input::placeholder {
+  color: var(--st-fine);
+}
+
+.st-loyalty__input:focus-visible,
+.st-loyalty__button:focus-visible {
+  outline: 2px solid var(--st-accent);
+  outline-offset: 2px;
+}
+
+.st-loyalty__button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  background: var(--st-accent);
+  color: var(--st-on-accent);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.st-loyalty__button:hover:not(:disabled) {
+  background: var(--st-text);
+}
+
+.st-loyalty__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.st-loyalty__button--ghost {
+  border-color: var(--st-line-strong);
+  background: transparent;
+  color: var(--st-text);
+}
+
+.st-loyalty__button--ghost:hover:not(:disabled) {
+  background: var(--st-surface);
+}
+
+/* ── motion: subtle, and switched off for anyone who asked for stillness ─────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .st-row,
+  .st-action,
+  .st-loyalty__listItem,
+  .st-loyalty__button {
+    transition: none;
+  }
+
+  .st-action:hover:not([data-contact-state="unavailable"]) {
+    transform: none;
+  }
+}
+
+
+/* ── customer-facing Business Hub panels ───────────────────────────────────────────────────────
+   These were still using the retired light jata-card skin after the storefront migration. Keep
+   their behaviour intact, but make every interactive surface a native part of the public system.
+   The layout rules below also prevent long names, prices and helper copy from crossing card edges. */
+.st-hub-panel {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--st-text);
+  background:
+    radial-gradient(100% 90% at 100% 0%, var(--st-tone-glow) 0%, transparent 58%),
+    linear-gradient(155deg, var(--st-structure) 0%, var(--st-raised) 100%);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+}
+
+.st-hub-panel,
+.st-hub-panel * {
+  box-sizing: border-box;
+}
+
+.st-hub-panel__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.st-hub-panel__title svg {
+  flex: none;
+  color: var(--st-accent);
+  margin-top: 0.08em;
+}
+
+.st-hub-panel p,
+.st-hub-panel label,
+.st-hub-panel li,
+.st-hub-panel dd,
+.st-hub-panel dt {
+  overflow-wrap: anywhere;
+}
+
+.st-hub-panel .jata-hint,
+.st-hub-panel .text-zinc-500,
+.st-hub-panel .text-zinc-600 {
+  color: var(--st-muted) !important;
+  line-height: 1.55;
+}
+
+.st-hub-panel .text-zinc-950,
+.st-hub-panel .text-zinc-900,
+.st-hub-panel .text-zinc-800 {
+  color: var(--st-text) !important;
+}
+
+.st-hub-panel .text-emerald-600 {
+  color: var(--st-accent) !important;
+}
+
+.st-hub-product {
+  min-width: 0;
+  border: 1px solid var(--st-line-strong);
+  border-radius: var(--st-radius-sm);
+  background: linear-gradient(135deg, var(--st-surface) 0%, var(--st-raised) 100%);
+  color: var(--st-text);
+  box-shadow: inset 0 1px rgba(255,255,255,0.025);
+}
+
+.st-hub-product > div {
+  min-width: 0;
+}
+
+.st-hub-product img {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: none;
+  border: 1px solid var(--st-line);
+  border-radius: 0.8rem;
+  object-fit: cover;
+}
+
+.st-hub-product__placeholder {
+  flex: none;
+  border: 1px solid var(--st-line);
+  background: var(--st-surface-muted);
+  color: var(--st-accent);
+}
+
+.st-hub-product .truncate {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.st-hub-product .line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--st-muted);
+  line-height: 1.45;
+}
+
+.st-hub-product .text-amber-700 {
+  color: var(--st-accent) !important;
+}
+
+.st-hub-panel .jata-icon-btn {
+  display: inline-flex;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--st-line-strong);
+  border-radius: 0.75rem;
+  background: var(--st-surface-muted);
+  color: var(--st-text);
+}
+
+.st-hub-panel .jata-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.st-hub-panel .jata-btn {
+  display: inline-flex;
+  min-height: 2.75rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid var(--st-line-strong);
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.st-hub-panel .jata-btn-primary,
+.st-hub-panel .jata-btn-secondary {
+  border-color: var(--st-accent);
+  background: var(--st-accent);
+  color: var(--st-on-accent);
+}
+
+.st-hub-panel .jata-btn-ghost {
+  background: var(--st-surface);
+  color: var(--st-text);
+}
+
+.st-hub-panel .jata-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.st-hub-panel .jata-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+}
+
+.st-hub-panel .jata-label {
+  color: var(--st-text);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.st-hub-panel .jata-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.8rem;
+  border: 1px solid var(--st-line-strong);
+  border-radius: 0.85rem;
+  background: rgba(9, 10, 12, 0.52);
+  padding: 0.7rem 0.8rem;
+  color: var(--st-text);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.st-hub-panel .jata-input::placeholder {
+  color: var(--st-fine);
+  opacity: 1;
+}
+
+.st-hub-panel .jata-input:focus-visible,
+.st-hub-panel .jata-btn:focus-visible,
+.st-hub-panel .jata-icon-btn:focus-visible {
+  outline: 2px solid var(--st-accent);
+  outline-offset: 2px;
+}
+
+.st-hub-panel select option {
+  background: var(--st-raised);
+  color: var(--st-text);
+}
+
+.st-hub-review {
+  min-width: 0;
+  border: 1px solid var(--st-line-strong);
+  background: rgba(9, 10, 12, 0.28);
+  color: var(--st-text);
+}
+
+.st-hub-review ul {
+  min-width: 0;
+}
+
+.st-hub-review li {
+  min-width: 0;
+  gap: 0.65rem;
+  line-height: 1.45;
+}
+
+.st-hub-qr {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--st-line-strong);
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+}
+
+.st-hub-qr svg {
+  display: block;
+  width: min(100%, 220px);
+  height: auto;
+}
+
+.st-hub-panel a:not(.jata-btn) {
+  color: var(--st-accent);
+  overflow-wrap: anywhere;
+}
+
+.st-hub-panel .jata-error {
+  color: #ffaaa5;
+  line-height: 1.5;
+}
+
+@media (max-width: 420px) {
+  .st-hub-panel {
+    padding: 1rem;
+  }
+
+  .st-hub-product {
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.65rem;
+  }
+
+  .st-hub-product img,
+  .st-hub-product__placeholder {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+
+  .st-hub-panel .jata-icon-btn {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
+  .st-hub-panel .jata-btn {
+    min-height: 2.65rem;
+    padding: 0.6rem 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-hub-panel .jata-btn {
+    transition: none;
+  }
+}

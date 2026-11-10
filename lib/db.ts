@@ -288,6 +288,15 @@ function createFallbackPrisma(): any {
       update: async () => { throw new Error("DB not available"); },
       upsert: async () => { throw new Error("DB not available"); },
     },
+    // Website Studio 2.0 workspace/site control plane. Offline reads are empty and writes refuse.
+    studioWorkspace: emptyModel(),
+    studioWorkspaceMember: emptyModel(),
+    studioWorkspaceBusiness: emptyModel(),
+    studioWebsite: emptyModel(),
+    studioWebsiteContent: emptyModel(),
+    studioWebsiteVersion: emptyModel(),
+    studioWebsiteDraftRevision: emptyModel(),
+    studioWebsiteMember: emptyModel(),
     experienceVersion: {
       findMany: async () => [],
       findUnique: async () => null,
@@ -673,6 +682,28 @@ function createFallbackPrisma(): any {
     msgMessageEvent: emptyModel(),
     msgWallet: emptyModel(),
     msgLedgerEntry: emptyModel(),
+    // JATA Business Hub (instant order requests, enquiries, promotions, loyalty, QR identity).
+    // Same contract as every other model above: reads answer empty so a page renders, and every
+    // write refuses rather than reporting a record that was never stored. The hub's own routes
+    // never reach this fallback — `hasDurableDatabase()` closes them with a 503 first — but the
+    // public Business Page must still render if the hub tables are momentarily unavailable.
+    orderRequest: emptyModel(),
+    orderRequestItem: emptyModel(),
+    customerEnquiry: emptyModel(),
+    promotion: emptyModel(),
+    loyaltyProgram: emptyModel(),
+    loyaltyCard: emptyModel(),
+    loyaltyStampEvent: emptyModel(),
+    loyaltyRedemption: emptyModel(),
+    // Loyalty 2.0 — points and rewards. Reads are empty and writes refuse, exactly like the rest
+    // of the fallback: an offline build must never look like it saved points it did not save.
+    loyaltyPointsProgramme: emptyModel(),
+    loyaltyPointsEligibleItem: emptyModel(),
+    loyaltyPointsAccount: emptyModel(),
+    loyaltyPointsLedger: emptyModel(),
+    loyaltyReward: emptyModel(),
+    loyaltyRewardRedemption: emptyModel(),
+    businessHubActivity: emptyModel(),
   };
   return stub;
 }
