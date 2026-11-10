@@ -4,6 +4,8 @@ import puppeteer from 'puppeteer-core';
 import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+// Publishing policy lives in a unit-tested module (tests/unit/motion-visual-annotation.test.ts).
+import { THUMBNAIL_TIERS, perViewportBudget, planVisualAnnotations } from './visual-annotation.mjs';
 
 const base = new URL(process.env.BASE_URL || 'http://localhost:4100');
 if (base.protocol !== 'http:' || !['localhost','127.0.0.1'].includes(base.hostname) || base.port !== '4100' || base.pathname !== '/' || !process.env.CI || process.env.MOTION_ISOLATED !== '1' || process.env.DATABASE_URL !== 'postgresql://jata:jata@localhost:5432/jata_e2e?schema=public' || process.env.AUTH_SECRET !== 'interactive-business-e2e-test-secret') throw Error('Refusing non-isolated browser capture');
@@ -63,14 +65,26 @@ try {
         animationCalls:window.__motionEvidence,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};
     },target.selector);
     await page.screenshot({path:path.join(out,`${name}.png`),fullPage:true}); row.screenshot=`${name}.png`;
-    // Public seeded fictional demo only: expose six small viewport captures via check annotations
-    // so they can be retrieved without the external artifact blob host. No customer data.
+    // Public seeded fictional demo only: expose a small viewport capture via a check annotation so
+    // it can be retrieved without the external artifact blob host. No customer data.
+    //
+    // The budget is per viewport, not per image: six viewports share GitHub's 10-annotation cap, so
+    // an image that cannot be published WHOLE is shrunk (THUMBNAIL_TIERS) until it fits. The old
+    // emitter chunked a full-size JPEG into ~3000-char parts, which overflowed the cap and published
+    // truncated streams that could not be opened. Nothing is published unless the reassembled bytes
+    // are a complete JPEG.
     if(target.name==='classic' && !reduced && row.status===200) {
-      const thumbnail=await page.screenshot({type:'jpeg',quality:20,fullPage:false});
-      const encoded=Buffer.from(thumbnail).toString('base64');
-      // GitHub check annotation messages are capped at 4096 bytes; keep every numbered part below it.
-      const chunks=encoded.match(/.{1,3000}/g) || [];
-      if(chunks.length<=20) for(let i=0;i<chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${chunks.length}::${chunks[i]}`);
+      const budget=perViewportBudget(6);
+      row.annotationBudget=budget;
+      for (const tier of THUMBNAIL_TIERS) {
+        const thumbnail=await page.screenshot({type:'jpeg',quality:tier.quality,fullPage:false,
+          clip:{x:0,y:0,width,height:Math.min(height,Math.round(width*1.6))}});
+        const plan=planVisualAnnotations(Buffer.from(thumbnail).toString('base64'),{maxAnnotations:budget});
+        if(!plan.fits) { row.annotationSkipped=plan.reason; continue; }
+        for(let i=0;i<plan.chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${plan.chunks.length}::${plan.chunks[i]}`);
+        row.annotation={tier,parts:plan.chunks.length,bytes:plan.bytes};
+        break;
+      }
     }
     if(recorder) await recorder.stop();
     row.result=(row.status===(target.expected||200) && (!target.selector || row.observation.probes===1) && (!reduced || row.observation.renderMode==='lite' || !target.selector) && row.video && existsSync(path.join(out,row.video)) && statSync(path.join(out,row.video)).size > 0)?'OBSERVED':'FAIL';
