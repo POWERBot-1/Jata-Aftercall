@@ -24,8 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  *
  * Server component: resolves the tenant, the latest draft, the publication readiness and
  * one tenant-scoped preview dataset. All generation/refinement previews stay client-side
- * until the owner saves through the existing versioned draft API. The legacy editing
- * surfaces remain reachable through the tabs while this replacement is being proven.
+ * until the owner saves through the existing versioned draft API. All legacy editing routes now redirect here; this is the sole owner editing surface.
  */
 export default async function PromptStudioPage({ params }: Props) {
   const { id } = await params;
@@ -40,7 +39,7 @@ export default async function PromptStudioPage({ params }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={`/dashboard/businesses/${business.id}`} className="jata-btn jata-btn-ghost !px-2 !py-1 text-xs">
+        <Link href="/dashboard/studio" className="jata-btn jata-btn-ghost !px-2 !py-1 text-xs">
           <ArrowLeft size={13} /> Workspace home
         </Link>
         <p className="text-xs text-[color:var(--ws-muted)]">{profile.label} · saved draft v{experience?.draftVersion ?? 0}</p>
