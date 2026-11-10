@@ -341,9 +341,7 @@ export function WebsiteStudio(props: WebsiteStudioProps) {
           <a className="jata-btn jata-btn-secondary" href={props.publicUrl} target="_blank" rel="noopener noreferrer">
             <Eye size={14} /> View site
           </a>
-          <Link className="jata-btn jata-btn-ghost" href="/dashboard/studio">
-            Classic editor
-          </Link>
+
         </div>
       </header>
 
