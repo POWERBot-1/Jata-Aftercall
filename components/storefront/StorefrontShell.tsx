@@ -23,11 +23,14 @@ export function StorefrontShell({
   data,
   previewNotice,
   structuredData,
+  trackViews = true,
   children,
 }: {
   data: StorefrontData;
   previewNotice?: string | null;
   structuredData?: Record<string, unknown> | null;
+  /** False only for owner previews, which must never count as customer page views. */
+  trackViews?: boolean;
   children: React.ReactNode;
 }) {
   const { document, theme, profile, business } = data;
@@ -38,7 +41,7 @@ export function StorefrontShell({
 
   return (
     <div className={themeRootClassName(theme, family ? `eb-family-${family.key} eb-density-${document.artDirection!.density}` : "")} data-template-family={family?.key} style={themeStyleVars(theme, document.brand)}>
-      <PageViewTracker businessId={business.id} />
+      {trackViews ? <PageViewTracker businessId={business.id} /> : null}
       <RenderModeProbe preference={isRenderPreference(document.renderPreference) ? document.renderPreference : "auto"} enabled={theme.treatment.motion !== "none"} />
       {structuredData ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />

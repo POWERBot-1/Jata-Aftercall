@@ -12,6 +12,7 @@ import { requestCache } from "@/lib/request-cache";
 import { ensureDefaultStudioWebsite } from "./ensure-default-website";
 import { createExperienceDocument, normalizeExperienceDocument } from "./document";
 import { getExperienceProfile } from "./categories";
+import { categoryForRead } from "./category-authority";
 import type { ExperienceProfile } from "./types";
 import { getInteractiveEntitlement, type EntitlementState } from "./entitlement";
 import { validateForPublication, findInvalidCatalogueItems, type PublishValidation } from "./validate";
@@ -129,7 +130,10 @@ async function loadWorkspaceImpl(businessId: string): Promise<Workspace | null> 
   const publishedJson = readJson(experience?.publishedJson);
   const draft = draftJson ? normalizeExperienceDocument(draftJson, experience?.categoryKey ?? business.category) : null;
   const published = publishedJson ? normalizeExperienceDocument(publishedJson, experience?.categoryKey ?? business.category) : null;
-  const categoryKey = experience?.categoryKey || (draft?.categoryKey as string) || business.category || "other";
+  const categoryKey = categoryForRead(
+    business.category,
+    experience?.categoryKey || (draft?.categoryKey as string) || null,
+  ).categoryKey;
   const profile = getExperienceProfile(categoryKey);
 
   const document =

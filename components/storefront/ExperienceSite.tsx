@@ -15,7 +15,7 @@ import { themeOf } from "@/lib/experience/document";
 import { templateForDocument } from "@/lib/experience/templateFamilies";
 import { ItemCard } from "./ItemCard";
 
-export function ExperienceSite({ data: incoming, previewNotice, shell = true }: { data: StorefrontData; previewNotice?: string | null; shell?: boolean }) {
+export function ExperienceSite({ data: incoming, previewNotice, shell = true, trackViews = true }: { data: StorefrontData; previewNotice?: string | null; shell?: boolean; trackViews?: boolean }) {
   const data = incoming.document.version === 2 ? { ...incoming, theme: themeOf(incoming.document) } : incoming;
   const { document, theme, profile, business } = data;
   const family = templateForDocument(document);
@@ -101,6 +101,6 @@ export function ExperienceSite({ data: incoming, previewNotice, shell = true }: 
   );
 
   return shell
-    ? <StorefrontShell data={data} previewNotice={previewNotice} structuredData={structuredData}>{content}</StorefrontShell>
+    ? <StorefrontShell data={data} previewNotice={previewNotice} structuredData={structuredData} trackViews={trackViews}>{content}</StorefrontShell>
     : content;
 }

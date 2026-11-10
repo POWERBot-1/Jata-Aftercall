@@ -18,6 +18,7 @@ import {
   QrCode,
   Receipt,
   Settings2,
+  Sparkles,
   UploadCloud,
   Users,
   Wand2,
@@ -41,7 +42,9 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
   const pathname = usePathname() || "";
   const tabs = [
     { href: base, label: "Home", icon: Home, exact: true },
-    // The Canvas is the editing surface; it sits second so "edit my website" is one tap from Home.
+    // Prompt-first Website Studio. The Canvas and classic tabs remain until the replacement
+    // has passed acceptance, so no owner loses access to the editor they already know.
+    { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
     { href: `${base}/canvas`, label: "Canvas", icon: PanelsTopLeft },
     { href: `${base}/sections`, label: "Website", icon: LayoutTemplate },
     { href: `${base}/create`, label: "Create", icon: Wand2 },

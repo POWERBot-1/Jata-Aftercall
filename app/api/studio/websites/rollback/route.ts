@@ -3,11 +3,20 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertStudioPublicationAccess, StudioPublicationRefused } from "@/lib/experience/publication-access";
 import { validateExperienceJson } from "@/lib/experience/schema";
+import { resolveExperienceProfile } from "@/lib/experience/categories";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logAudit } from "@/lib/audit";
 import { canTransitionStudioSite } from "@/lib/experience/publication-state";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Machine-readable code for every refusal caused by the document itself. Publish already sent
+ * this code; this route sent the same refusal with no code at all, so a client could not tell
+ * "your document is unsupported" from "we could not reach the database" without parsing prose.
+ * Local constant: routes never import from each other.
+ */
+const EXPERIENCE_SCHEMA_INVALID_CODE = "experience_schema_invalid";
 
 /** Roll back one site by publishing an immutable historical snapshot as a new version. */
 export async function POST(request: Request) {
@@ -44,8 +53,13 @@ export async function POST(request: Request) {
       const parsed = JSON.parse(target.snapshotJson) as { categoryKey?: unknown };
       if (typeof parsed?.categoryKey === "string") categoryKey = parsed.categoryKey;
     } catch { /* schema validation below returns the safe failure */ }
-    const validated = validateExperienceJson(target.snapshotJson, categoryKey);
-    if (!validated.ok) return NextResponse.json({ error: "That historical publication is no longer valid for this renderer.", issues: validated.issues }, { status: 422 });
+    // A pre-profile snapshot may omit its category; fall back to the tenant's resolved profile
+    // rather than rejecting a valid historical publication because onboarding stored a label.
+    const validated = validateExperienceJson(
+      target.snapshotJson,
+      categoryKey || resolveExperienceProfile(business.category).key,
+    );
+    if (!validated.ok) return NextResponse.json({ error: "That historical publication is no longer valid for this renderer.", code: EXPERIENCE_SCHEMA_INVALID_CODE, issues: validated.issues }, { status: 422 });
     if (containsInlineImageDataUrl(validated.document)) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }

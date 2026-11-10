@@ -1,0 +1,955 @@
+
+ RUN  v4.1.12 /home/user/Jata-Aftercall
+
+ ❯ tests/unit/autopilot-phase1-hardening.test.ts (6 tests | 1 failed) 50ms
+     × Priority 1: validates PostgreSQL migration SQL identifier lengths (<63 bytes), constraint guards, DMMF parity & P2002 recovery 16ms
+     ✓ Priority 2: blocks actionType/payload confusion, foreign unansweredQuestionId, malformed quiet hours, and STAFF/VIEWER route mutations 16ms
+     ✓ Priority 3 & 9: repairs legacy PAID Autopilot payments even when AFTERCALL Subscription exists, replays webhooks idempotently, and scopes refunds to matching paymentId 4ms
+     ✓ Priority 4: enforces proposal expiry, CAS under concurrent double-approve & double-rollback, and controlled retry from FAILED 3ms
+     ✓ Priority 5, 6, 7 & 8: re-verifies STOP opt-out & quiet hours right before dispatch, serializes concurrent spend caps, honors pause/kill-switch on ingest & LLM, and requires providerMessageId for DELIVERED 9ms
+     ✓ Priority 10: verifies Command Center UI accessibility labels, ARIA toggle/alert attributes, 44px touch targets & workspace compliance 1ms
+ ✓ tests/integration/studio-image-lab.test.ts (17 tests) 3251ms
+     ✓ creates clearly-labelled candidates through the explicit in-memory durable-store test adapter  539ms
+     ✓ reuses the images it already created for an identical request instead of paying twice  491ms
+     ✓ serves the cache from the stored prompt hash, so a repeat is recognised even after a restart  462ms
+     ✓ waits out the cooldown between spends, then creates a genuinely new set on request  947ms
+     ✓ produces an asset the document will accept as a product, hero or section image  307ms
+     ✓ returns hosted object references from the explicit test adapter, never inline data URLs  469ms
+ ✓ tests/unit/qr-encoder.test.ts (10 tests) 2455ms
+     ✓ is module-for-module identical to the reference encoder at every error-correction level  432ms
+     ✓ picks the same mask as the reference encoder  381ms
+     ✓ decodes to the same payload as the reference encoder's auto-segmented symbol  595ms
+     ✓ chooses the same version as the reference encoder  395ms
+     ✓ decodes back to the exact payload from the rendered raster  549ms
+stderr | tests/unit/voice-media-server.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/voice-media-server.test.ts (12 tests) 1966ms
+     ✓ queues a second utterance while the first is in flight — turns never overlap  1225ms
+stderr | tests/unit/published-product-design-system.test.ts > every published product carries the design system > keeps a legacy inline hero image readable in a published customer render
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at div
+    at section
+    at main
+    at CartProvider (/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx:26:3)
+    at div
+    at StorefrontShell (/home/user/Jata-Aftercall/components/storefront/StorefrontShell.tsx:27:3)
+    at ExperienceSite (/home/user/Jata-Aftercall/components/storefront/ExperienceSite.tsx:18:33)
+
+ ✓ tests/unit/published-product-design-system.test.ts (4 tests) 1705ms
+     ✓ renders the contract root class and the foundation tokens for every category × theme  1689ms
+ ✓ tests/unit/studio-ai-safety.test.ts (27 tests) 1292ms
+     ✓ turns a hung provider into a timeout sentence an owner understands  1003ms
+ ✓ tests/security/password-reset-login.test.ts (4 tests) 1104ms
+     ✓ resets the credential and signs in with the new password, refusing the old one and the replayed link  650ms
+ ✓ tests/unit/ai-front-desk-filler-regression.test.ts (21 tests) 846ms
+ ✓ tests/security/password-reset-delivery.test.ts (2 tests) 437ms
+ ✓ tests/integration/pos-api-routes.test.ts (86 tests) 632ms
+ ✓ tests/unit/public-loyalty-rewards-visibility.test.tsx (14 tests) 363ms
+stderr | tests/integration/voice-e2e.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/integration/voice-e2e.test.ts (2 tests) 372ms
+     ✓ runs the complete automated acceptance path  369ms
+ ✓ tests/security/pos-anonymous-access.test.ts (2 tests) 317ms
+     ✓ redirects /dashboard/pos to the login page without reading any business data  314ms
+ ✓ tests/unit/seeded-account-audit.test.ts (16 tests) 369ms
+     ✓ refuses production in the actual seed CLI before Prisma loads or a DB URL is needed  353ms
+ ✓ tests/unit/autopilot-phase3-remediation.test.ts (10 tests) 268ms
+ ✓ tests/unit/public-points-entry.test.tsx (11 tests) 265ms
+ ✓ tests/integration/business-hub-journey.test.ts (30 tests) 263ms
+stderr | tests/unit/demo-showcase-band.test.ts > the band on a public demo page > renders the fictional story, active sample services and existing on-page actions
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at DemoShowcaseBand (/home/user/Jata-Aftercall/components/storefront/DemoShowcaseBand.tsx:9:5)
+
+ ✓ tests/unit/demo-showcase-band.test.ts (15 tests) 228ms
+ ✓ tests/security/pos-page-authorization.test.ts (22 tests) 225ms
+ ✓ tests/security/admin-page-authorization.test.ts (29 tests) 236ms
+stderr | tests/unit/demo-data-restore.test.ts > public demo pages after restore > are empty before the restore (the production defect)
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at StoreHero (/home/user/Jata-Aftercall/components/storefront/public/StoreHero.tsx:11:3)
+    at main
+    at div
+    at BusinessPage (/home/user/Jata-Aftercall/components/BusinessPage.tsx:56:3)
+
+ ✓ tests/unit/demo-data-restore.test.ts (22 tests) 201ms
+ ✓ tests/unit/ai-front-desk-nullable-category.test.ts (11 tests) 203ms
+stderr | tests/unit/experience-art-direction.test.ts > registered compositional library > cinematic has a valid explicit v2 composition and SSR renderer without commercial rewrites
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at div
+    at section
+    at main
+    at CartProvider (/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx:26:3)
+    at div
+    at StorefrontShell (/home/user/Jata-Aftercall/components/storefront/StorefrontShell.tsx:27:3)
+    at ExperienceSite (/home/user/Jata-Aftercall/components/storefront/ExperienceSite.tsx:18:33)
+
+ ✓ tests/unit/experience-art-direction.test.ts (34 tests) 169ms
+stderr | tests/unit/pos-financial-timezone.test.ts > the wallet health label reads in business time > labels the last confirmed payment with the Nairobi timestamp, not the server's
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-financial-timezone.test.ts (8 tests) 197ms
+ ✓ tests/unit/ai-business-front-desk-behavior.test.ts (45 tests) 171ms
+ ✓ tests/integration/mobile-upload-pipeline.test.ts (14 tests) 146ms
+ ✓ tests/unit/voice-audio-vad.test.ts (13 tests) 120ms
+stderr | tests/unit/storefront-motion-inheritance.test.ts > storefront motion integration contract (SSR, not browser evidence) > cinematic retains its generated branding and exactly one shared controller
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at div
+    at section
+    at main
+    at CartProvider (/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx:26:3)
+    at div
+    at StorefrontShell (/home/user/Jata-Aftercall/components/storefront/StorefrontShell.tsx:27:3)
+    at ExperienceSite (/home/user/Jata-Aftercall/components/storefront/ExperienceSite.tsx:18:33)
+
+ ✓ tests/unit/storefront-motion-inheritance.test.ts (21 tests) 142ms
+ ✓ tests/unit/ai-front-desk-journey.test.ts (31 tests) 146ms
+ ✓ tests/integration/preorder-price-integrity.test.ts (22 tests) 133ms
+stderr | tests/unit/customer-interface-completeness.test.ts > homepage: the four AI Front Desk tiers live in the pricing experience > renders the complete family with honest availability (empty PlanConfig state)
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at Hero
+    at main
+    at div
+
+ ✓ tests/unit/customer-interface-completeness.test.ts (14 tests) 144ms
+stderr | tests/unit/public-storefront-system.test.tsx > IMAGE IS EVERYTHING (§4) > shows the business's own photography when the business supplied it
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at div
+    at section
+    at StoreHero (/home/user/Jata-Aftercall/components/storefront/public/StoreHero.tsx:11:3)
+    at main
+    at div
+    at BusinessPage (/home/user/Jata-Aftercall/components/BusinessPage.tsx:56:3)
+
+ ✓ tests/unit/public-storefront-system.test.tsx (11 tests) 133ms
+stderr | tests/unit/bos-pro-catalogue.test.ts > homepage: the seven offers in the exact mobile-first order > renders exactly seven cards in the required order, one grid, no extra sections
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at Hero
+    at main
+    at div
+
+ ✓ tests/unit/bos-pro-catalogue.test.ts (23 tests) 127ms
+ ✓ tests/unit/opening-hours.test.ts (11 tests) 133ms
+ ✓ tests/integration/pos-journey.test.ts (23 tests) 129ms
+stderr | tests/unit/homepage-business-pos.test.ts > the homepage renders the Business POS in the shared pricing grid (2026-10-25) > keeps the POS fifth in the one grid under the 2026-10-29 owner order
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at Hero
+    at main
+    at div
+
+ ✓ tests/unit/homepage-business-pos.test.ts (12 tests) 131ms
+ ✓ tests/unit/design-system.test.ts (21 tests) 107ms
+ ✓ tests/integration/media-route-upload.test.ts (22 tests) 128ms
+ ✓ tests/unit/hydration-render-parity.test.ts (10 tests) 127ms
+stderr | tests/unit/homepage-autopilot.test.ts > the homepage renders the standard JATA Autopilot package in the shared pricing grid > puts JATA Autopilot seventh (last) in the one grid under the 2026-10-29 owner order
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at Hero
+    at main
+    at div
+
+ ✓ tests/unit/homepage-autopilot.test.ts (12 tests) 112ms
+stderr | tests/unit/paystack.test.ts > Paystack idempotency logic > toKobo/fromKobo conversion is correct
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/paystack.test.ts (8 tests) 96ms
+ ✓ tests/unit/business-page-ai-link.test.ts (4 tests) 84ms
+ ✓ tests/integration/pos-offline-sync.test.ts (9 tests) 100ms
+ ✓ tests/integration/pos-awaiting-payment-ux.test.ts (5 tests) 104ms
+ ✓ tests/integration/pos-sale-idempotency.test.ts (13 tests) 93ms
+ ✓ tests/unit/pwa-marketing.test.ts (14 tests) 91ms
+ ✓ tests/integration/payments-journey.test.ts (12 tests) 94ms
+ ✓ tests/unit/pos-engine.test.ts (45 tests) 92ms
+ ✓ tests/integration/pos-branch-data-scope.test.ts (24 tests) 92ms
+ ✓ tests/unit/booking-time-display.test.ts (6 tests) 87ms
+stderr | tests/unit/subscription-catalogue.test.ts > subscription page: the complete catalogue > shows all seven offers exactly once each, in the marketing order, with prices and periods
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at WorkspacePhotoImage (/home/user/Jata-Aftercall/components/workspace/WorkspaceUI.tsx:17:3)
+    at div
+    at section
+    at WorkspaceHero (/home/user/Jata-Aftercall/components/workspace/WorkspaceUI.tsx:60:3)
+    at div
+
+ ✓ tests/unit/subscription-catalogue.test.ts (7 tests) 98ms
+ ✓ tests/unit/pos-repayment-panel.test.ts (3 tests) 82ms
+ ✓ tests/integration/experience-version-guard.test.ts (54 tests) 81ms
+ ✓ tests/unit/hydration-determinism.test.ts (7 tests) 83ms
+stderr | tests/integration/openpage-render.test.tsx > Website Studio candidates render through the real storefront > produces three candidates, each validating and rendering with JATA's ExperienceSite
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at div
+    at section
+    at main
+    at CartProvider (/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx:26:3)
+    at div
+    at StorefrontShell (/home/user/Jata-Aftercall/components/storefront/StorefrontShell.tsx:27:3)
+    at ExperienceSite (/home/user/Jata-Aftercall/components/storefront/ExperienceSite.tsx:18:33)
+    at div
+    at div
+    at StudioPreview (/home/user/Jata-Aftercall/components/studio/openpage/StudioPreview.tsx:16:3)
+
+ ✓ tests/integration/openpage-render.test.tsx (4 tests) 83ms
+ ✓ tests/integration/pos-refund-integrity.test.ts (12 tests) 76ms
+ ✓ tests/unit/release-acceptance-runner.test.ts (2 tests) 84ms
+ ✓ tests/integration/pos-branch-record-scope.test.ts (13 tests) 82ms
+ ✓ tests/integration/pos-wallet-refund-stock.test.ts (11 tests) 78ms
+ ✓ tests/security/ai-front-desk-publication-enforcement.test.ts (37 tests) 68ms
+ ✓ tests/unit/business-hub-markup.test.tsx (7 tests) 82ms
+ ✓ tests/integration/pos-publication-policy.test.ts (5 tests) 38ms
+ ✓ tests/unit/pos-product-photo-ui.test.ts (2 tests) 77ms
+ ✓ tests/unit/hydration-structure-probe.test.ts (12 tests) 72ms
+ ✓ tests/unit/team-free-access.test.ts (29 tests) 75ms
+ ✓ tests/integration/pos-branch-isolation.test.ts (8 tests) 71ms
+stderr | tests/unit/homepage-plan-cards.test.ts > homepage plan cards > orders database-backed cards Monthly → Annual → AI Front Desk → Website Studio → Business POS → JATA BOS PRO → JATA Autopilot in one grid
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at div
+    at section
+    at Hero
+    at main
+    at div
+
+ ✓ tests/unit/homepage-plan-cards.test.ts (11 tests) 72ms
+ ✓ tests/unit/tailwind-v4-migration.test.ts (4 tests) 65ms
+ ✓ tests/integration/pos-refund-method-integrity.test.ts (12 tests) 63ms
+ ✓ tests/unit/demo-contact-actions.test.ts (24 tests) 62ms
+stderr | tests/unit/storefront-motion.test.ts > safe finite recipes and full SSR > keeps actual storefront text, prices and contact/shop links in readable server HTML
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at div
+    at section
+    at main
+    at CartProvider (/home/user/Jata-Aftercall/components/storefront/CartProvider.tsx:26:3)
+    at div
+    at StorefrontShell (/home/user/Jata-Aftercall/components/storefront/StorefrontShell.tsx:27:3)
+    at ExperienceSite (/home/user/Jata-Aftercall/components/storefront/ExperienceSite.tsx:18:33)
+
+ ✓ tests/unit/storefront-motion.test.ts (37 tests) 58ms
+ ✓ tests/unit/studio-media-upload-facts.test.ts (20 tests) 53ms
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > fails closed on DB errors or a missing database instead of acknowledging an in-memory lead
+Professional enquiry persistence unavailable
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > acknowledges the durable record even if separate analytics fail
+Enquiry measurement unavailable
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > refuses cross-origin and oversized bodies
+Enquiry origin refused: origin-host=foreign.test request-host=jata.test
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > refuses cross-origin and oversized bodies
+Enquiry origin refused: origin-host=invalid request-host=jata.test
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > refuses cross-origin and oversized bodies
+Enquiry origin refused: origin-host=invalid request-host=jata.test
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > does not accept a foreign origin merely because x-forwarded-host claims it
+Enquiry origin refused: origin-host=foreign.test request-host=jata.test
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > refuses non-http(s) origin schemes and malformed forwarded protocols with no write
+Enquiry origin refused: origin-host=jata.test request-host=jata.test
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > refuses non-http(s) origin schemes and malformed forwarded protocols with no write
+Enquiry origin refused: malformed host or forwarded protocol
+
+stderr | tests/integration/professional-enquiry-route.test.ts > durable request-only professional intake > refuses non-http(s) origin schemes and malformed forwarded protocols with no write
+Enquiry origin refused: malformed host or forwarded protocol
+
+ ✓ tests/integration/professional-enquiry-route.test.ts (24 tests) 55ms
+ ✓ tests/security/pos-permissions.test.ts (35 tests) 73ms
+ ✓ tests/integration/openpage-integration.test.ts (14 tests) 58ms
+ ✓ tests/unit/pos-category-photo-ui.test.ts (1 test) 56ms
+ ✓ tests/security/pos-tenant-isolation.test.ts (20 tests) 58ms
+ ✓ tests/unit/business-hub-loyalty-points.test.ts (53 tests) 60ms
+ ✓ tests/integration/pos-wallet-settlement.test.ts (7 tests) 58ms
+stderr | tests/integration/studio-website-route-hardening.test.ts > save site draft: a refused document is a client error, never a 500 > rejects a foreign tenant before performing any write
+studio website content update failed
+
+stderr | tests/integration/studio-website-route-hardening.test.ts > tenant isolation across every per-site route > refuses a foreign tenant on save before any write
+studio website content update failed
+
+ ✓ tests/integration/studio-website-route-hardening.test.ts (29 tests) 50ms
+ ✓ tests/integration/studio-history-branching.test.ts (8 tests) 54ms
+ ✓ tests/security/publish-authorization.test.ts (48 tests) 51ms
+stderr | tests/unit/erp-storefront.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-storefront.test.ts (20 tests) 50ms
+ ✓ tests/unit/repair-guards.test.ts (18 tests) 60ms
+ ✓ tests/integration/experience-publish.test.ts (20 tests) 40ms
+ ✓ tests/unit/business-recipe-rendering.test.ts (10 tests) 48ms
+stderr | tests/integration/experience-category-authority.test.ts > atomicity: a type change is all-or-nothing > propagates a database failure instead of reporting a successful change
+experience create failed
+
+ ✓ tests/integration/experience-category-authority.test.ts (27 tests) 45ms
+ ✓ tests/unit/ai-grounding-and-safety.test.ts (11 tests) 45ms
+ ✓ tests/unit/storefront-emission-order.test.ts (14 tests) 60ms
+ ✓ tests/unit/studio-canvas-render.test.ts (9 tests) 51ms
+ ✓ tests/integration/pos-stock-capability.test.ts (8 tests) 60ms
+ ✓ tests/unit/pos-schema.test.ts (18 tests) 52ms
+stderr | tests/unit/landing-content.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+stderr | tests/unit/landing-content.test.ts > demo cards > renders links only for eligible destinations, including the footer sitemap
+Warning: React does not recognize the `fetchPriority` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fetchpriority` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+    at img
+    at picture
+    at figure
+    at article
+    at div
+    at div
+    at section
+    at DemoShowcase (/home/user/Jata-Aftercall/components/landing/DemoShowcase.tsx:13:25)
+
+ ✓ tests/unit/landing-content.test.ts (32 tests) 45ms
+ ✓ tests/unit/immersive-boundary.test.ts (6 tests) 46ms
+ ✓ tests/unit/autopilot-execution-rollback-isolation.test.ts (4 tests) 44ms
+ ✓ tests/security/agent-dashboard-access.test.ts (7 tests) 41ms
+stderr | tests/unit/erp-accounting-invoicing.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-accounting-invoicing.test.ts (17 tests) 42ms
+ ✓ tests/integration/pos-page-gates.test.ts (6 tests) 40ms
+ ✓ tests/security/ai-front-desk-route-authorization.test.ts (14 tests) 43ms
+ ✓ tests/integration/ai-front-desk-lifecycle.test.ts (7 tests) 44ms
+ ✓ tests/unit/business-recipe-layouts.test.ts (10 tests) 42ms
+ ✓ tests/prisma/loyalty-points-migration-parity.test.ts (12 tests) 35ms
+stderr | tests/unit/messaging-campaigns.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/messaging-campaigns.test.ts (19 tests) 40ms
+ ✓ tests/unit/booking-time-contract.test.ts (22 tests) 40ms
+ ✓ tests/unit/booking-hydration.test.ts (12 tests) 35ms
+stderr | tests/unit/messaging-core.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/messaging-core.test.ts (30 tests) 45ms
+ ✓ tests/integration/storefront-checkout.test.ts (15 tests) 49ms
+stderr | tests/unit/erp-approvals.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-approvals.test.ts (33 tests) 42ms
+ ✓ tests/unit/immersive-glb-safety.test.ts (12 tests) 35ms
+stderr | tests/unit/experience-publish.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/experience-publish.test.ts (22 tests) 25ms
+ ✓ tests/unit/business-recipes.test.ts (21 tests) 43ms
+ ✓ tests/integration/autopilot-activation.test.ts (27 tests) 41ms
+ ✓ tests/integration/storefront-parity.test.ts (10 tests) 38ms
+stderr | tests/security/password-reset.test.ts > password-reset request > invalidates a newly created token if SMTP delivery fails, without exposing delivery details
+Password reset email delivery failed; recovery token invalidated.
+
+stderr | tests/security/password-reset.test.ts > password-reset request > releases the cooldown after a delivery failure so an immediate retry delivers
+Password reset email delivery failed; recovery token invalidated.
+
+ ✓ tests/security/password-reset.test.ts (15 tests) 41ms
+stderr | tests/unit/erp-procurement.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-procurement.test.ts (22 tests) 47ms
+stderr | tests/unit/erp-accounting.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-accounting.test.ts (14 tests) 39ms
+stderr | tests/unit/referral-code.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/referral-code.test.ts (19 tests) 37ms
+stderr | tests/unit/control-plane-security.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/control-plane-security.test.ts (9 tests) 38ms
+ ✓ tests/integration/payment-settlement.test.ts (17 tests) 38ms
+ ✓ tests/unit/ai-front-desk-customer-default-state.test.ts (11 tests) 31ms
+ ✓ tests/unit/control-plane-routes.test.ts (13 tests) 32ms
+ ✓ tests/unit/media-source-safety.test.ts (17 tests) 46ms
+ ✓ tests/unit/meta-whatsapp.test.ts (12 tests) 33ms
+ ✓ tests/unit/autopilot-checkout-client.test.ts (10 tests) 37ms
+ ✓ tests/prisma/business-hub-migration-parity.test.ts (10 tests) 38ms
+ ✓ tests/integration/copilot-and-business-type-concurrency.test.ts (12 tests) 34ms
+stderr | tests/integration/business-create-idempotency.test.ts > idempotent business creation for onboarding drafts > failure while writing the owner membership leaves nothing behind, and the retry creates both
+business create failed
+
+stderr | tests/integration/business-create-idempotency.test.ts > idempotent business creation for onboarding drafts > if the missing membership cannot be completed, the retry fails safely instead of reporting success
+business create failed
+
+ ✓ tests/integration/business-create-idempotency.test.ts (14 tests) 36ms
+ ✓ tests/integration/payments-webhooks.test.ts (16 tests) 33ms
+stderr | tests/integration/registration-lifecycle.test.ts > registration lifecycle > hides unexpected errors and rolls back so no orphan business remains
+registration transaction failed
+
+stderr | tests/integration/registration-lifecycle.test.ts > registration lifecycle > does not fail registration when the audit write throws
+audit write failed after registration
+
+ ✓ tests/integration/registration-lifecycle.test.ts (6 tests) 34ms
+ ✓ tests/unit/pos-entitlement.test.ts (35 tests) 33ms
+ ✓ tests/integration/experience-variant-route.test.ts (10 tests) 34ms
+ ✓ tests/unit/hydration-mutation-probe.test.ts (20 tests) 34ms
+stderr | tests/unit/pos-refund-period-limit.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-refund-period-limit.test.ts (2 tests) 36ms
+ ✓ tests/integration/storefront-booking.test.ts (11 tests) 33ms
+ ✓ tests/integration/experience-history-route.test.ts (12 tests) 32ms
+stderr | tests/unit/erp-entitlement-access.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-entitlement-access.test.ts (24 tests) 32ms
+ ✓ tests/unit/professional-book-routing.test.ts (6 tests) 29ms
+ ✓ tests/unit/erp-schema.test.ts (13 tests) 32ms
+ ✓ tests/security/agent-referral-report-reconciliation.test.ts (6 tests) 30ms
+ ✓ tests/unit/dashboard-nav-bos.test.ts (9 tests) 29ms
+ ✓ tests/unit/erp-notifications-page.test.ts (8 tests) 30ms
+ ✓ tests/integration/experience-diversity-routes.test.ts (9 tests) 31ms
+stderr | tests/integration/paystack-webhook-route.test.ts > Paystack webhook > returns a retryable failure when provider verification fails
+payment webhook settlement failed
+
+ ✓ tests/integration/paystack-webhook-route.test.ts (14 tests) 32ms
+ ✓ tests/security/payments-isolation.test.ts (16 tests) 30ms
+ ✓ tests/unit/pos-money.test.ts (41 tests) 29ms
+stderr | tests/unit/erp-procurement-page.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-procurement-page.test.ts (8 tests) 28ms
+stderr | tests/integration/experience-restore-undo-concurrency.test.ts > history: undo and redo are compare-and-swaps on the version read > rethrows an unexpected database error instead of reporting a conflict
+draft history move failed
+
+ ✓ tests/integration/experience-restore-undo-concurrency.test.ts (10 tests) 29ms
+ ✓ tests/unit/experience-variant.test.ts (16 tests) 30ms
+ ✓ tests/unit/workspace-design.test.ts (25 tests) 30ms
+stderr | tests/integration/referral-end-to-end.test.ts > referral lifecycle — real handlers, real referral storage > leaves nothing behind when the business creation fails mid-transaction
+registration transaction failed
+
+ ✓ tests/integration/referral-end-to-end.test.ts (7 tests) 28ms
+stderr | tests/unit/messaging-dispatch.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/messaging-dispatch.test.ts (15 tests) 31ms
+ ✓ tests/unit/public-product-discoverability.test.ts (17 tests) 26ms
+stderr | tests/unit/erp-invoicing.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-invoicing.test.ts (17 tests) 28ms
+stderr | tests/unit/erp-automation-onboarding.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-automation-onboarding.test.ts (17 tests) 35ms
+stderr | tests/unit/erp-tasks-page.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-tasks-page.test.ts (9 tests) 31ms
+ ✓ tests/unit/experience-schema-boundary.test.ts (29 tests) 37ms
+ ✓ tests/unit/public-points-access.test.ts (25 tests) 26ms
+ ✓ tests/integration/business-contact-number-route.test.ts (22 tests) 27ms
+ ✓ tests/integration/media-durable-upload.test.ts (13 tests) 27ms
+ ✓ tests/integration/inline-media-write-routes.test.ts (12 tests) 26ms
+stderr | tests/unit/ai-front-desk-merchant-credentials.test.ts > Merchant payment credentials (§10, §14) > fails closed in production when no credential key is configured
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+stderr | tests/unit/ai-front-desk-merchant-credentials.test.ts > Merchant payment credentials (§10, §14) > encrypts credentials into a versioned envelope that never contains the plaintext
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/ai-front-desk-merchant-credentials.test.ts (3 tests) 27ms
+stderr | tests/unit/erp-entitlement.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-entitlement.test.ts (15 tests) 23ms
+ ✓ tests/unit/lime-spark-contrast.test.ts (9 tests) 20ms
+ ✓ tests/security/media-authorization.test.ts (11 tests) 28ms
+ ✓ tests/unit/sale-pricing.test.ts (30 tests) 25ms
+ ✓ tests/integration/experience-assist-route.test.ts (11 tests) 26ms
+ ✓ tests/integration/media-version-guard.test.ts (15 tests) 26ms
+stderr | tests/integration/payment-verification-route.test.ts > server payment verification route > allows only an authenticated non-production mock settlement without Paystack credentials
+payment verification failed
+
+ ✓ tests/integration/payment-verification-route.test.ts (9 tests) 21ms
+ ✓ tests/unit/control-records-route.test.ts (7 tests) 25ms
+stderr | tests/integration/experience-draft-concurrency.test.ts > PATCH draft concurrency > applies the edit when the client's base version matches the stored draft
+draft revision was not recorded
+
+stderr | tests/integration/experience-draft-concurrency.test.ts > PATCH draft concurrency > rethrows unexpected database errors instead of reporting a conflict
+experience update failed
+
+ ✓ tests/integration/experience-draft-concurrency.test.ts (8 tests) 24ms
+ ✓ tests/unit/category-imagery.test.ts (10 tests) 24ms
+stderr | tests/integration/referral-link-route.test.ts > GET /r/[code] — self-service referral entry > degrades to a plain redirect when attribution cannot be persisted
+referral attribution write failed
+
+ ✓ tests/integration/referral-link-route.test.ts (15 tests) 27ms
+ ✓ tests/unit/experience-diversity-gate.test.ts (14 tests) 22ms
+stderr | tests/security/experience-tenant-isolation.test.ts > experience editing is tenant-scoped > allows the owner to edit their own draft
+draft revision was not recorded
+
+ ✓ tests/security/experience-tenant-isolation.test.ts (8 tests) 23ms
+ ✓ tests/integration/payment-in-progress.test.ts (14 tests) 22ms
+ ✓ tests/unit/landing-header.test.ts (10 tests) 24ms
+ ✓ tests/integration/customer-lifecycle.test.ts (3 tests) 22ms
+ ✓ tests/unit/voice-handoff-speech.test.ts (16 tests) 20ms
+ ✓ tests/unit/telnyx-voice-webhook-route.test.ts (7 tests) 22ms
+ ✓ tests/unit/agent-registration.test.ts (7 tests) 20ms
+stderr | tests/unit/erp-requisitions.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-requisitions.test.ts (23 tests) 21ms
+ ✓ tests/integration/checkout-route.test.ts (8 tests) 23ms
+ ✓ tests/unit/business-hub-boundaries.test.ts (11 tests) 21ms
+ ✓ tests/unit/agent-application.test.ts (9 tests) 22ms
+ ✓ tests/unit/studio-browser-safety.test.ts (58 tests) 20ms
+stderr | tests/unit/professional-enquiry.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/professional-enquiry.test.ts (14 tests) 21ms
+ ✓ tests/integration/pos-payment-confirmation.test.ts (11 tests) 21ms
+stderr | tests/unit/autopilot-policy-consent-budget.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/autopilot-policy-consent-budget.test.ts (7 tests) 21ms
+ ✓ tests/unit/business-hub-public-points-lookup.test.ts (15 tests) 23ms
+ ✓ tests/unit/studio-canvas.test.ts (41 tests) 22ms
+stderr | tests/unit/erp-approvals-page.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-approvals-page.test.ts (6 tests) 21ms
+stderr | tests/unit/erp-tasks.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-tasks.test.ts (22 tests) 21ms
+ ✓ tests/unit/r2-storage.test.ts (8 tests) 19ms
+stderr | tests/audit/deployment-identity.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/audit/deployment-identity.test.ts (11 tests) 19ms
+ ✓ tests/unit/dependency-security-compat.test.ts (14 tests) 19ms
+ ✓ tests/security/agent-notification-operations.test.ts (4 tests) 19ms
+ ✓ tests/unit/studio-health-and-fixes.test.ts (24 tests) 19ms
+stderr | tests/unit/erp-notifications.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-notifications.test.ts (27 tests) 18ms
+ ✓ tests/unit/test-collection-guard.test.ts (4 tests) 19ms
+stderr | tests/unit/studio-draft-history.test.ts > recordDraftRevision > refuses an impossible version and never throws when history cannot be written
+draft revision was not recorded
+
+stderr | tests/unit/studio-draft-history.test.ts > moveDraftHistory > returns an empty history instead of failing when the table is unreachable
+draft revision was not recorded
+
+ ✓ tests/unit/studio-draft-history.test.ts (19 tests) 18ms
+ ✓ tests/security/ai-front-desk-tenant-isolation.test.ts (3 tests) 21ms
+ ✓ tests/unit/rate-limit.test.ts (4 tests) 19ms
+ ✓ tests/security/referral-security.test.ts (18 tests) 19ms
+ ✓ tests/security/referral-payment-boundary.test.ts (10 tests) 19ms
+ ✓ tests/unit/voice-lifecycle-metering.test.ts (28 tests) 19ms
+ ✓ tests/integration/subscription-payment-revival.test.ts (14 tests) 18ms
+ ✓ tests/unit/qi-adapter-seam.test.ts (20 tests) 18ms
+ ✓ tests/security/agent-referral-reports.test.ts (3 tests) 17ms
+ ✓ tests/unit/pos-offline-queue.test.ts (10 tests) 18ms
+ ✓ tests/security/auth-session-revocation.test.ts (6 tests) 15ms
+ ✓ tests/security/agent-commission-diagnostics.test.ts (5 tests) 16ms
+ ✓ tests/integration/business-location-route.test.ts (6 tests) 25ms
+ ✓ tests/security/agent-report-scheduler.test.ts (5 tests) 16ms
+ ✓ tests/security/agent-commission-sandbox.test.ts (4 tests) 19ms
+stderr | tests/integration/referral-registration.test.ts > registration with referral attribution > survives an unexpected referral failure without blocking registration
+referral resolution failed before registration
+
+stderr | tests/integration/referral-registration.test.ts > registration with referral attribution > rolls the whole thing back when the first business cannot be created
+registration transaction failed
+
+ ✓ tests/integration/referral-registration.test.ts (12 tests) 17ms
+ ✓ tests/security/ai-front-desk-payment-webhook-idempotency.test.ts (5 tests) 18ms
+stderr | tests/unit/messaging-sender-id.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/messaging-sender-id.test.ts (17 tests) 22ms
+ ✓ tests/integration/paystack-refund-pos.test.ts (5 tests) 17ms
+ ✓ tests/unit/contact-action-fallbacks.test.ts (6 tests) 16ms
+ ✓ tests/unit/agent-application-review.test.ts (5 tests) 19ms
+ ✓ tests/unit/ai-front-desk-accessibility.test.ts (23 tests) 16ms
+ ✓ tests/security/service-read-visibility.test.ts (8 tests) 17ms
+ ✓ tests/integration/cart-guest-and-pricing.test.ts (8 tests) 17ms
+ ✓ tests/unit/catalogue-rendering.test.ts (4 tests) 17ms
+ ✓ tests/unit/control-policy-pending-access.test.ts (7 tests) 14ms
+ ✓ tests/unit/experience-diversity.test.ts (11 tests) 15ms
+ ✓ tests/unit/m418-gate.test.ts (23 tests) 16ms
+ ✓ tests/unit/voice-call-control.test.ts (12 tests) 16ms
+ ✓ tests/integration/ai-front-desk-order-stage-transitions.test.ts (5 tests) 14ms
+ ✓ tests/unit/image-first-persistence.test.ts (9 tests) 17ms
+ ✓ tests/unit/ai-brain-sale-end.test.ts (5 tests) 15ms
+ ✓ tests/unit/agent-phone-verification.test.ts (5 tests) 12ms
+ ✓ tests/security/agent-notification-replay.test.ts (2 tests) 14ms
+stderr | tests/unit/pos-report-limit-refusal.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-report-limit-refusal.test.ts (5 tests) 16ms
+stderr | tests/unit/motion-system.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/motion-system.test.ts (16 tests) 14ms
+stderr | tests/unit/erp-team.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-team.test.ts (17 tests) 20ms
+stderr | tests/unit/control-role-policy.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/control-role-policy.test.ts (6 tests) 15ms
+ ✓ tests/unit/payment-settlement.test.ts (8 tests) 15ms
+ ✓ tests/security/agent-notification-worker.test.ts (2 tests) 14ms
+stderr | tests/unit/payments-core.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/payments-core.test.ts (16 tests) 15ms
+ ✓ tests/unit/product-themes.test.ts (6 tests) 14ms
+ ✓ tests/unit/pos-banner.test.ts (6 tests) 15ms
+stderr | tests/unit/experience-operations.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/experience-operations.test.ts (17 tests) 14ms
+ ✓ tests/unit/durable-asset-store.test.ts (9 tests) 13ms
+ ✓ tests/unit/agent-landing.test.ts (2 tests) 15ms
+ ✓ tests/unit/ai-payment-request-integrity.test.ts (8 tests) 15ms
+ ✓ tests/unit/pos-offline-sync-client.test.ts (8 tests) 13ms
+ ✓ tests/integration/studio-health-guard.test.ts (5 tests) 14ms
+ ✓ tests/unit/website-studio-master-spec.test.ts (4 tests) 21ms
+ ✓ tests/unit/meta-whatsapp-webhook-route.test.ts (3 tests) 14ms
+ ✓ tests/unit/public-loyalty-rewards-state.test.ts (8 tests) 18ms
+ ✓ tests/integration/inline-media-opaque-write-routes.test.ts (3 tests) 12ms
+ ✓ tests/unit/workspace-status-tokens.test.ts (9 tests) 12ms
+stderr | tests/unit/autopilot-entitlement-and-packs.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/autopilot-entitlement-and-packs.test.ts (7 tests) 13ms
+stderr | tests/unit/checkout-idempotency.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/checkout-idempotency.test.ts (9 tests) 11ms
+ ✓ tests/unit/media-persistence-policy.test.ts (7 tests) 12ms
+ ✓ tests/unit/agent-decision.test.ts (2 tests) 12ms
+ ✓ tests/integration/health-route.test.ts (5 tests) 14ms
+ ✓ tests/security/agent-notification-attempts.test.ts (2 tests) 12ms
+stderr | tests/unit/front-desk-tier-catalogue.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/front-desk-tier-catalogue.test.ts (17 tests) 14ms
+stderr | tests/unit/paystack-client.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/paystack-client.test.ts (6 tests) 14ms
+ ✓ tests/security/studio-website-publication-isolation.test.ts (4 tests) 12ms
+ ✓ tests/unit/media-prepare-fallback.test.ts (9 tests) 9ms
+ ✓ tests/unit/storefront-public-content.test.ts (4 tests) 13ms
+stderr | tests/unit/mpesa-reversal-receipt.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/mpesa-reversal-receipt.test.ts (3 tests) 11ms
+ ✓ tests/unit/storefront-preview-metadata.test.ts (8 tests) 13ms
+ ✓ tests/security/agent-report-scheduler-runs.test.ts (2 tests) 12ms
+ ✓ tests/integration/ai-front-desk-publish-atomicity.test.ts (4 tests) 12ms
+stderr | tests/unit/original-design-restoration-2026.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/original-design-restoration-2026.test.ts (11 tests) 12ms
+ ✓ tests/unit/password-reset-email.test.ts (8 tests) 12ms
+ ✓ tests/unit/onboarding-draft.test.ts (10 tests) 12ms
+ ✓ tests/unit/pos-credit-period-projection.test.ts (2 tests) 11ms
+ ✓ tests/unit/subscription-flow.test.ts (21 tests) 9ms
+ ✓ tests/unit/sale-channels.test.ts (15 tests) 11ms
+ ✓ tests/unit/creative-engine.test.ts (14 tests) 11ms
+ ✓ tests/security/agent-referral-summary.test.ts (3 tests) 11ms
+ ✓ tests/security/agent-commission-summary.test.ts (3 tests) 12ms
+stderr | tests/unit/autopilot-security-multimodal.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/autopilot-security-multimodal.test.ts (5 tests) 11ms
+ ✓ tests/unit/prisma-write-policy.test.ts (13 tests) 11ms
+ ✓ tests/unit/agent-admin-notification-plan.test.ts (7 tests) 11ms
+ ✓ tests/unit/dashboard-ux.test.ts (9 tests) 11ms
+ ✓ tests/unit/storage-provider.test.ts (13 tests) 12ms
+ ✓ tests/unit/experience-categories.test.ts (6 tests) 11ms
+stderr | tests/unit/voice-call-events.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/voice-call-events.test.ts (13 tests) 11ms
+ ✓ tests/unit/direct-url-guard.test.ts (17 tests) 15ms
+ ✓ tests/unit/experience-pricing.test.ts (9 tests) 11ms
+ ✓ tests/unit/messaging-segments-consent.test.ts (18 tests) 10ms
+ ✓ tests/unit/agent-registration-referral.test.ts (3 tests) 10ms
+ ✓ tests/security/login-session-version.test.ts (1 test) 10ms
+stderr | tests/unit/phase5-intelligence.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/phase5-intelligence.test.ts (10 tests) 10ms
+ ✓ tests/unit/experience-copy-variation.test.ts (4 tests) 9ms
+stderr | tests/unit/phase1-foundation.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/phase1-foundation.test.ts (9 tests) 8ms
+ ✓ tests/unit/erp-etims.test.ts (18 tests) 9ms
+ ✓ tests/unit/autopilot-controls-repair.test.ts (14 tests) 9ms
+ ✓ tests/unit/url.test.ts (19 tests) 10ms
+ ✓ tests/unit/business-hub-catalogue.test.ts (9 tests) 10ms
+ ✓ tests/unit/ai-front-desk-reconciliation-dry-run.test.ts (10 tests) 8ms
+ ✓ tests/unit/local-preview-headers.test.ts (5 tests) 12ms
+ ✓ tests/unit/experience-render-mode.test.ts (15 tests) 12ms
+ ✓ tests/unit/publication-state-machine.test.ts (16 tests) 9ms
+ ✓ tests/unit/experience-themes.test.ts (5 tests) 11ms
+stderr | tests/unit/plan-catalogue-visibility.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/plan-catalogue-visibility.test.ts (9 tests) 9ms
+ ✓ tests/unit/recovery-screens.test.ts (7 tests) 6ms
+ ✓ tests/unit/agent-paystack-sandbox-diagnostics.test.ts (3 tests) 9ms
+ ✓ tests/unit/order-payment-reference.test.ts (9 tests) 8ms
+ ✓ tests/security/agent-admin-notifications.test.ts (1 test) 9ms
+ ✓ tests/unit/payment-reference.test.ts (2 tests) 5ms
+ ✓ tests/unit/experience-document.test.ts (8 tests) 8ms
+ ✓ tests/unit/pos-reporting-period-policy.test.ts (5 tests) 7ms
+ ✓ tests/unit/front-desk-entitlement-sync.test.ts (5 tests) 8ms
+ ✓ tests/unit/landing-motion.test.ts (10 tests) 8ms
+stderr | tests/unit/control-audit.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/control-audit.test.ts (2 tests) 10ms
+ ✓ tests/unit/storefront-contrast-and-specificity.test.ts (9 tests) 11ms
+stderr | tests/unit/website-studio-naming.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/website-studio-naming.test.ts (14 tests) 8ms
+ ✓ tests/unit/messaging-live-gate.test.ts (8 tests) 8ms
+ ✓ tests/unit/erp-money-tax.test.ts (12 tests) 7ms
+stderr | tests/unit/pos-credit-statement-safety.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-credit-statement-safety.test.ts (3 tests) 7ms
+ ✓ tests/unit/voice-llm.test.ts (4 tests) 11ms
+ ✓ tests/security/publication-access.test.ts (11 tests) 8ms
+ ✓ tests/security/tenant-isolation.test.ts (8 tests) 7ms
+ ✓ tests/integration/onboarding.test.ts (7 tests) 6ms
+stderr | tests/unit/pos-dashboard-report-safety.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-dashboard-report-safety.test.ts (2 tests) 7ms
+stderr | tests/unit/phase3-commerce.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/phase3-commerce.test.ts (11 tests) 7ms
+stderr | tests/unit/pos-bounded-totals.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-bounded-totals.test.ts (2 tests) 9ms
+ ✓ tests/unit/agent-admin-notification-claims.test.ts (5 tests) 7ms
+stderr | tests/unit/plan-key-normalization.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/plan-key-normalization.test.ts (7 tests) 7ms
+ ✓ tests/unit/plan-availability.test.ts (7 tests) 7ms
+ ✓ tests/unit/ai-public-pricing.test.ts (8 tests) 8ms
+ ✓ tests/unit/media-derivatives.test.ts (9 tests) 7ms
+ ✓ tests/unit/business-page-contrast.test.ts (5 tests) 7ms
+ ✓ tests/unit/immersive-policy.test.ts (15 tests) 7ms
+ ✓ tests/unit/pos-refund-report-snapshot.test.ts (6 tests) 7ms
+ ✓ tests/unit/publication-gate.test.ts (16 tests) 8ms
+ ✓ tests/unit/erp-tax.test.ts (10 tests) 6ms
+ ✓ tests/unit/agent-application-throttle.test.ts (3 tests) 7ms
+ ✓ tests/unit/slug.test.ts (8 tests) 6ms
+ ✓ tests/unit/pos-prisma-contract.test.ts (6 tests) 7ms
+ ✓ tests/unit/agent-commission-calculation.test.ts (6 tests) 7ms
+stderr | tests/unit/ai-entitlement.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/ai-entitlement.test.ts (6 tests) 5ms
+ ✓ tests/unit/telnyx-webhook-signature.test.ts (4 tests) 6ms
+ ✓ tests/unit/agent-admin-notification-event.test.ts (5 tests) 7ms
+ ✓ tests/unit/agent-commission-reconciliation.test.ts (4 tests) 7ms
+stderr | tests/unit/referral-eligibility.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/referral-eligibility.test.ts (12 tests) 7ms
+ ✓ tests/unit/checkout-status.test.ts (8 tests) 6ms
+ ✓ tests/unit/location-payment.test.ts (7 tests) 7ms
+ ✓ tests/unit/agent-notification-worker-gate.test.ts (2 tests) 6ms
+ ✓ tests/unit/media-webp-output.test.ts (9 tests) 6ms
+ ✓ tests/unit/agent-admin-notification-config.test.ts (10 tests) 7ms
+ ✓ tests/unit/experience-schema-compat.test.ts (4 tests) 6ms
+stderr | tests/unit/phase4-notifications.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/phase4-notifications.test.ts (8 tests) 5ms
+ ✓ tests/unit/website-studio-plan-entitlements.test.ts (3 tests) 6ms
+ ✓ tests/unit/storage-quota.test.ts (6 tests) 6ms
+ ✓ tests/unit/telnyx-voice-readiness.test.ts (5 tests) 6ms
+ ✓ tests/security/agent-login-redirect.test.ts (5 tests) 6ms
+ ✓ tests/security/paystack-security.test.ts (6 tests) 6ms
+ ✓ tests/unit/themes.test.ts (4 tests) 5ms
+stderr | tests/unit/erp-postjournal-transaction.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/erp-postjournal-transaction.test.ts (2 tests) 6ms
+ ✓ tests/unit/phone.test.ts (8 tests) 5ms
+ ✓ tests/unit/catalogue-server-boundary.test.ts (4 tests) 5ms
+stderr | tests/unit/pricing-ai.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pricing-ai.test.ts (7 tests) 5ms
+ ✓ tests/unit/erp-migration-baseline.test.ts (2 tests) 4ms
+ ✓ tests/unit/render-mode-immersive.test.ts (8 tests) 5ms
+ ✓ tests/unit/validation.test.ts (5 tests) 5ms
+ ✓ tests/unit/autopilot-activation-ui.test.ts (7 tests) 5ms
+ ✓ tests/unit/payments-config-url.test.ts (3 tests) 5ms
+ ✓ tests/unit/pos-credit-age-fifo.test.ts (3 tests) 5ms
+ ✓ tests/unit/experience-prompt-variation.test.ts (5 tests) 5ms
+stderr | tests/unit/ai-entitlement-plan-substitution.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/ai-entitlement-plan-substitution.test.ts (6 tests) 5ms
+ ✓ tests/unit/og-image.test.ts (6 tests) 5ms
+ ✓ tests/unit/agent-commission-storage-display.test.ts (2 tests) 5ms
+stderr | tests/unit/pos-report-snapshot-period.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/unit/pos-report-snapshot-period.test.ts (2 tests) 4ms
+ ✓ tests/unit/status-labels.test.ts (5 tests) 5ms
+ ✓ tests/unit/website-studio-tenant-policy.test.ts (5 tests) 4ms
+ ✓ tests/unit/agent-report-periods.test.ts (3 tests) 4ms
+ ✓ tests/unit/qr-domain.test.ts (3 tests) 4ms
+ ✓ tests/unit/pos-erp-workflow-tools.test.ts (2 tests) 4ms
+ ✓ tests/unit/next-env-build-mode.test.ts (3 tests) 4ms
+stderr | tests/e2e/interactive-business-journey.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ✓ tests/e2e/interactive-business-journey.test.ts (18 tests | 17 skipped) 3ms
+stderr | tests/e2e/business-hub-journey.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/e2e/business-hub-journey.test.ts (14 tests | 14 skipped)
+stderr | tests/e2e/business-pos-journey.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/e2e/business-pos-journey.test.ts (33 tests | 33 skipped)
+stderr | tests/integration/ai-front-desk-entitlement-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/ai-front-desk-entitlement-postgres.test.ts (5 tests | 5 skipped)
+stderr | tests/integration/business-hub-loyalty-points-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/business-hub-loyalty-points-postgres.test.ts (20 tests | 20 skipped)
+stderr | tests/integration/erp-approvals-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/erp-approvals-postgres.test.ts (13 tests | 13 skipped)
+stderr | tests/integration/erp-notifications-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/erp-notifications-postgres.test.ts (11 tests | 11 skipped)
+ ↓ tests/integration/erp-pro-postgres.test.ts (19 tests | 19 skipped)
+stderr | tests/integration/erp-procurement-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/erp-procurement-postgres.test.ts (9 tests | 9 skipped)
+stderr | tests/integration/erp-requisitions-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/erp-requisitions-postgres.test.ts (7 tests | 7 skipped)
+stderr | tests/integration/erp-tasks-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/erp-tasks-postgres.test.ts (13 tests | 13 skipped)
+stderr | tests/integration/openpage-authenticated-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/openpage-authenticated-postgres.test.ts (6 tests | 6 skipped)
+stderr | tests/integration/payment-wallet-refunds-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/payment-wallet-refunds-postgres.test.ts (4 tests | 4 skipped)
+stderr | tests/integration/payment-wallet-stk-receipt-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/payment-wallet-stk-receipt-postgres.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/pos-category-concurrency-postgres.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/pos-provider-reversal-postgres.test.ts (5 tests | 5 skipped)
+stderr | tests/integration/pos-refund-race-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/integration/pos-refund-race-postgres.test.ts (1 test | 1 skipped)
+ ↓ tests/integration/pos-repayment-refund-race-postgres.test.ts (15 tests | 15 skipped)
+ ↓ tests/integration/pos-snapshot-exclusion-postgres.test.ts (2 tests | 2 skipped)
+ ↓ tests/integration/pos-supplier-concurrency-postgres.test.ts (9 tests | 9 skipped)
+ ↓ tests/prisma/agent-applications-postgres.test.ts (19 tests | 19 skipped)
+ ↓ tests/prisma/agent-commission-diagnostics-postgres.test.ts (4 tests | 4 skipped)
+ ↓ tests/prisma/agent-commission-ledger-postgres.test.ts (7 tests | 7 skipped)
+ ↓ tests/prisma/agent-notification-claims-postgres.test.ts (4 tests | 4 skipped)
+ ↓ tests/prisma/agent-notification-worker-postgres.test.ts (7 tests | 7 skipped)
+ ↓ tests/prisma/agent-report-scheduler-postgres.test.ts (9 tests | 9 skipped)
+ ↓ tests/prisma/agent-report-versions-postgres.test.ts (7 tests | 7 skipped)
+stderr | tests/prisma/autopilot-constraints-and-concurrency.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/prisma/autopilot-constraints-and-concurrency.test.ts (3 tests | 3 skipped)
+stderr | tests/prisma/checkout-commit.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/prisma/checkout-commit.test.ts (6 tests | 6 skipped)
+stderr | tests/prisma/control-plane-foundation-postgres.test.ts
+PrismaClient not available (offline fallback active): @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+
+ ↓ tests/prisma/control-plane-foundation-postgres.test.ts (4 tests | 4 skipped)
+ ↓ tests/prisma/experience-art-direction.test.ts (6 tests | 6 skipped)
+ ↓ tests/prisma/experience-boundary.test.ts (8 tests | 8 skipped)
+ ↓ tests/prisma/media-storage-identity-postgres.test.ts (1 test | 1 skipped)
+ ↓ tests/prisma/payment-settlement.test.ts (12 tests | 12 skipped)
+ ↓ tests/prisma/pos-publication-policy.test.ts (4 tests | 4 skipped)
+ ↓ tests/prisma/professional-enquiries.test.ts (5 tests | 5 skipped)
+ ↓ tests/prisma/schema-constraints.test.ts (6 tests | 6 skipped)
+ ↓ tests/prisma/storefront-checkout.test.ts (15 tests | 15 skipped)
+ ↓ tests/prisma/subscription-payment.test.ts (5 tests | 5 skipped)
+ ↓ tests/prisma/user-role-revocation-postgres.test.ts (4 tests | 4 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/autopilot-phase1-hardening.test.ts > Stage C Phase 1 adversarial hardening across all 10 priorities > Priority 1: validates PostgreSQL migration SQL identifier lengths (<63 bytes), constraint guards, DMMF parity & P2002 recovery
+TypeError: Cannot read properties of undefined (reading 'datamodel')
+ ❯ tests/unit/autopilot-phase1-hardening.test.ts:493:38
+    491|     expect(sql).toContain("AutopilotCustomerProfile_businessId_emailNo…
+    492|
+    493|     const profileModel = Prisma.dmmf.datamodel.models.find(
+       |                                      ^
+    494|       (m) => m.name === "AutopilotCustomerProfile",
+    495|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 377 passed | 39 skipped (417)
+      Tests  1 failed | 4518 passed | 343 skipped (4862)
+   Start at  18:14:54
+   Duration  129.15s (transform 10.74s, setup 3.65s, import 43.87s, tests 28.33s, environment 1.80s)
