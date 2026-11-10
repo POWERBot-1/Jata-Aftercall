@@ -800,7 +800,13 @@ button:focus-visible {
   height: auto;
 }
 
-.eb-scope a {
+/* `:where()` keeps the specificity of this rule at a single class, so a button that happens to be
+ * rendered as an <a> can still state its own colour. Without it this rule (0,1,1) out-ranked
+ * `.eb-btn` (0,1,0) and every anchor-styled button fell back to inherited text: the solid buttons
+ * painted their brand background but drew dark text on it, measuring 2.03:1 — a real WCAG AA
+ * failure on the primary call-to-action across every storefront. The intent here is unchanged:
+ * ordinary links inherit, buttons say what they need. */
+.eb-scope :where(a) {
   color: inherit;
   text-decoration: none;
 }
@@ -859,7 +865,10 @@ button:focus-visible {
   max-width: 46ch;
   margin-top: 0.85rem;
   font-size: 1.0625rem;
-  color: var(--eb-muted);
+  /* Same surface mismatch as the card description: the lede sits on the page background, not on
+   * `--eb-surface`, and `--eb-muted` alone measured 4.32:1 here — just under AA. Mixing toward the
+   * page's own text colour darkens only this surface's shortfall and keeps following the theme. */
+  color: color-mix(in srgb, var(--eb-muted) 84%, var(--eb-text, #101010));
 }
 
 .eb-muted { color: var(--eb-muted); }
@@ -1068,13 +1077,17 @@ button:focus-visible {
 .eb-card__body { display: flex; flex: 1; flex-direction: column; gap: 0.4rem; padding: 1rem 1rem 1.15rem; }
 .eb-card__title { font-family: var(--eb-font-display); font-size: 1.02rem; font-weight: var(--eb-heading-weight); letter-spacing: var(--eb-heading-tracking); }
 .eb-card__meta { font-size: 0.85rem; color: var(--eb-muted); }
+/* `--eb-muted` is tuned against the theme's `surface`, but card bodies paint on `--eb-card`, which
+ * is white in this theme. The same token therefore measured 4.05:1 here — under the 4.5:1 AA floor
+ * for 14px body text. A colour-mix toward the card's own text colour darkens only as much as this
+ * surface needs (measured 4.84:1) and still follows the theme, rather than hard-coding a grey. */
 .eb-card__desc {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   font-size: 0.9rem;
-  color: var(--eb-muted);
+  color: color-mix(in srgb, var(--eb-muted) 78%, var(--eb-text, #101010));
 }
 .eb-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: auto; padding-top: 0.6rem; }
 
@@ -1222,6 +1235,13 @@ button:focus-visible {
  * (`overflow-wrap: anywhere`) instead of bleeding. Typography, colours, padding and the 44 px
  * touch target are unchanged. */
 .eb-actionbar .eb-btn { flex: 1 1 45%; min-width: 0; padding-inline: 0.5rem; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.2; }
+/* The action-bar primary CTA inherits the brand colour, and the shipped brand (#C24A27) with cream
+ * text measured 4.40:1 — just under the 4.5:1 AA floor, on the most-tapped control on the page.
+ * A small darkening settles it at 5.68:1 while looking like the same brand colour. Scoped to the
+ * action bar so in-page CTAs, which sit on different surfaces, are unaffected. */
+.eb-actionbar .eb-btn:not(.eb-btn--outline) {
+  background: color-mix(in srgb, var(--eb-primary, #c24a27) 86%, #000);
+}
 @media (min-width: 900px) { .eb-actionbar { display: none; } }
 /* Reserve the full two-row height below 900px so the fixed bar never covers page content.
  *
@@ -3954,7 +3974,7 @@ button:focus-visible {
 .jc-mt { margin-top: 1rem; }
 .jc-muted { margin: 0; font-size: 0.8rem; color: var(--jata-muted); line-height: 1.45; }
 .jc-help { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--jata-muted); line-height: 1.4; }
-.jc-link { color: #1d4ed8; text-decoration: underline; text-underline-offset: 2px; }
+.jc-link { color: #93c5fd; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ------------------------------------------------------------------ outline */
 
@@ -3990,7 +4010,7 @@ button:focus-visible {
   cursor: pointer;
 }
 .jc-row__select:focus-visible { outline: 2px solid var(--jata-focus); outline-offset: 2px; }
-.jc-row__index { font-size: 0.7rem; font-weight: 700; color: #a1a1aa; font-variant-numeric: tabular-nums; }
+.jc-row__index { font-size: 0.7rem; font-weight: 700; color: #d4d4d8; font-variant-numeric: tabular-nums; }
 .jc-row__text { display: flex; flex-direction: column; min-width: 0; }
 .jc-row__label { font-size: 0.82rem; font-weight: 700; color: var(--jata-ink); }
 .jc-row__title { font-size: 0.72rem; color: var(--jata-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5454,8 +5474,13 @@ html[data-jata-theme="lime-spark"] .ws-shell .ws-plan__includes svg { color: var
   border-color: color-mix(in srgb, currentColor 30%, transparent);
   background: color-mix(in srgb, currentColor 4%, transparent);
 }
-.jata-contact-action--whatsapp { background: rgb(4 120 87); color: rgb(255 255 255); }
-.jata-contact-action--call { background: var(--jata-accent, rgb(217 119 6)); color: rgb(255 255 255); }
+/* WCAG 2.1 AA contrast (measured, not estimated). These two solid buttons carried white text on
+ * surfaces that were too light: WhatsApp green-700 measured 5.48:1 (passes), but the amber-600 Call
+ * button measured only 3.19:1 against white — below the 4.5:1 AA floor for 13-15 px text. Green is
+ * deepened to 6 95 70 (7.68:1) and Call to 180 83 9 (5.02:1) so both clear AA with margin. The
+ * hues stay recognisable as WhatsApp green and amber; only lightness changes. */
+.jata-contact-action--whatsapp { background: rgb(6 95 70); color: rgb(255 255 255); }
+.jata-contact-action--call { background: rgb(180 83 9); color: rgb(255 255 255); }
 .jata-contact-action[data-contact-state="unavailable"] {
   border-style: dashed;
   border-color: color-mix(in srgb, currentColor 28%, transparent);
