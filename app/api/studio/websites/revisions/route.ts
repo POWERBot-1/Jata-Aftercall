@@ -8,6 +8,14 @@ import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Machine-readable code for every refusal caused by the document itself. Publish already sent
+ * this code; this route sent the same refusal with no code at all, so a client could not tell
+ * "your document is unsupported" from "we could not reach the database" without parsing prose.
+ * Local constant: routes never import from each other.
+ */
+const EXPERIENCE_SCHEMA_INVALID_CODE = "experience_schema_invalid";
+
 /** Restore a same-site draft revision as a new revision; never rewinds or overwrites history. */
 export async function POST(request: Request) {
   const session = await getSession();
@@ -44,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const validated = validateExperienceJson(revision.snapshotJson, business?.category);
-    if (!validated.ok) return NextResponse.json({ error: "That revision cannot be restored safely.", issues: validated.issues }, { status: 422 });
+    if (!validated.ok) return NextResponse.json({ error: "That revision cannot be restored safely.", code: EXPERIENCE_SCHEMA_INVALID_CODE, issues: validated.issues }, { status: 422 });
     if (containsInlineImageDataUrl(validated.document)) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }

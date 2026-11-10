@@ -20,6 +20,14 @@ function safeStatus(error: unknown) {
   return status >= 400 && status <= 599 ? status : 500;
 }
 
+/**
+ * Machine-readable code for every refusal caused by the document itself. Publish already sent
+ * this code; save, restore and rollback sent the same refusal with no code at all, so a client
+ * could not tell "your document is unsupported" from "we could not reach the database" without
+ * parsing prose. Kept as a local constant because this route must not import from another route.
+ */
+const EXPERIENCE_SCHEMA_INVALID_CODE = "experience_schema_invalid";
+
 /** Read one site's isolated draft and published documents after server-side tenant authorization. */
 export async function GET(request: Request) {
   const session = await getSession();
@@ -106,9 +114,41 @@ export async function PUT(request: Request) {
       );
     }
 
-    const validated = validateExperienceJson(serialized, business.category);
+    // The site's own business is the authority on its category. The draft used to be validated
+    // against the business's category and then stored with whatever category the caller put in
+    // the body, so a document asking for a different category was accepted and silently changed
+    // which sections, catalogue rules and storefront flow this site renders with. Pinning the
+    // category here makes the stored document agree with the tenant, and validation below then
+    // refuses anything inconsistent instead of quietly rewriting it.
+    // Only a plain object is a document. Anything else is refused rather than repaired: pinning a
+    // category onto a non-document would turn the caller's payload into a *default* website and
+    // store that, which is the one outcome worse than an error.
+    const rawDocument = body.document;
+    if (!rawDocument || typeof rawDocument !== "object" || Array.isArray(rawDocument)) {
+      return NextResponse.json({ error: "A website document is required." }, { status: 400 });
+    }
+    const requested = rawDocument as Record<string, unknown>;
+    if (requested.categoryKey !== undefined && requested.categoryKey !== business.category) {
+      return NextResponse.json(
+        {
+          error: "This website belongs to a different kind of business. Nothing was changed.",
+          code: EXPERIENCE_SCHEMA_INVALID_CODE,
+        },
+        { status: 422 },
+      );
+    }
+    const pinned = { ...requested, categoryKey: business.category };
+    let pinnedJson: string;
+    try { pinnedJson = JSON.stringify(pinned); } catch {
+      return NextResponse.json({ error: "The website draft is not valid JSON." }, { status: 400 });
+    }
+
+    const validated = validateExperienceJson(pinnedJson, business.category);
     if (!validated.ok) {
-      return NextResponse.json({ error: "The website draft failed validation.", issues: validated.issues }, { status: 422 });
+      return NextResponse.json(
+        { error: "The website draft failed validation.", code: EXPERIENCE_SCHEMA_INVALID_CODE, issues: validated.issues },
+        { status: 422 },
+      );
     }
 
     const current = await ensureStudioWebsiteContent(websiteId, access.businessId);
