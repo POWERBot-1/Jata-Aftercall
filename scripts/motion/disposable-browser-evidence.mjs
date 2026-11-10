@@ -78,16 +78,26 @@ try {
       row.annotationBudget=budget;
       row.annotationPublished=false;
       // Shrink in the BROWSER, not by asking Puppeteer for a smaller JPEG: `quality` alone left every
-      // tier the same pixel size, so no tier ever fit and the publisher silently emitted nothing.
-      // Chrome's own setDeviceMetricsOverride downsamples the viewport before encoding.
-      // NOTE: CDP metrics overrides supersede `page.setViewport`, so the ORIGINAL metrics are restored
-      // inside the loop's `finally` — the rest of this viewport's evidence must not be left rescaled.
+      // tier the same pixel size, so no tier ever fit and the publisher emitted nothing.
+      // Chrome's setDeviceMetricsOverride downsamples before encoding, but `page.screenshot`
+      // re-applies Puppeteer's own tracked viewport and silently undoes the override (measured:
+      // 1366x768 stayed ~35,400 bytes at every tier). Capture through CDP directly instead.
+      // The original metrics are restored after the loop so no later evidence is left rescaled.
       const cdp=await page.createCDPSession();
+      let previousBytes=null;
       for (const tier of THUMBNAIL_TIERS) {
         const scale=Math.min(1,tier.width/width);
         await cdp.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:scale,mobile:false});
-        const thumbnail=await page.screenshot({type:'jpeg',quality:tier.quality,fullPage:false});
-        const plan=planVisualAnnotations(Buffer.from(thumbnail).toString('base64'),{maxAnnotations:budget});
+        const shot=await cdp.send('Page.captureScreenshot',{format:'jpeg',quality:tier.quality,captureBeyondViewport:false});
+        const thumbnail=Buffer.from(shot.data,'base64');
+        row.annotationTierBytes=[...(row.annotationTierBytes||[]),thumbnail.length];
+        // A tier that produces identical bytes to the previous tier means the downscale was not
+        // applied. Report that instead of looping through ten no-ops and calling it "too tight".
+        if(previousBytes!==null && thumbnail.length===previousBytes) {
+          row.annotationScaleIgnored=true;
+        }
+        previousBytes=thumbnail.length;
+        const plan=planVisualAnnotations(thumbnail.toString('base64'),{maxAnnotations:budget});
         if(!plan.fits) { row.annotationSkipped=plan.reason; continue; }
         for(let i=0;i<plan.chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${plan.chunks.length}::${plan.chunks[i]}`);
         row.annotation={tier,parts:plan.chunks.length,bytes:plan.bytes};
@@ -98,7 +108,10 @@ try {
       // Silence is what hid the previous defect: a viewport that published nothing looked identical
       // to one that published successfully. A viewport with no whole image fails the run.
       if(!row.annotationPublished) {
-        console.log(`::error title=MOTION_VISUAL_MISSING_${width}x${height}::No thumbnail tier fit the per-viewport annotation budget (${budget}); ${row.annotationSkipped || 'no tier attempted'}. This viewport has no inspectable pixel evidence.`);
+        const why = row.annotationScaleIgnored
+          ? `the browser ignored the downscale (tier byte sizes did not change: ${(row.annotationTierBytes||[]).join('/')})`
+          : `${row.annotationSkipped || 'no tier attempted'}`;
+        console.log(`::error title=MOTION_VISUAL_MISSING_${width}x${height}::No thumbnail tier fit the per-viewport annotation budget (${budget}); ${why}. This viewport has no inspectable pixel evidence.`);
       }
     }
     if(recorder) await recorder.stop();
