@@ -6,8 +6,8 @@
  * Describe → understand → generate multiple distinct layouts → compare live previews →
  * refine conversationally or with the inspector → approve/save → publish.
  *
- * The legacy Studio remains available while this replacement is proven; this component
- * never bypasses JATA's draft/published separation, entitlement checks or tenant guards.
+ * This is the single owner editing surface. It preserves JATA's draft/published separation,
+ * entitlement checks, tenant guards and existing storefront renderer.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -341,7 +341,7 @@ export function WebsiteStudio(props: WebsiteStudioProps) {
           <a className="jata-btn jata-btn-secondary" href={props.publicUrl} target="_blank" rel="noopener noreferrer">
             <Eye size={14} /> View site
           </a>
-          <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${props.business.id}`}>
+          <Link className="jata-btn jata-btn-ghost" href="/dashboard/studio">
             Classic editor
           </Link>
         </div>
