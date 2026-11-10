@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   experience: null as any,
   business: null as any,
   experienceUpdate: vi.fn(),
+  experienceUpdateMany: vi.fn(),
+  businessUpdateMany: vi.fn(),
   experienceCreate: vi.fn(),
   versionFindMany: vi.fn(),
   revision: vi.fn(),
@@ -48,10 +50,13 @@ vi.mock("@/lib/db", () => ({
       findUnique: vi.fn(async () => mocks.business),
       // An explicit type change now moves the business record with the draft.
       update: vi.fn(async () => mocks.business),
+      updateMany: mocks.businessUpdateMany,
     },
     businessExperience: {
       findUnique: vi.fn(async () => mocks.experience),
       update: mocks.experienceUpdate,
+      // A category change now writes the draft through a compare-and-swap inside a transaction.
+      updateMany: mocks.experienceUpdateMany,
       create: mocks.experienceCreate,
     },
     experienceVersion: { findMany: mocks.versionFindMany },
@@ -62,6 +67,11 @@ vi.mock("@/lib/db", () => ({
     payment: { findFirst: vi.fn(async () => null) },
     subscription: { findUnique: vi.fn(async () => null) },
     interactiveBusinessEntitlement: { findUnique: vi.fn(async () => null), upsert: vi.fn(async () => ({})) },
+    // A category change writes the draft and the business record in one transaction.
+    $transaction: vi.fn(async (callback: any) => callback({
+      business: { updateMany: mocks.businessUpdateMany },
+      businessExperience: { updateMany: mocks.experienceUpdateMany, create: mocks.experienceCreate },
+    })),
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
@@ -110,6 +120,8 @@ beforeEach(() => {
     openingHours: null,
   };
   mocks.experienceUpdate.mockResolvedValue({ id: "exp-a", draftVersion: 4, publishedVersion: 2, status: "PUBLISHED", updatedAt: new Date(0) });
+  mocks.experienceUpdateMany.mockResolvedValue({ count: 1 });
+  mocks.businessUpdateMany.mockResolvedValue({ count: 1 });
   mocks.experienceCreate.mockImplementation(async (args: any) => ({ id: "exp-new", ...args.data }));
   mocks.versionFindMany.mockResolvedValue([]);
   mocks.revision.mockResolvedValue(undefined);
@@ -330,7 +342,9 @@ describe("POST: changing the business type of an existing draft must name its ba
     const before = baseDocument();
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
     expect(response.status).toBe(200);
-    const args = mocks.experienceUpdate.mock.calls[0][0];
+    // A type change now writes the draft through a compare-and-swap inside a transaction, so the
+    // same guarantee is asserted on the transactional write: it is pinned to the version read.
+    const args = mocks.experienceUpdateMany.mock.calls[0][0];
     expect(args.where).toEqual({ businessId: OWNED, draftVersion: 3 });
     expect(args.data.categoryKey).toBe("retail");
     const written = JSON.parse(args.data.draftJson);
@@ -339,7 +353,7 @@ describe("POST: changing the business type of an existing draft must name its ba
   });
 
   it("returns 409 and records no revision when another write lands between read and update", async () => {
-    mocks.experienceUpdate.mockRejectedValue(Object.assign(new Error("Record to update not found."), { code: "P2025" }));
+    mocks.experienceUpdateMany.mockResolvedValue({ count: 0 });
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
     expect(response.status).toBe(409);
     expect(mocks.revision).not.toHaveBeenCalled();

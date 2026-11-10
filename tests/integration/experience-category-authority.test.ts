@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   experienceUpdate: vi.fn(),
   experienceCreate: vi.fn(),
   businessUpdate: vi.fn(),
+  businessUpdateMany: vi.fn(),
+  draftUpdateMany: vi.fn(),
+  transaction: vi.fn(),
   revision: vi.fn(),
   audit: vi.fn(),
 }));
@@ -44,13 +47,19 @@ vi.mock("@/lib/experience/ensure-default-website", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   default: {
-    business: { findUnique: vi.fn(async () => mocks.business), update: mocks.businessUpdate },
+    business: { findUnique: vi.fn(async () => mocks.business), update: mocks.businessUpdate, updateMany: mocks.businessUpdateMany },
     businessExperience: {
       findUnique: vi.fn(async () => mocks.experience),
       update: mocks.experienceUpdate,
       create: mocks.experienceCreate,
+      updateMany: mocks.draftUpdateMany,
     },
     experienceVersion: { findMany: vi.fn(async () => []) },
+    // The category change is applied inside one transaction with the draft write.
+    $transaction: vi.fn(async (callback: any) => callback({
+      business: { updateMany: mocks.businessUpdateMany },
+      businessExperience: { updateMany: mocks.draftUpdateMany, create: mocks.experienceCreate },
+    })),
     auditEvent: { create: mocks.audit },
   },
 }));
@@ -98,6 +107,8 @@ beforeEach(() => {
   mocks.experienceUpdate.mockResolvedValue({ id: "exp-a", draftVersion: 4, publishedVersion: 2, status: "PUBLISHED", updatedAt: new Date(0) });
   mocks.experienceCreate.mockImplementation(async (args: any) => ({ id: "exp-new", ...args.data }));
   mocks.businessUpdate.mockResolvedValue({});
+  mocks.businessUpdateMany.mockResolvedValue({ count: 1 });
+  mocks.draftUpdateMany.mockResolvedValue({ count: 1 });
   mocks.revision.mockResolvedValue(undefined);
   mocks.audit.mockResolvedValue({});
 });
@@ -112,14 +123,14 @@ describe("create website: the business record decides the category", () => {
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "realestate" }, "POST"));
     expect(response.status).toBe(201);
     expect(mocks.experienceCreate.mock.calls[0][0].data.categoryKey).toBe("realestate");
-    expect(mocks.businessUpdate).toHaveBeenCalledWith({ where: { id: OWNED }, data: { category: "realestate" } });
+    expect(mocks.businessUpdateMany).toHaveBeenCalledWith({ where: { id: OWNED, category: "food" }, data: { category: "realestate" } });
   });
 
   it("carries an explicit type change into the business record on an existing draft", async () => {
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
     expect(response.status).toBe(200);
-    expect(mocks.experienceUpdate.mock.calls[0][0].data.categoryKey).toBe("retail");
-    expect(mocks.businessUpdate).toHaveBeenCalledWith({ where: { id: OWNED }, data: { category: "retail" } });
+    expect(mocks.draftUpdateMany.mock.calls[0][0].data.categoryKey).toBe("retail");
+    expect(mocks.businessUpdateMany).toHaveBeenCalledWith({ where: { id: OWNED, category: "food" }, data: { category: "retail" } });
     expect(mocks.revision).toHaveBeenCalledTimes(1);
   });
 
@@ -194,16 +205,16 @@ describe("a type change propagates to the business record", () => {
     // The website and the tenant must never disagree about what the business is.
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
     expect(response.status).toBe(200);
-    expect(mocks.businessUpdate).toHaveBeenCalledTimes(1);
-    expect(mocks.businessUpdate.mock.calls[0][0]).toEqual({ where: { id: OWNED }, data: { category: "retail" } });
-    expect(mocks.experienceUpdate.mock.calls[0][0].data.categoryKey).toBe("retail");
+    expect(mocks.businessUpdateMany).toHaveBeenCalledTimes(1);
+    expect(mocks.businessUpdateMany.mock.calls[0][0]).toEqual({ where: { id: OWNED, category: "food" }, data: { category: "retail" } });
+    expect(mocks.draftUpdateMany.mock.calls[0][0].data.categoryKey).toBe("retail");
   });
 
   it("does not touch the business record when the type did not change", async () => {
     mocks.business.category = "food";
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "food", expectedDraftVersion: 3 }, "POST"));
     expect(response.status).toBe(200);
-    expect(mocks.businessUpdate).not.toHaveBeenCalled();
+    expect(mocks.businessUpdateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -262,5 +273,44 @@ describe("category authority rules in isolation", () => {
     expect(categoryForRead("food", null).categoryKey).toBe("food");
     expect(categoryForRead(null, "retail").categoryKey).toBe("retail");
     expect(categoryForRead(null, null).categoryKey).toBe("other");
+  });
+});
+
+describe("atomicity: a type change is all-or-nothing", () => {
+  it("does not move the business record when the draft compare-and-swap loses", async () => {
+    // A concurrent edit advanced the draft. The draft write matches no row, so the transaction must
+    // abandon BEFORE touching the business record — otherwise the tenant's type would change while
+    // the draft stayed on the old one.
+    mocks.draftUpdateMany.mockResolvedValue({ count: 0 });
+    const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
+    expect(response.status).toBe(409);
+    expect(mocks.businessUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the draft when the business record compare-and-swap loses", async () => {
+    // Someone else changed the business type between our read and our write. The whole request must
+    // fail rather than leave a draft for one type and a business record for another.
+    mocks.businessUpdateMany.mockResolvedValue({ count: 0 });
+    const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
+    expect(response.status).toBe(409);
+    expect((await response.json() as { code?: string }).code).toBe("draft_version_conflict");
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+
+  it("fails the whole create when the business record cannot be updated", async () => {
+    mocks.experience = null;
+    mocks.businessUpdateMany.mockResolvedValue({ count: 0 });
+    const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail" }, "POST"));
+    expect(response.status).not.toBe(201);
+    // The draft must not have been created for a type the business record does not hold.
+    expect(mocks.experienceCreate).not.toHaveBeenCalled();
+  });
+
+  it("propagates a database failure instead of reporting a successful change", async () => {
+    mocks.draftUpdateMany.mockRejectedValue(new Error("connection reset"));
+    const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(mocks.businessUpdateMany).not.toHaveBeenCalled();
   });
 });

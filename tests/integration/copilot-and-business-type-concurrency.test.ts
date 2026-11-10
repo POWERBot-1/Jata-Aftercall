@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   workspace: null as any,
   publishedJson: null as string | null,
   experienceUpdate: vi.fn(),
+  experienceUpdateMany: vi.fn(),
   experienceFindUnique: vi.fn(),
   revision: vi.fn(),
   audit: vi.fn(),
@@ -45,6 +46,8 @@ vi.mock("@/lib/db", () => ({
     businessExperience: {
       findUnique: mocks.experienceFindUnique,
       update: mocks.experienceUpdate,
+      // A category change writes the draft through a compare-and-swap inside a transaction.
+      updateMany: mocks.experienceUpdateMany,
       create: vi.fn(),
       upsert: vi.fn(),
     },
@@ -53,8 +56,13 @@ vi.mock("@/lib/db", () => ({
     business: {
       findUnique: vi.fn(async () => ({ category: "food" })),
       update: vi.fn(async () => ({})),
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
     experienceVersion: { findMany: mocks.versionFindMany },
+    $transaction: vi.fn(async (callback: any) => callback({
+      business: { updateMany: vi.fn(async () => ({ count: 1 })) },
+      businessExperience: { updateMany: mocks.experienceUpdateMany, create: vi.fn() },
+    })),
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
@@ -93,6 +101,7 @@ beforeEach(() => {
   mocks.workspace = workspaceFor(3);
   mocks.publishedJson = null;
   // A real persisted reviewed draft, not a partial mock without its configuration.
+  mocks.experienceUpdateMany.mockResolvedValue({ count: 1 });
   mocks.experienceFindUnique.mockImplementation(async () => ({ publishedJson: mocks.publishedJson, draftVersion: 3, categoryKey: "food", themeKey: mocks.workspace.document.themeKey, draftJson: JSON.stringify(mocks.workspace.document) }));
   mocks.experienceUpdate.mockImplementation(async (args: any) => ({ id: "exp-a", draftVersion: args.data.draftVersion }));
   mocks.revision.mockResolvedValue({});
@@ -183,7 +192,9 @@ describe("changing business type on an existing website: draft version", () => {
   it("applies when the expected version matches, using a compare-and-swap", async () => {
     const response = await change({ expectedDraftVersion: 3 });
     expect(response.status).toBe(200);
-    const args = mocks.experienceUpdate.mock.calls[0][0];
+    // The draft write is a compare-and-swap pinned to the version that was read, now issued inside
+    // a transaction together with the business-record update.
+    const args = mocks.experienceUpdateMany.mock.calls[0][0];
     expect(args.where).toEqual({ businessId: OWNED, draftVersion: 3 });
     expect(args.data.categoryKey).toBe("retail");
     expect(mocks.revision).toHaveBeenCalledTimes(1);
@@ -197,8 +208,9 @@ describe("changing business type on an existing website: draft version", () => {
     expect(mocks.revision).not.toHaveBeenCalled();
   });
 
-  it("returns 409 on a lost race (P2025) and records no revision", async () => {
-    mocks.experienceUpdate.mockRejectedValue(Object.assign(new Error("Record to update not found."), { code: "P2025" }));
+  it("returns 409 on a lost race and records no revision", async () => {
+    // The row no longer matches the version we read, so the compare-and-swap updates nothing.
+    mocks.experienceUpdateMany.mockResolvedValue({ count: 0 });
     const response = await change({ expectedDraftVersion: 3 });
     expect(response.status).toBe(409);
     expect(mocks.revision).not.toHaveBeenCalled();
