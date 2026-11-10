@@ -48,7 +48,12 @@ vi.mock("@/lib/db", () => ({
       create: vi.fn(),
       upsert: vi.fn(),
     },
-    business: { findUnique: vi.fn(async () => null) },
+    // The experience route now reads the tenant category to keep the business record and the
+    // draft in step. This suite is about concurrency, so it reports the same category on both.
+    business: {
+      findUnique: vi.fn(async () => ({ category: "food" })),
+      update: vi.fn(async () => ({})),
+    },
     experienceVersion: { findMany: mocks.versionFindMany },
   },
 }));
