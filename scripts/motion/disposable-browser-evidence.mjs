@@ -76,6 +76,7 @@ try {
     if(target.name==='classic' && !reduced && row.status===200) {
       const budget=perViewportBudget(6);
       row.annotationBudget=budget;
+      row.annotationPublished=false;
       for (const tier of THUMBNAIL_TIERS) {
         const thumbnail=await page.screenshot({type:'jpeg',quality:tier.quality,fullPage:false,
           clip:{x:0,y:0,width,height:Math.min(height,Math.round(width*1.6))}});
@@ -83,7 +84,13 @@ try {
         if(!plan.fits) { row.annotationSkipped=plan.reason; continue; }
         for(let i=0;i<plan.chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${plan.chunks.length}::${plan.chunks[i]}`);
         row.annotation={tier,parts:plan.chunks.length,bytes:plan.bytes};
+        row.annotationPublished=true;
         break;
+      }
+      // Silence is what hid the previous defect: a viewport that published nothing looked identical
+      // to one that published successfully. A viewport with no whole image fails the run.
+      if(!row.annotationPublished) {
+        console.log(`::error title=MOTION_VISUAL_MISSING_${width}x${height}::No thumbnail tier fit the per-viewport annotation budget (${budget}); ${row.annotationSkipped || 'no tier attempted'}. This viewport has no inspectable pixel evidence.`);
       }
     }
     if(recorder) await recorder.stop();

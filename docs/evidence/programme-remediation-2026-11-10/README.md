@@ -107,26 +107,41 @@ annotations because the artifact blob host is unreachable here. Reassembling the
 - `scripts/motion/retrieve-visual-evidence.mjs` — materialise all six viewports and report a
   truncation or a missing viewport as a **failure**, never as a saved corrupt file.
 
-### Proof the fix works
+### Proof the fix works — and its measured limit
 
-Measured against the real caps (`MAX_ANNOTATIONS_PER_CHECK = 10`, 3500-char parts):
+Measured against the real caps (`MAX_ANNOTATIONS_PER_CHECK = 10`, 3500-char parts), and then against a
+**real** storefront capture rather than a synthetic target (photographic hero, 16,268 bytes at 320 px):
 
 ```
-per-viewport budget: 1
-320x568   parts=1 bytes=2341      390x844   parts=1 bytes=2231
-360x800   parts=1 bytes=2341      430x932   parts=1 bytes=2204
-768x1024  parts=1 bytes=2529      1366x768  parts=1 bytes=2618
-annotations emitted: 7 (cap 10)   RESULT: 6/6 viewports produced a whole, openable JPEG
+w=240 q=40 -> 14732B  b64=19644  does not fit
+w=160 q=22 ->  5103B  b64= 6804  does not fit
+w=120 q=18 ->  2639B  b64= 3520  does not fit
+w=100 q=16 ->  1842B  b64= 2456  FITS: 1 part, complete JPEG
 ```
 
-A round trip through the real annotation semantics emitted 7 annotations (3 spare), regrouped all six
-viewports with no missing parts, and decoded **6/6 complete JPEGs** — one of which was inspected
-visually and shows the real Nyumbani Kitchen storefront: fictional-demo disclosure banner, restaurant
-brand identity, sample offer, and the WhatsApp / Call / Directions / Share action bar with the
-JATA AFTERCALL graphite-and-lime treatment intact.
+**The first version of this fix was too tight and correctly published nothing.** At a budget of one
+part per viewport, a real photograph compresses far worse than a flat synthetic image, so every tier
+was rejected. The run at `14d4fe4` (check run `130143153630`) consequently emitted **zero**
+`MOTION_VISUAL_*` annotations — the new retrieval script reported that as `BLOCKED`, which is exactly
+what it is for. Two corrections followed:
 
-The same script against the **old** run still reports `1/6` — that is the defect being demonstrated,
-not a regression.
+1. The tier ladder was extended to 90 px and 80 px so a whole image can still fit.
+2. Silence was made a failure. A viewport that publishes nothing now emits
+   `::error MOTION_VISUAL_MISSING_<viewport>`, because "published nothing" and "published fine" looked
+   identical, and that ambiguity is what hid the original defect for an entire cycle.
+
+Round-trip proof at the current code, using the real capture as input: the 100 px tier fits in **one**
+annotation and decodes to a complete JPEG. All six viewports emit in 7 annotations with 3 spare.
+
+### The limit this fix does NOT remove
+
+At 100 px the published image is enough to prove *layout and colour* — the demo disclosure banner, the
+restaurant brand identity, the sample offer block, and the graphite/lime action bar are all legible —
+but it is **not review-grade**. Type and icons are no longer resolvable, so it cannot satisfy
+MOTION-015's "independently inspected six-viewport" criterion on its own. That criterion needs a
+full-resolution channel, and the repository already has one: `premium-screenshots.yml` commits
+full-page PNGs to the branch when the PR carries the `visual-evidence` label. This cycle did not add
+that label, because it changes the branch under review and is the owner's call.
 
 ### What this does NOT do
 
@@ -232,11 +247,12 @@ These cannot be answered by engineering. Each one is a hard blocker on the named
 | Programme completeness | `node scripts/admin/check-programme-readiness.mjs` | `NOT READY (24)` | **1** |
 | Exact-head CI @ `4828463` | 19 checks | 17 pass, 1 fail (programme), 1 skipped | — |
 | Six-viewport retrieval, old run | `retrieve-visual-evidence.mjs 130128893526` | **1/6** — demonstrates the defect | 1 |
-| Six-viewport round trip, new emitter | measured, 7 annotations | **6/6 complete JPEGs** | 0 |
+| Six-viewport retrieval, run at `14d4fe4` | `retrieve-visual-evidence.mjs 130143153630` | **0/6 — BLOCKED**, budget too tight; found by the new script | 2 |
+| Six-viewport round trip, current emitter | measured on the real capture | 1 part per viewport, complete JPEG, 7 annotations total | 0 |
 | Authenticated real-DB browser journey (local) | `npm run test:browser:studio-authenticated` | **BLOCKED** — no isolated DB/Chrome | 2 |
 | `prisma generate` (local) | `bash scripts/lib/prisma-generate.sh` | **BLOCKED** — `binaries.prisma.sh` unreachable | 1 |
 
-**PASS:** the two engineering defects above; all CI gates at `4828463` except the intended
+**PASS:** the two engineering defects above (the annotation publisher after its second iteration); all CI gates at `4828463` except the intended
 programme gate. **FAIL:** `programme-completeness (24)` — truthful, not to be bypassed.
 **BLOCKED:** local authenticated browser capture; local Prisma generation; ADMIN-009 direct TLS.
 **NOT TESTED:** independent six-viewport inspection, all authenticated console journeys, all before/

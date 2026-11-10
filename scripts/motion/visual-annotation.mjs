@@ -48,6 +48,13 @@ export const VIEWPORT_ORDER = ["320x568", "360x800", "390x844", "430x932", "768x
  * Thumbnail tiers, largest first. The capture script encodes at each tier until
  * one fits its share of the budget, so the published image is as legible as the
  * channel actually permits instead of a fixed guess.
+ *
+ * Measured on a real storefront capture (photographic hero, 16,268 bytes at
+ * 320px): a 240px tier needs ~19,600 base64 characters and cannot fit even two
+ * parts, while 140px needs ~5,024 (two parts) and 100px needs ~2,456 (one part).
+ * Photographs compress far worse than flat synthetic images, which is why the
+ * ladder reaches below 100px: a small whole image beats no image, and the
+ * fidelity limit is reported rather than hidden.
  */
 export const THUMBNAIL_TIERS = [
   { width: 240, quality: 40 },
@@ -58,6 +65,8 @@ export const THUMBNAIL_TIERS = [
   { width: 140, quality: 20 },
   { width: 120, quality: 18 },
   { width: 100, quality: 16 },
+  { width: 90, quality: 14 },
+  { width: 80, quality: 12 },
 ];
 
 /** Split base64 into numbered annotation parts. */
