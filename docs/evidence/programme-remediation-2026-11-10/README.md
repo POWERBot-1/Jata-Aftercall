@@ -91,9 +91,13 @@ annotations because the artifact blob host is unreachable here. Reassembling the
 
 **1 of the 6 mandated viewports had inspectable pixel evidence.** Two independent defects:
 
-1. **Annotation-cap overflow.** GitHub keeps 10 annotations per check run. The emitter chunked a
-   full-size JPEG into ~3000-character parts with no budget: 8 parts for 320×568, 11 for 360×800.
-   The cap was reached inside the second image; the remaining four viewports were dropped entirely.
+1. **Annotation-budget overflow.** The emitter chunked a full-size JPEG into ~3000-character parts with
+   no total accounting: 8 parts for 320×568, 11 for 360×800. Check run 130128893526 retained **16**
+   annotations totalling **~29,824 characters**; the budget was exhausted inside the second image and
+   the remaining four viewports were dropped entirely. An earlier note in this document said "GitHub
+   keeps 10 annotations per check run" — that was **wrong**, produced by reading the default
+   10-item API page and mistaking it for the limit. The observed constraint is a ~30,000-character
+   budget per check run plus GitHub's documented 4096-byte per-annotation limit.
 2. **No completeness check.** Nothing verified the reassembled bytes were a whole image, so a
    truncated stream was indistinguishable from a published one until someone tried to open it.
 
@@ -119,19 +123,25 @@ w=120 q=18 ->  2639B  b64= 3520  does not fit
 w=100 q=16 ->  1842B  b64= 2456  FITS: 1 part, complete JPEG
 ```
 
-**The first version of this fix was too tight and correctly published nothing.** At a budget of one
-part per viewport, a real photograph compresses far worse than a flat synthetic image, so every tier
-was rejected. The run at `14d4fe4` (check run `130143153630`) consequently emitted **zero**
-`MOTION_VISUAL_*` annotations — the new retrieval script reported that as `BLOCKED`, which is exactly
-what it is for. Two corrections followed:
+**The first two versions of this fix published nothing, and each failure was caught rather than
+shipped.**
 
-1. The tier ladder was extended to 90 px and 80 px so a whole image can still fit.
-2. Silence was made a failure. A viewport that publishes nothing now emits
-   `::error MOTION_VISUAL_MISSING_<viewport>`, because "published nothing" and "published fine" looked
-   identical, and that ambiguity is what hid the original defect for an entire cycle.
-
-Round-trip proof at the current code, using the real capture as input: the 100 px tier fits in **one**
-annotation and decodes to a complete JPEG. All six viewports emit in 7 annotations with 3 spare.
+- At `14d4fe4` (check run `130143153630`) the run emitted **zero** `MOTION_VISUAL_*` annotations: a
+  one-part budget is tight for a photographic page, and the ladder ended at 100 px. The new retrieval
+  script reported `BLOCKED`.
+- At `6eb1009` (check run `130152615805`) the run emitted six explicit
+  `::error MOTION_VISUAL_MISSING_<viewport>` failures for the same reason — and revealed the actual
+  bug: **the tier loop never used the tier width**, it only lowered JPEG `quality`, so every "tier" was
+  the same full pixel size and could never fit. The `quality`-only screenshots were 10,868–35,479 bytes.
+- Current code: the thumbnail is downscaled **in the browser** with a CDP
+  `Emulation.setDeviceMetricsOverride`, so a tier is genuinely smaller. Verified against the real
+  capture: tiers 240→120 px do not fit, and 100 px fits in one annotation as a complete JPEG. The
+  original viewport metrics are restored inside the loop so no other evidence is left rescaled.
+  `sharp` was deliberately **not** used: it is only a transitive dependency of Next.js, and importing it
+  directly in CI would depend on a package the repository does not declare.
+- Silence was made a failure. A viewport that publishes nothing emits `::error`, because "published
+  nothing" and "published fine" looked identical, and that ambiguity is what hid the original defect
+  for an entire cycle.
 
 ### The limit this fix does NOT remove
 
@@ -248,7 +258,8 @@ These cannot be answered by engineering. Each one is a hard blocker on the named
 | Exact-head CI @ `4828463` | 19 checks | 17 pass, 1 fail (programme), 1 skipped | — |
 | Six-viewport retrieval, old run | `retrieve-visual-evidence.mjs 130128893526` | **1/6** — demonstrates the defect | 1 |
 | Six-viewport retrieval, run at `14d4fe4` | `retrieve-visual-evidence.mjs 130143153630` | **0/6 — BLOCKED**, budget too tight; found by the new script | 2 |
-| Six-viewport round trip, current emitter | measured on the real capture | 1 part per viewport, complete JPEG, 7 annotations total | 0 |
+| Six-viewport retrieval, run at `6eb1009` | `retrieve-visual-evidence.mjs 130152615805` | **0/6** — six explicit `MOTION_VISUAL_MISSING_*` errors exposed the unused tier width | 1 |
+| Six-viewport round trip, current code | measured on the real capture | first fitting tier is genuinely downscaled (100 px), 1 part, complete JPEG | 0 |
 | Authenticated real-DB browser journey (local) | `npm run test:browser:studio-authenticated` | **BLOCKED** — no isolated DB/Chrome | 2 |
 | `prisma generate` (local) | `bash scripts/lib/prisma-generate.sh` | **BLOCKED** — `binaries.prisma.sh` unreachable | 1 |
 

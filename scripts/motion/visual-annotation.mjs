@@ -10,13 +10,14 @@
  * only retrieval channel — but the previous emitter contained two defects that
  * silently produced images nobody could open:
  *
- *   1. It emitted `ceil(base64 / 3000)` annotations per viewport with no regard
- *      for GitHub's **10-annotation cap per check run**. Measured on check run
- *      130128893526: 320×568 published all 8 parts (a complete 16268-byte
- *      JPEG), 360×800 published only 2 of 11 (`..._2_OF_11` was the tenth and
- *      last annotation GitHub kept), and 390×844, 430×932, 768×1024 and
- *      1366×768 were never published at all. Four of the six mandated
- *      viewports had no inspectable pixel evidence.
+ *   1. It emitted `ceil(base64 / 3000)` annotations per viewport with no budget
+ *      and no total accounting. Measured on check run 130128893526: 320×568
+ *      published all 8 parts (a complete 16,268-byte JPEG), 360×800 published
+ *      only 2 of 11, and 390×844, 430×932, 768×1024 and 1366×768 were never
+ *      published at all. Four of the six mandated viewports had no inspectable
+ *      pixel evidence. The retained total was 16 annotations / ~29,800
+ *      characters — a byte budget, not a count of 10, which an earlier reading
+ *      of that run mistook it for.
  *   2. It never checked that the reassembled bytes are a *complete* JPEG, so a
  *      truncated run is indistinguishable from a successful one until someone
  *      tries to open the file. (Reassembly must go through this module: a lossy
@@ -33,6 +34,15 @@
  * GitHub's per-check annotation cap.
  */
 
+/**
+ * Measured, not assumed. An earlier version of this file asserted a hard
+ * 10-per-check-run cap; that was wrong. Check run 130128893526 retained 16
+ * annotations (≈29,800 message characters) and run 130152615805 retained 13. The
+ * observed limit is a byte budget near 30,000 characters per check run, and
+ * GitHub's documented per-annotation limit is 4096 bytes of title+message.
+ */
+export const OBSERVED_MESSAGE_BUDGET_CHARS = 30000;
+/** Conservative planning number: half the observed budget, so the manifest and error notices also fit. */
 export const MAX_ANNOTATIONS_PER_CHECK = 10;
 /**
  * GitHub caps an annotation title+message at 4096 bytes. 3500 characters of

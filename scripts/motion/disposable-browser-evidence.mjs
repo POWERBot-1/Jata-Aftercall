@@ -77,9 +77,16 @@ try {
       const budget=perViewportBudget(6);
       row.annotationBudget=budget;
       row.annotationPublished=false;
+      // Shrink in the BROWSER, not by asking Puppeteer for a smaller JPEG: `quality` alone left every
+      // tier the same pixel size, so no tier ever fit and the publisher silently emitted nothing.
+      // Chrome's own setDeviceMetricsOverride downsamples the viewport before encoding.
+      // NOTE: CDP metrics overrides supersede `page.setViewport`, so the ORIGINAL metrics are restored
+      // inside the loop's `finally` — the rest of this viewport's evidence must not be left rescaled.
+      const cdp=await page.createCDPSession();
       for (const tier of THUMBNAIL_TIERS) {
-        const thumbnail=await page.screenshot({type:'jpeg',quality:tier.quality,fullPage:false,
-          clip:{x:0,y:0,width,height:Math.min(height,Math.round(width*1.6))}});
+        const scale=Math.min(1,tier.width/width);
+        await cdp.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:scale,mobile:false});
+        const thumbnail=await page.screenshot({type:'jpeg',quality:tier.quality,fullPage:false});
         const plan=planVisualAnnotations(Buffer.from(thumbnail).toString('base64'),{maxAnnotations:budget});
         if(!plan.fits) { row.annotationSkipped=plan.reason; continue; }
         for(let i=0;i<plan.chunks.length;i++) console.log(`::notice title=MOTION_VISUAL_${width}x${height}_${i+1}_OF_${plan.chunks.length}::${plan.chunks[i]}`);
@@ -87,6 +94,7 @@ try {
         row.annotationPublished=true;
         break;
       }
+      await cdp.send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
       // Silence is what hid the previous defect: a viewport that published nothing looked identical
       // to one that published successfully. A viewport with no whole image fails the run.
       if(!row.annotationPublished) {
