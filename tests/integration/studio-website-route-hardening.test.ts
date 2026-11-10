@@ -156,6 +156,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.session = { userId: "owner-a", role: "OWNER" };
   mocks.accessError = null;
+  mocks.business.category = "food";
   mocks.content = { websiteId: "site-a", draftJson: JSON.stringify(validDocument()), draftVersion: 4, publishedJson: null, publishedVersion: 2 };
   mocks.version = { websiteId: "site-a", version: 2, snapshotJson: JSON.stringify(validDocument()) };
   mocks.revision = { websiteId: "site-a", draftVersion: 3, snapshotJson: JSON.stringify(validDocument()) };
@@ -241,6 +242,16 @@ describe("save site draft: a save never rewrites data it was not asked to change
     const response = await saveContent(request("PUT", { websiteId: "site-a", expectedDraftVersion: 4, document }));
     expect(response.status).toBe(200);
     const data = mocks.updateMany.mock.calls[0][0].data as { draftJson: string };
+    expect((JSON.parse(data.draftJson) as { categoryKey: string }).categoryKey).toBe("food");
+  });
+
+  it("accepts a legacy free-text business category and stores the resolved profile key", async () => {
+    // Thousands of existing tenants were onboarded with "Restaurant" rather than "food".
+    // Pinning must resolve that label instead of rejecting a valid food document.
+    mocks.business.category = "Restaurant";
+    const response = await saveContent(request("PUT", { websiteId: "site-a", expectedDraftVersion: 4, document: validDocument() }));
+    expect(response.status, await response.clone().text()).toBe(200);
+    const data = mocks.updateMany.mock.calls[0][0].data as { draftJson: string; categoryKey?: string };
     expect((JSON.parse(data.draftJson) as { categoryKey: string }).categoryKey).toBe("food");
   });
 

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertStudioWebsiteAccess } from "@/lib/experience/tenant";
 import { ensureStudioWebsiteContent } from "@/lib/experience/site-content";
 import { validateExperienceJson } from "@/lib/experience/schema";
+import { resolveExperienceProfile } from "@/lib/experience/categories";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logAudit } from "@/lib/audit";
 import { TenantError } from "@/lib/tenant";
@@ -128,7 +129,10 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "A website document is required." }, { status: 400 });
     }
     const requested = rawDocument as Record<string, unknown>;
-    if (requested.categoryKey !== undefined && requested.categoryKey !== business.category) {
+    // Onboarded tenants still carry free-text categories ("Restaurant"); the document carries a
+    // profile key ("food"). Compare and store the resolved profile key, never the raw label.
+    const businessCategoryKey = resolveExperienceProfile(business.category).key;
+    if (requested.categoryKey !== undefined && resolveExperienceProfile(String(requested.categoryKey)).key !== businessCategoryKey) {
       return NextResponse.json(
         {
           error: "This website belongs to a different kind of business. Nothing was changed.",
@@ -137,13 +141,13 @@ export async function PUT(request: Request) {
         { status: 422 },
       );
     }
-    const pinned = { ...requested, categoryKey: business.category };
+    const pinned = { ...requested, categoryKey: businessCategoryKey };
     let pinnedJson: string;
     try { pinnedJson = JSON.stringify(pinned); } catch {
       return NextResponse.json({ error: "The website draft is not valid JSON." }, { status: 400 });
     }
 
-    const validated = validateExperienceJson(pinnedJson, business.category);
+    const validated = validateExperienceJson(pinnedJson, businessCategoryKey);
     if (!validated.ok) {
       return NextResponse.json(
         { error: "The website draft failed validation.", code: EXPERIENCE_SCHEMA_INVALID_CODE, issues: validated.issues },

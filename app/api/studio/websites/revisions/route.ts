@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertStudioWebsiteAccess } from "@/lib/experience/tenant";
 import { validateExperienceJson } from "@/lib/experience/schema";
+import { resolveExperienceProfile } from "@/lib/experience/categories";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
 import { logAudit } from "@/lib/audit";
 
@@ -51,7 +52,9 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
 
-    const validated = validateExperienceJson(revision.snapshotJson, business?.category);
+    // A legacy business label ("Restaurant") is not a schema key; validate against its profile.
+    const businessCategoryKey = business ? resolveExperienceProfile(business.category).key : undefined;
+    const validated = validateExperienceJson(revision.snapshotJson, businessCategoryKey);
     if (!validated.ok) return NextResponse.json({ error: "That revision cannot be restored safely.", code: EXPERIENCE_SCHEMA_INVALID_CODE, issues: validated.issues }, { status: 422 });
     if (containsInlineImageDataUrl(validated.document)) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });

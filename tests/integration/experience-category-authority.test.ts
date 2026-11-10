@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   businessUpdateMany: vi.fn(),
   draftUpdateMany: vi.fn(),
   transaction: vi.fn(),
+  transactionRolledBack: false,
   revision: vi.fn(),
   audit: vi.fn(),
 }));
@@ -55,11 +56,20 @@ vi.mock("@/lib/db", () => ({
       updateMany: mocks.draftUpdateMany,
     },
     experienceVersion: { findMany: vi.fn(async () => []) },
-    // The category change is applied inside one transaction with the draft write.
-    $transaction: vi.fn(async (callback: any) => callback({
-      business: { updateMany: mocks.businessUpdateMany },
-      businessExperience: { updateMany: mocks.draftUpdateMany, create: mocks.experienceCreate },
-    })),
+    // The category change is applied inside one transaction with the draft write. A real Prisma
+    // transaction rolls back when its callback throws, so record that here and let the error
+    // propagate exactly as Prisma would.
+    $transaction: mocks.transaction.mockImplementation(async (callback: any) => {
+      try {
+        return await callback({
+          business: { updateMany: mocks.businessUpdateMany },
+          businessExperience: { updateMany: mocks.draftUpdateMany, create: mocks.experienceCreate },
+        });
+      } catch (error) {
+        mocks.transactionRolledBack = true;
+        throw error;
+      }
+    }),
     auditEvent: { create: mocks.audit },
   },
 }));
@@ -111,6 +121,7 @@ beforeEach(() => {
   mocks.draftUpdateMany.mockResolvedValue({ count: 1 });
   mocks.revision.mockResolvedValue(undefined);
   mocks.audit.mockResolvedValue({});
+  mocks.transactionRolledBack = false;
 });
 
 describe("create website: the business record decides the category", () => {
@@ -150,6 +161,27 @@ describe("create website: the business record decides the category", () => {
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "food" }, "POST"));
     expect(response.status).toBe(201);
     expect(mocks.experienceCreate.mock.calls[0][0].data.categoryKey).toBe("food");
+  });
+
+  it("normalises a legacy free-text category such as Restaurant to its profile", async () => {
+    // Existing tenants were onboarded with human-readable categories ("Restaurant"), while the
+    // profile keys are slugs ("food"). Opening the website must not force the owner to re-choose,
+    // and the compare-and-swap must match the value that is actually stored.
+    mocks.experience = null;
+    mocks.business.category = "Restaurant";
+    const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "food" }, "POST"));
+    expect(response.status).toBe(201);
+    expect(mocks.experienceCreate.mock.calls[0][0].data.categoryKey).toBe("food");
+    expect(mocks.businessUpdateMany).toHaveBeenCalledWith({ where: { id: OWNED, category: "Restaurant" }, data: { category: "food" } });
+  });
+
+  it("derives the profile from an existing legacy category without a body category", async () => {
+    mocks.experience = null;
+    mocks.business.category = "Salon";
+    const response = await POST(jsonRequest({ businessId: OWNED }, "POST"));
+    expect(response.status).toBe(201);
+    expect(mocks.experienceCreate.mock.calls[0][0].data.categoryKey).toBe("salon");
+    expect(mocks.businessUpdateMany).toHaveBeenCalledWith({ where: { id: OWNED, category: "Salon" }, data: { category: "salon" } });
   });
 
   it("refuses a create with no category at all when the business has none", async () => {
@@ -249,6 +281,30 @@ describe("category authority rules in isolation", () => {
     if (!plan.ok) expect(plan.code).toBe("category_required");
   });
 
+  it("resolves a legacy stored category for a create and for reading", () => {
+    expect(hasChosenCategory("Restaurant")).toBe(true);
+    const create = planCreateCategory("Restaurant", undefined);
+    expect(create.ok).toBe(true);
+    if (create.ok) {
+      expect(create.categoryKey).toBe("food");
+      expect(create.propagateToBusiness).toBe(true);
+      expect(create.previousCategory).toBe("Restaurant");
+    }
+    const read = categoryForRead("Restaurant", "food");
+    expect(read).toEqual({ categoryKey: "food", mismatch: false });
+    expect(planContentCategory("Restaurant", "food").ok).toBe(true);
+    expect(planContentCategory("Restaurant", "retail").ok).toBe(false);
+  });
+
+  it("does not let a content edit invent a category when the business has none", () => {
+    // Only create/change-type may write the tenant and the draft together. A PATCH may confirm the
+    // draft's existing category, but cannot establish a new one behind the business record's back.
+    expect(planContentCategory(null, "retail", "food").ok).toBe(false);
+    expect(planContentCategory(null, "food", "food").ok).toBe(true);
+    const keep = planContentCategory(null, undefined, "food");
+    expect(keep.ok && keep.categoryKey).toBe("food");
+  });
+
   it("refuses a content edit that tries to change a recorded category", () => {
     const plan = planContentCategory("food", "retail");
     expect(plan.ok).toBe(false);
@@ -295,6 +351,7 @@ describe("atomicity: a type change is all-or-nothing", () => {
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail", expectedDraftVersion: 3 }, "POST"));
     expect(response.status).toBe(409);
     expect((await response.json() as { code?: string }).code).toBe("draft_version_conflict");
+    expect(mocks.transactionRolledBack).toBe(true);
     expect(mocks.revision).not.toHaveBeenCalled();
   });
 
@@ -302,7 +359,9 @@ describe("atomicity: a type change is all-or-nothing", () => {
     mocks.experience = null;
     mocks.businessUpdateMany.mockResolvedValue({ count: 0 });
     const response = await POST(jsonRequest({ businessId: OWNED, categoryKey: "retail" }, "POST"));
-    expect(response.status).not.toBe(201);
+    expect(response.status).toBe(409);
+    expect((await response.json() as { code?: string }).code).toBe("business_category_conflict");
+    expect(mocks.transactionRolledBack).toBe(true);
     // The draft must not have been created for a type the business record does not hold.
     expect(mocks.experienceCreate).not.toHaveBeenCalled();
   });

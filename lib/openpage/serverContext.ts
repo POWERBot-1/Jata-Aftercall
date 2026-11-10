@@ -10,6 +10,7 @@ import "server-only";
 import prisma from "@/lib/db";
 import { createExperienceDocument } from "@/lib/experience/document";
 import { validateExperienceJson } from "@/lib/experience/schema";
+import { categoryForRead } from "@/lib/experience/category-authority";
 import type { ExperienceDocument } from "@/lib/experience/types";
 import type { StudioBusinessFacts } from "./requirements";
 
@@ -74,7 +75,9 @@ export async function loadStudioGenerationContext(businessId: string): Promise<S
 
   if (!business) return { ok: false, status: 404, error: "We couldn't find that business." };
 
-  const categoryKey = experience?.categoryKey || business.category || "other";
+  // Resolve legacy free-text categories ("Restaurant") to their profile key exactly as the
+  // Experience API does, so generation cannot build a site for the wrong business type.
+  const categoryKey = categoryForRead(business.category, experience?.categoryKey).categoryKey;
   let baseDocument: ExperienceDocument;
 
   if (experience?.draftJson) {
@@ -87,7 +90,9 @@ export async function loadStudioGenerationContext(businessId: string): Promise<S
         code: "experience_schema_invalid",
       };
     }
-    baseDocument = parsed.document;
+    // The business record is authoritative even when an old draft still names another type.
+    // Generation composes for what the tenant is, and the final candidate is schema-validated.
+    baseDocument = { ...parsed.document, categoryKey };
   } else {
     baseDocument = createExperienceDocument({
       categoryKey,

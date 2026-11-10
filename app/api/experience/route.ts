@@ -16,7 +16,7 @@ import { guardStudioWebsiteMutation } from "@/lib/experience/ensure-default-webs
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { logAudit } from "@/lib/audit";
 import { getExperienceProfile, isCategoryKey } from "@/lib/experience/categories";
-import { planCreateCategory, planContentCategory } from "@/lib/experience/category-authority";
+import { categoryForRead, planCreateCategory, planContentCategory } from "@/lib/experience/category-authority";
 import {
   addSection,
   createExperienceDocument,
@@ -89,7 +89,10 @@ export async function GET(req: Request) {
 
     const draft = parseDocument(experience?.draftJson, experience?.categoryKey ?? business.category);
     const published = parseDocument(experience?.publishedJson, experience?.categoryKey ?? business.category);
-    const categoryKey = experience?.categoryKey || (draft?.categoryKey as string) || business.category || "other";
+    // The business record is authoritative. A legacy draft may still hold a different category;
+    // reading never refuses, but the mismatch is reported so the editor can explain it.
+    const readCategory = categoryForRead(business.category, experience?.categoryKey || (draft?.categoryKey as string) || null);
+    const categoryKey = readCategory.categoryKey;
     const profile = getExperienceProfile(categoryKey);
     const entitlement = await getInteractiveEntitlement(businessId);
     const paidPayment = await prisma.payment.findFirst({ where: { businessId, status: "PAID" }, select: { status: true } });
@@ -136,6 +139,8 @@ export async function GET(req: Request) {
         : null,
       document,
       publishedDocument: published,
+      categoryKey,
+      categoryMismatch: readCategory.mismatch,
       hasDraft: Boolean(experience),
       hasUnpublishedChanges: hasUnpublishedChanges(experience?.draftJson, experience?.publishedJson),
       entitlement,
@@ -221,7 +226,12 @@ export async function POST(req: Request) {
               historyCursor: nextVersion,
             },
           });
-          if (draft.count !== 1) return "draft_conflict" as const;
+          // A transaction must THROW to roll back. Returning a conflict after the draft update
+          // would commit that write while the business record kept its old type — exactly the
+          // divergence this transaction exists to prevent.
+          if (draft.count !== 1) {
+            throw Object.assign(new Error("DRAFT_CONFLICT"), { code: "DRAFT_CONFLICT" });
+          }
 
           if (plan.propagateToBusiness) {
             // Claim the exact category observed when planning. A concurrent change of type means
@@ -230,16 +240,21 @@ export async function POST(req: Request) {
               where: { id: businessId, category: plan.previousCategory ?? null },
               data: { category: categoryKey },
             });
-            if (businessRow.count !== 1) return "category_conflict" as const;
+            if (businessRow.count !== 1) {
+              throw Object.assign(new Error("CATEGORY_CONFLICT"), { code: "CATEGORY_CONFLICT" });
+            }
           }
           return "ok" as const;
         })
         .catch((error: unknown) => {
-          if ((error as { code?: string })?.code === "P2025") return "draft_conflict" as const;
+          const code = (error as { code?: string })?.code;
+          if (code === "P2025" || code === "DRAFT_CONFLICT" || code === "CATEGORY_CONFLICT") {
+            return "conflict" as const;
+          }
           throw error;
         });
 
-      if (written !== "ok") {
+      if (written === "conflict") {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
       }
       await recordDraftRevision(prisma, {
@@ -294,25 +309,39 @@ export async function POST(req: Request) {
     // Same rule on the first website: the tenant's recorded type follows the owner's choice, in the
     // SAME transaction as the draft. Creating one without the other would leave the site and the
     // business profile describing different businesses.
-    const experience = await prisma.$transaction(async (tx: any) => {
-      if (createPlan.propagateToBusiness) {
-        const businessRow = await tx.business.updateMany({
-          where: { id: businessId, category: createPlan.previousCategory ?? null },
-          data: { category: categoryKey },
+    let experience;
+    try {
+      experience = await prisma.$transaction(async (tx: any) => {
+        if (createPlan.propagateToBusiness) {
+          const businessRow = await tx.business.updateMany({
+            where: { id: businessId, category: createPlan.previousCategory ?? null },
+            data: { category: categoryKey },
+          });
+          if (businessRow.count !== 1) throw Object.assign(new Error("CATEGORY_CONFLICT"), { code: "CATEGORY_CONFLICT" });
+        }
+        return tx.businessExperience.create({
+          data: {
+            businessId,
+            categoryKey,
+            themeKey: document.themeKey,
+            draftJson: JSON.stringify(document),
+            draftVersion: 1,
+            status: "DRAFT",
+          },
         });
-        if (businessRow.count !== 1) throw Object.assign(new Error("CATEGORY_CONFLICT"), { code: "CATEGORY_CONFLICT" });
-      }
-      return tx.businessExperience.create({
-        data: {
-          businessId,
-          categoryKey,
-          themeKey: document.themeKey,
-          draftJson: JSON.stringify(document),
-          draftVersion: 1,
-          status: "DRAFT",
-        },
       });
-    });
+    } catch (error) {
+      if ((error as { code?: string })?.code === "CATEGORY_CONFLICT") {
+        return NextResponse.json(
+          {
+            error: "Your business profile changed while this website was being created. Reload and try again. Nothing was changed.",
+            code: "business_category_conflict",
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
     await logAudit({ actorId: session.userId, action: "EXPERIENCE_CREATED", targetType: "BUSINESS_EXPERIENCE", targetId: experience.id, metadata: { businessId, categoryKey } });
     await recordDraftRevision(prisma, {
       businessId,
@@ -506,7 +535,7 @@ export async function PATCH(req: Request) {
       // first. Reading the business earlier would have shadowed those safeguards with a 404.
       const tenantRow = await prisma.business.findUnique({ where: { id: businessId }, select: { category: true } });
       if (!tenantRow) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-      const patchCategory = planContentCategory(tenantRow.category, body?.categoryKey);
+      const patchCategory = planContentCategory(tenantRow.category, body?.categoryKey, document.categoryKey);
       if (!patchCategory.ok) {
         return NextResponse.json(
           { error: patchCategory.error, code: patchCategory.code, businessCategory: patchCategory.businessCategory },
