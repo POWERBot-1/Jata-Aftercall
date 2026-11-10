@@ -203,29 +203,44 @@ export async function POST(req: Request) {
       }
       const profile = getExperienceProfile(categoryKey);
       const nextVersion = Math.max(1, Number(existing.draftVersion) || 1) + 1;
-      const updated = await prisma.businessExperience
-        .update({
-          where: { businessId, draftVersion: existing.draftVersion },
-          data: {
-            categoryKey,
-            themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
-            draftJson: JSON.stringify(document),
-            draftVersion: nextVersion,
-            historyCursor: nextVersion,
-          },
+      // The draft, the business record and the revision are ONE unit. Writing the draft and then
+      // moving the business record as a second statement would leave exactly the divergence this
+      // change exists to remove if the second write failed: the site would render the new type's
+      // sections while the tenant profile still said the old one. Both rows are also claimed with
+      // compare-and-swaps, so a concurrent type change cannot interleave between the read above and
+      // these writes.
+      const written = await prisma
+        .$transaction(async (tx: any) => {
+          const draft = await tx.businessExperience.updateMany({
+            where: { businessId, draftVersion: existing.draftVersion },
+            data: {
+              categoryKey,
+              themeKey: isValidThemeKey(body?.themeKey) ? body.themeKey : profile.defaultThemeKey,
+              draftJson: JSON.stringify(document),
+              draftVersion: nextVersion,
+              historyCursor: nextVersion,
+            },
+          });
+          if (draft.count !== 1) return "draft_conflict" as const;
+
+          if (plan.propagateToBusiness) {
+            // Claim the exact category observed when planning. A concurrent change of type means
+            // this request is stale, not that it should win.
+            const businessRow = await tx.business.updateMany({
+              where: { id: businessId, category: plan.previousCategory ?? null },
+              data: { category: categoryKey },
+            });
+            if (businessRow.count !== 1) return "category_conflict" as const;
+          }
+          return "ok" as const;
         })
         .catch((error: unknown) => {
-          if ((error as { code?: string })?.code === "P2025") return null;
+          if ((error as { code?: string })?.code === "P2025") return "draft_conflict" as const;
           throw error;
         });
-      if (!updated) {
+
+      if (written !== "ok") {
         return NextResponse.json({ error: DRAFT_CHANGED_MESSAGE, code: DRAFT_CHANGED_CODE }, { status: 409 });
-      }
-      // The owner explicitly changed their business type. The business record must move with the
-      // draft, or the tenant and its website would disagree about what the business is — the site
-      // would render one business's sections while invoices, admin and the profile said another.
-      if (plan.propagateToBusiness) {
-        await prisma.business.update({ where: { id: businessId }, data: { category: categoryKey } });
       }
       await recordDraftRevision(prisma, {
         businessId,
@@ -236,6 +251,7 @@ export async function POST(req: Request) {
         source: "EDIT",
         createdById: session.userId,
       });
+      const updated = await prisma.businessExperience.findUnique({ where: { businessId } });
       return NextResponse.json({ experience: updated, document, idempotent: true });
     }
 
@@ -275,20 +291,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: INLINE_MEDIA_PERSISTENCE_MESSAGE, code: INLINE_MEDIA_PERSISTENCE_CODE }, { status: 503 });
     }
 
-    // Same rule on first publication of a website: the tenant's recorded type follows the owner's
-    // choice so the two never disagree.
-    if (createPlan.propagateToBusiness) {
-      await prisma.business.update({ where: { id: businessId }, data: { category: categoryKey } });
-    }
-    const experience = await prisma.businessExperience.create({
-      data: {
-        businessId,
-        categoryKey,
-        themeKey: document.themeKey,
-        draftJson: JSON.stringify(document),
-        draftVersion: 1,
-        status: "DRAFT",
-      },
+    // Same rule on the first website: the tenant's recorded type follows the owner's choice, in the
+    // SAME transaction as the draft. Creating one without the other would leave the site and the
+    // business profile describing different businesses.
+    const experience = await prisma.$transaction(async (tx: any) => {
+      if (createPlan.propagateToBusiness) {
+        const businessRow = await tx.business.updateMany({
+          where: { id: businessId, category: createPlan.previousCategory ?? null },
+          data: { category: categoryKey },
+        });
+        if (businessRow.count !== 1) throw Object.assign(new Error("CATEGORY_CONFLICT"), { code: "CATEGORY_CONFLICT" });
+      }
+      return tx.businessExperience.create({
+        data: {
+          businessId,
+          categoryKey,
+          themeKey: document.themeKey,
+          draftJson: JSON.stringify(document),
+          draftVersion: 1,
+          status: "DRAFT",
+        },
+      });
     });
     await logAudit({ actorId: session.userId, action: "EXPERIENCE_CREATED", targetType: "BUSINESS_EXPERIENCE", targetId: experience.id, metadata: { businessId, categoryKey } });
     await recordDraftRevision(prisma, {
