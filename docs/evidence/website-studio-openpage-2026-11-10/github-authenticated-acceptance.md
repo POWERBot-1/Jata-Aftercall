@@ -1,15 +1,15 @@
-Source: GitHub Actions, "Journey against a real database" run 42869947953, job 130018210984.
-Feature head: 9e18fbf4f9a3b07cc48006c0eca952028ddf817d
-Runner checkout: 2189141bf4f1dfa5cc28507455800abaa23a7be2
-Workflow conclusion: success (14m45s)
+Source: GitHub Actions, "Journey against a real database" run 42873770478, job 130031541690.
+Feature head: d534797510b94bf69fc695214c7c812489df7316
+Runner checkout: 6acaba6c4014d224a3e443d993cc26e6ac235390
+Workflow conclusion: success (14m25s)
 
-Verification passed for feature head `9e18fbf4f9a3b07cc48006c0eca952028ddf817d` (runner checkout `2189141bf4f1dfa5cc28507455800abaa23a7be2`). [Run 42869947953](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947953).
+Verification passed for feature head `d534797510b94bf69fc695214c7c812489df7316` (runner checkout `6acaba6c4014d224a3e443d993cc26e6ac235390`). [Run 42873770478](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42873770478).
 
 ### Full native DB suite
 
 ```
-Test Files  413 passed (413)
-      Tests  4791 passed (4791)
+Test Files  414 passed (414)
+      Tests  4797 passed (4797)
 ```
 
 ### Experience journey
@@ -33,7 +33,7 @@ PASS  anonymous protected API is denied — HTTP 401
 PASS  authenticated /api/control/overview remains policy-pending — HTTP 403; code=POLICY_PENDING
 PASS  authenticated /api/control/businesses remains policy-pending — HTTP 403; code=POLICY_PENDING
 PASS  authenticated /control pending state 320x568 — HTTP 200; content=true; noHorizontalOverflow=true; pageErrors=0
-PASS  browser page is on the expected application origin — page=http://localhost:39429; app=http://localhost:39429
+PASS  browser page is on the expected application origin — page=http://localhost:46787; app=http://localhost:46787
 PASS  valid same-origin business suspension is explicitly denied by pending policy — HTTP 403; code=POLICY_PENDING; error=Control access remains disabled. The owner-approved policy denies all 90 role/capability combinations.
 PASS  denied mutation leaves disposable business unchanged — status=PENDING
 PASS  journey provisions no Control grant — before=0; after=0
@@ -85,19 +85,19 @@ PASS retail: stale edit refused without overwrite
 PASS retail: raw unsupported recipe/authority config refused without overwrite
 PASS retail: actual recipe detail UI save off
 PASS retail: recipe v1 detail persists without publication
-PASS retail: preview marker exists in authoritative draft — draftVersion=4; marker=QA first retail 21da65eb
+PASS retail: preview marker exists in authoritative draft — draftVersion=4; marker=QA first retail 88cf6be8
 PASS retail: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS retail: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS retail: private preview faithfully hides owner-disabled recipe fact
 PASS retail: actual recipe detail UI save on
 PASS retail: recipe v1 detail persists without publication
-PASS retail: preview marker exists in authoritative draft — draftVersion=5; marker=QA first retail 21da65eb
+PASS retail: preview marker exists in authoritative draft — draftVersion=5; marker=QA first retail 88cf6be8
 PASS retail: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS retail: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS retail: private preview faithfully shows owner-enabled recipe fact
 PASS retail: actual recipe layout UI save
 PASS retail: recipe v1 registered layout persists without publication
-PASS retail: preview marker exists in authoritative draft — draftVersion=6; marker=QA first retail 21da65eb
+PASS retail: preview marker exists in authoritative draft — draftVersion=6; marker=QA first retail 88cf6be8
 PASS retail: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS retail: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS retail: private preview faithfully applies owner-selected registered recipe layout
@@ -118,7 +118,7 @@ PASS retail: actual category-appropriate availability filter
 PASS retail: actual search/no-match/recovery preserves owned item and price
 PASS retail: authenticated guarded edit
 PASS retail: monotonic draft revision
-PASS retail: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished retail 21da65eb
+PASS retail: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished retail 88cf6be8
 PASS retail: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS retail: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS retail: customer cannot see draft-query content
@@ -147,19 +147,19 @@ PASS food: stale edit refused without overwrite
 PASS food: raw unsupported recipe/authority config refused without overwrite
 PASS food: actual recipe detail UI save off
 PASS food: recipe v1 detail persists without publication
-PASS food: preview marker exists in authoritative draft — draftVersion=4; marker=QA first food 21da65eb
+PASS food: preview marker exists in authoritative draft — draftVersion=4; marker=QA first food 88cf6be8
 PASS food: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS food: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS food: private preview faithfully hides owner-disabled recipe fact
 PASS food: actual recipe detail UI save on
 PASS food: recipe v1 detail persists without publication
-PASS food: preview marker exists in authoritative draft — draftVersion=5; marker=QA first food 21da65eb
+PASS food: preview marker exists in authoritative draft — draftVersion=5; marker=QA first food 88cf6be8
 PASS food: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS food: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS food: private preview faithfully shows owner-enabled recipe fact
 PASS food: actual recipe layout UI save
 PASS food: recipe v1 registered layout persists without publication
-PASS food: preview marker exists in authoritative draft — draftVersion=6; marker=QA first food 21da65eb
+PASS food: preview marker exists in authoritative draft — draftVersion=6; marker=QA first food 88cf6be8
 PASS food: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS food: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS food: private preview faithfully applies owner-selected registered recipe layout
@@ -180,7 +180,7 @@ PASS food: actual category-appropriate availability filter
 PASS food: actual search/no-match/recovery preserves owned item and price
 PASS food: authenticated guarded edit
 PASS food: monotonic draft revision
-PASS food: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished food 21da65eb
+PASS food: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished food 88cf6be8
 PASS food: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS food: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS food: customer cannot see draft-query content
@@ -209,19 +209,19 @@ PASS salon: stale edit refused without overwrite
 PASS salon: raw unsupported recipe/authority config refused without overwrite
 PASS salon: actual recipe detail UI save off
 PASS salon: recipe v1 detail persists without publication
-PASS salon: preview marker exists in authoritative draft — draftVersion=4; marker=QA first salon 21da65eb
+PASS salon: preview marker exists in authoritative draft — draftVersion=4; marker=QA first salon 88cf6be8
 PASS salon: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS salon: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS salon: private preview faithfully hides owner-disabled recipe fact
 PASS salon: actual recipe detail UI save on
 PASS salon: recipe v1 detail persists without publication
-PASS salon: preview marker exists in authoritative draft — draftVersion=5; marker=QA first salon 21da65eb
+PASS salon: preview marker exists in authoritative draft — draftVersion=5; marker=QA first salon 88cf6be8
 PASS salon: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS salon: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS salon: private preview faithfully shows owner-enabled recipe fact
 PASS salon: actual recipe layout UI save
 PASS salon: recipe v1 registered layout persists without publication
-PASS salon: preview marker exists in authoritative draft — draftVersion=6; marker=QA first salon 21da65eb
+PASS salon: preview marker exists in authoritative draft — draftVersion=6; marker=QA first salon 88cf6be8
 PASS salon: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS salon: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS salon: private preview faithfully applies owner-selected registered recipe layout
@@ -243,7 +243,7 @@ PASS salon: actual duration filter restores owned service
 PASS salon: actual search/no-match/recovery preserves owned item and price
 PASS salon: authenticated guarded edit
 PASS salon: monotonic draft revision
-PASS salon: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished salon 21da65eb
+PASS salon: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished salon 88cf6be8
 PASS salon: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS salon: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS salon: customer cannot see draft-query content
@@ -277,19 +277,19 @@ PASS professional: stale edit refused without overwrite
 PASS professional: raw unsupported recipe/authority config refused without overwrite
 PASS professional: actual recipe detail UI save off
 PASS professional: recipe v1 detail persists without publication
-PASS professional: preview marker exists in authoritative draft — draftVersion=4; marker=QA first professional 21da65eb
+PASS professional: preview marker exists in authoritative draft — draftVersion=4; marker=QA first professional 88cf6be8
 PASS professional: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS professional: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS professional: private preview faithfully hides owner-disabled recipe fact
 PASS professional: actual recipe detail UI save on
 PASS professional: recipe v1 detail persists without publication
-PASS professional: preview marker exists in authoritative draft — draftVersion=5; marker=QA first professional 21da65eb
+PASS professional: preview marker exists in authoritative draft — draftVersion=5; marker=QA first professional 88cf6be8
 PASS professional: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS professional: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS professional: private preview faithfully shows owner-enabled recipe fact
 PASS professional: actual recipe layout UI save
 PASS professional: recipe v1 registered layout persists without publication
-PASS professional: preview marker exists in authoritative draft — draftVersion=6; marker=QA first professional 21da65eb
+PASS professional: preview marker exists in authoritative draft — draftVersion=6; marker=QA first professional 88cf6be8
 PASS professional: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS professional: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS professional: private preview faithfully applies owner-selected registered recipe layout
@@ -312,7 +312,7 @@ PASS professional: actual duration filter restores owned service
 PASS professional: actual search/no-match/recovery preserves owned item and price
 PASS professional: authenticated guarded edit
 PASS professional: monotonic draft revision
-PASS professional: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished professional 21da65eb
+PASS professional: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished professional 88cf6be8
 PASS professional: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS professional: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS professional: customer cannot see draft-query content
@@ -359,19 +359,19 @@ PASS technical: stale edit refused without overwrite
 PASS technical: raw unsupported recipe/authority config refused without overwrite
 PASS technical: actual recipe detail UI save off
 PASS technical: recipe v1 detail persists without publication
-PASS technical: preview marker exists in authoritative draft — draftVersion=4; marker=QA first technical 21da65eb
+PASS technical: preview marker exists in authoritative draft — draftVersion=4; marker=QA first technical 88cf6be8
 PASS technical: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS technical: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS technical: private preview faithfully hides owner-disabled recipe fact
 PASS technical: actual recipe detail UI save on
 PASS technical: recipe v1 detail persists without publication
-PASS technical: preview marker exists in authoritative draft — draftVersion=5; marker=QA first technical 21da65eb
+PASS technical: preview marker exists in authoritative draft — draftVersion=5; marker=QA first technical 88cf6be8
 PASS technical: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS technical: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS technical: private preview faithfully shows owner-enabled recipe fact
 PASS technical: actual recipe layout UI save
 PASS technical: recipe v1 registered layout persists without publication
-PASS technical: preview marker exists in authoritative draft — draftVersion=6; marker=QA first technical 21da65eb
+PASS technical: preview marker exists in authoritative draft — draftVersion=6; marker=QA first technical 88cf6be8
 PASS technical: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS technical: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS technical: private preview faithfully applies owner-selected registered recipe layout
@@ -394,7 +394,7 @@ PASS technical: actual duration filter restores owned service
 PASS technical: actual search/no-match/recovery preserves owned item and price
 PASS technical: authenticated guarded edit
 PASS technical: monotonic draft revision
-PASS technical: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished technical 21da65eb
+PASS technical: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished technical 88cf6be8
 PASS technical: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS technical: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS technical: customer cannot see draft-query content
@@ -438,19 +438,19 @@ PASS farm: stale edit refused without overwrite
 PASS farm: raw unsupported recipe/authority config refused without overwrite
 PASS farm: actual recipe detail UI save off
 PASS farm: recipe v1 detail persists without publication
-PASS farm: preview marker exists in authoritative draft — draftVersion=4; marker=QA first farm 21da65eb
+PASS farm: preview marker exists in authoritative draft — draftVersion=4; marker=QA first farm 88cf6be8
 PASS farm: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS farm: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS farm: private preview faithfully hides owner-disabled recipe fact
 PASS farm: actual recipe detail UI save on
 PASS farm: recipe v1 detail persists without publication
-PASS farm: preview marker exists in authoritative draft — draftVersion=5; marker=QA first farm 21da65eb
+PASS farm: preview marker exists in authoritative draft — draftVersion=5; marker=QA first farm 88cf6be8
 PASS farm: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS farm: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS farm: private preview faithfully shows owner-enabled recipe fact
 PASS farm: actual recipe layout UI save
 PASS farm: recipe v1 registered layout persists without publication
-PASS farm: preview marker exists in authoritative draft — draftVersion=6; marker=QA first farm 21da65eb
+PASS farm: preview marker exists in authoritative draft — draftVersion=6; marker=QA first farm 88cf6be8
 PASS farm: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS farm: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS farm: private preview faithfully applies owner-selected registered recipe layout
@@ -471,7 +471,7 @@ PASS farm: actual category-appropriate availability filter
 PASS farm: actual search/no-match/recovery preserves owned item and price
 PASS farm: authenticated guarded edit
 PASS farm: monotonic draft revision
-PASS farm: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished farm 21da65eb
+PASS farm: preview marker exists in authoritative draft — draftVersion=7; marker=QA unpublished farm 88cf6be8
 PASS farm: Mobile authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":388,"widthCap":390,"frameWidth":388,"overflow":false}
 PASS farm: Desktop authenticated draft iframe/readable/noindex — {"noindex":true,"notice":true,"width":1230,"widthCap":1280,"frameWidth":1230,"overflow":false}
 PASS farm: customer cannot see draft-query content
@@ -482,79 +482,79 @@ PASS farm: touch-size customer cart is visible with correct price
 PASS farm: browser HTTP quote ignores forged prices
 PASS farm: provider-free gate creates no customer payment/order
 PASS retail: actual SSR UTC home
-PASS retail: actual SSR UTC /item/cmwazz5uq000bb95qztepdra1
+PASS retail: actual SSR UTC /item/cmwb0reaz000bgupk4ew4pyit
 PASS retail: actual SSR UTC /shop
 PASS retail: actual SSR Africa/Nairobi home
-PASS retail: actual SSR Africa/Nairobi /item/cmwazz5uq000bb95qztepdra1
+PASS retail: actual SSR Africa/Nairobi /item/cmwb0reaz000bgupk4ew4pyit
 PASS retail: actual SSR Africa/Nairobi /shop
 PASS retail: actual SSR America/New_York home
-PASS retail: actual SSR America/New_York /item/cmwazz5uq000bb95qztepdra1
+PASS retail: actual SSR America/New_York /item/cmwb0reaz000bgupk4ew4pyit
 PASS retail: actual SSR America/New_York /shop
 PASS food: actual SSR UTC home
-PASS food: actual SSR UTC /item/cmwazzmtp002nb95qg45xqxk5
+PASS food: actual SSR UTC /item/cmwb0rurj002ngupk7osbzmuz
 PASS food: actual SSR UTC /shop
 PASS food: actual SSR Africa/Nairobi home
-PASS food: actual SSR Africa/Nairobi /item/cmwazzmtp002nb95qg45xqxk5
+PASS food: actual SSR Africa/Nairobi /item/cmwb0rurj002ngupk7osbzmuz
 PASS food: actual SSR Africa/Nairobi /shop
 PASS food: actual SSR America/New_York home
-PASS food: actual SSR America/New_York /item/cmwazzmtp002nb95qg45xqxk5
+PASS food: actual SSR America/New_York /item/cmwb0rurj002ngupk7osbzmuz
 PASS food: actual SSR America/New_York /shop
 PASS salon: actual SSR UTC home
-PASS salon: actual SSR UTC /item/cmwb002gv004zb95qwx58b1kc
+PASS salon: actual SSR UTC /item/cmwb0sass004xgupk496xolxz
 PASS salon: actual SSR UTC /book
 PASS salon: actual SSR/client calendar identical in UTC
 PASS salon: actual SSR Africa/Nairobi home
-PASS salon: actual SSR Africa/Nairobi /item/cmwb002gv004zb95qwx58b1kc
+PASS salon: actual SSR Africa/Nairobi /item/cmwb0sass004xgupk496xolxz
 PASS salon: actual SSR Africa/Nairobi /book
 PASS salon: actual SSR/client calendar identical in Africa/Nairobi
 PASS salon: actual SSR America/New_York home
-PASS salon: actual SSR America/New_York /item/cmwb002gv004zb95qwx58b1kc
+PASS salon: actual SSR America/New_York /item/cmwb0sass004xgupk496xolxz
 PASS salon: actual SSR America/New_York /book
 PASS salon: actual SSR/client calendar identical in America/New_York
 PASS professional: actual SSR UTC home
-PASS professional: actual SSR UTC /item/cmwb00jxk007hb95qpyc03h5c
+PASS professional: actual SSR UTC /item/cmwb0srtl007fgupkqk0t8fog
 PASS professional: actual SSR UTC /shop
 PASS professional: actual SSR UTC /enquire
 PASS professional: actual SSR UTC /book
 PASS professional: actual SSR/client calendar identical in UTC
 PASS professional: actual SSR Africa/Nairobi home
-PASS professional: actual SSR Africa/Nairobi /item/cmwb00jxk007hb95qpyc03h5c
+PASS professional: actual SSR Africa/Nairobi /item/cmwb0srtl007fgupkqk0t8fog
 PASS professional: actual SSR Africa/Nairobi /shop
 PASS professional: actual SSR Africa/Nairobi /enquire
 PASS professional: actual SSR Africa/Nairobi /book
 PASS professional: actual SSR/client calendar identical in Africa/Nairobi
 PASS professional: actual SSR America/New_York home
-PASS professional: actual SSR America/New_York /item/cmwb00jxk007hb95qpyc03h5c
+PASS professional: actual SSR America/New_York /item/cmwb0srtl007fgupkqk0t8fog
 PASS professional: actual SSR America/New_York /shop
 PASS professional: actual SSR America/New_York /enquire
 PASS professional: actual SSR America/New_York /book
 PASS professional: actual SSR/client calendar identical in America/New_York
 PASS technical: actual SSR UTC home
-PASS technical: actual SSR UTC /item/cmwb014w600adb95q8y36q7xf
+PASS technical: actual SSR UTC /item/cmwb0tc5300a9gupkymyuzd4p
 PASS technical: actual SSR UTC /shop
 PASS technical: actual SSR UTC /enquire
 PASS technical: actual SSR UTC /book
 PASS technical: actual SSR/client calendar identical in UTC
 PASS technical: actual SSR Africa/Nairobi home
-PASS technical: actual SSR Africa/Nairobi /item/cmwb014w600adb95q8y36q7xf
+PASS technical: actual SSR Africa/Nairobi /item/cmwb0tc5300a9gupkymyuzd4p
 PASS technical: actual SSR Africa/Nairobi /shop
 PASS technical: actual SSR Africa/Nairobi /enquire
 PASS technical: actual SSR Africa/Nairobi /book
 PASS technical: actual SSR/client calendar identical in Africa/Nairobi
 PASS technical: actual SSR America/New_York home
-PASS technical: actual SSR America/New_York /item/cmwb014w600adb95q8y36q7xf
+PASS technical: actual SSR America/New_York /item/cmwb0tc5300a9gupkymyuzd4p
 PASS technical: actual SSR America/New_York /shop
 PASS technical: actual SSR America/New_York /enquire
 PASS technical: actual SSR America/New_York /book
 PASS technical: actual SSR/client calendar identical in America/New_York
 PASS farm: actual SSR UTC home
-PASS farm: actual SSR UTC /item/cmwb01qj700d9b95qjcjv2r3y
+PASS farm: actual SSR UTC /item/cmwb0twvg00d5gupkt5m45q7r
 PASS farm: actual SSR UTC /shop
 PASS farm: actual SSR Africa/Nairobi home
-PASS farm: actual SSR Africa/Nairobi /item/cmwb01qj700d9b95qjcjv2r3y
+PASS farm: actual SSR Africa/Nairobi /item/cmwb0twvg00d5gupkt5m45q7r
 PASS farm: actual SSR Africa/Nairobi /shop
 PASS farm: actual SSR America/New_York home
-PASS farm: actual SSR America/New_York /item/cmwb01qj700d9b95qjcjv2r3y
+PASS farm: actual SSR America/New_York /item/cmwb0twvg00d5gupkt5m45q7r
 PASS farm: actual SSR America/New_York /shop
 PASS cross-tenant GET /api/experience refused
 PASS cross-tenant PATCH /api/experience refused
@@ -574,40 +574,40 @@ PASS expired entitlement refuses publish and preserves content
 PASS logout removes server cookie and private API access
 PASS real UI password login succeeds
 PASS real cookie login restores only own workspace
-HYDRATION SAMPLE {"category":"retail","route":"/dashboard/businesses/cmwazz5tb0003b95quh1676rd/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":269,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3049 theme-root@3749 theme-root@3837 theme-root@4537 theme-root@4627 body@5667 state-div@5731 cmt-$@5746 route-root@5837 main@9676 cmt-$@21875 r-script@21961 nextF@21997 nextF@22011 nextF@22056 theme-root@22591","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"retail","route":"/dashboard/businesses/cmwazz5tb0003b95quh1676rd/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":272,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3049 theme-root@3749 theme-root@3837 theme-root@4537 theme-root@4627 body@5667 state-div@5731 cmt-$@5746 route-root@5837 main@9676 cmt-$@21875 r-script@21961 nextF@21997 nextF@22011 nextF@22056 theme-root@22591","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"retail","route":"/dashboard/businesses/cmwazz5tb0003b95quh1676rd/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":275,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3049 theme-root@3749 theme-root@3837 theme-root@4537 theme-root@4627 body@5667 state-div@5731 cmt-$@5746 route-root@5837 main@9676 cmt-$@21875 r-script@21961 nextF@21997 nextF@22011 nextF@22056 theme-root@22591","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"food","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":278,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,catalogue,cmt-$,r-script,nextF,nextF,nextF","rawOffsets":"theme-root@3025 theme-root@3725 theme-root@3813 theme-root@4513 theme-root@4603 body@5643 state-div@5707 cmt-$@5722 route-root@5813 main@9621 catalogue@11023 cmt-$@22911 r-script@22997 nextF@23033 nextF@23047 nextF@23092","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"food","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":282,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,catalogue,cmt-$,r-script,nextF,nextF,nextF","rawOffsets":"theme-root@3025 theme-root@3725 theme-root@3813 theme-root@4513 theme-root@4603 body@5643 state-div@5707 cmt-$@5722 route-root@5813 main@9621 catalogue@11023 cmt-$@22911 r-script@22997 nextF@23033 nextF@23047 nextF@23092","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"food","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":285,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,catalogue,cmt-$,r-script,nextF,nextF,nextF","rawOffsets":"theme-root@3025 theme-root@3725 theme-root@3813 theme-root@4513 theme-root@4603 body@5643 state-div@5707 cmt-$@5722 route-root@5813 main@9621 catalogue@11023 cmt-$@22911 r-script@22997 nextF@23033 nextF@23047 nextF@23092","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"salon","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":288,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3037 theme-root@3737 theme-root@3825 theme-root@4525 theme-root@4615 body@5655 state-div@5719 cmt-$@5734 route-root@5825 main@9738 cmt-$@22590 r-script@22676 nextF@22712 nextF@22726 nextF@22771 theme-root@23306","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"salon","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":292,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3037 theme-root@3737 theme-root@3825 theme-root@4525 theme-root@4615 body@5655 state-div@5719 cmt-$@5734 route-root@5825 main@9738 cmt-$@22590 r-script@22676 nextF@22712 nextF@22726 nextF@22771 theme-root@23306","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"salon","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":296,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3037 theme-root@3737 theme-root@3825 theme-root@4525 theme-root@4615 body@5655 state-div@5719 cmt-$@5734 route-root@5825 main@9738 cmt-$@22590 r-script@22676 nextF@22712 nextF@22726 nextF@22771 theme-root@23306","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"professional","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":299,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3121 theme-root@3821 theme-root@3909 theme-root@4609 theme-root@4699 body@5739 state-div@5803 cmt-$@5818 route-root@5909 main@9911 cmt-$@22068 r-script@22154 nextF@22190 nextF@22204 nextF@22249 theme-root@22784","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"professional","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":302,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3121 theme-root@3821 theme-root@3909 theme-root@4609 theme-root@4699 body@5739 state-div@5803 cmt-$@5818 route-root@5909 main@9911 cmt-$@22068 r-script@22154 nextF@22190 nextF@22204 nextF@22249 theme-root@22784","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"professional","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":305,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3121 theme-root@3821 theme-root@3909 theme-root@4609 theme-root@4699 body@5739 state-div@5803 cmt-$@5818 route-root@5909 main@9911 cmt-$@22068 r-script@22154 nextF@22190 nextF@22204 nextF@22249 theme-root@22784","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"technical","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":309,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3085 theme-root@3785 theme-root@3873 theme-root@4573 theme-root@4663 body@5703 state-div@5767 cmt-$@5782 route-root@5873 main@9842 cmt-$@23016 r-script@23102 nextF@23138 nextF@23152 nextF@23197 theme-root@23732","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"technical","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":313,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3085 theme-root@3785 theme-root@3873 theme-root@4573 theme-root@4663 body@5703 state-div@5767 cmt-$@5782 route-root@5873 main@9842 cmt-$@23016 r-script@23102 nextF@23138 nextF@23152 nextF@23197 theme-root@23732","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-HYDRATION SAMPLE {"category":"technical","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":317,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3085 theme-root@3785 theme-root@3873 theme-root@4573 theme-root@4663 body@5703 state-div@5767 cmt-$@5782 route-root@5873 main@9842 cmt-$@23016 r-script@23102 nextF@23138 nextF@23152 nextF@23197 theme-root@23732","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"food","session":"first-owner","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
+HYDRATION SAMPLE {"category":"retail","route":"/dashboard/businesses/cmwb0re9r0003gupkgifb0ejc/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":266,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3049 theme-root@3749 theme-root@3837 theme-root@4537 theme-root@4627 body@5667 state-div@5731 cmt-$@5746 route-root@5837 main@9673 cmt-$@21833 r-script@21919 nextF@21955 nextF@21969 nextF@22014 theme-root@22549","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"retail","route":"/dashboard/businesses/cmwb0re9r0003gupkgifb0ejc/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":269,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3049 theme-root@3749 theme-root@3837 theme-root@4537 theme-root@4627 body@5667 state-div@5731 cmt-$@5746 route-root@5837 main@9673 cmt-$@21833 r-script@21919 nextF@21955 nextF@21969 nextF@22014 theme-root@22549","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"retail","route":"/dashboard/businesses/cmwb0re9r0003gupkgifb0ejc/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":273,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3049 theme-root@3749 theme-root@3837 theme-root@4537 theme-root@4627 body@5667 state-div@5731 cmt-$@5746 route-root@5837 main@9673 cmt-$@21833 r-script@21919 nextF@21955 nextF@21969 nextF@22014 theme-root@22549","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"food","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":276,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3025 theme-root@3725 theme-root@3813 theme-root@4513 theme-root@4603 body@5643 state-div@5707 cmt-$@5722 route-root@5813 main@9617 cmt-$@23001 r-script@23087 nextF@23123 nextF@23137 nextF@23182 theme-root@23717","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"food","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":279,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3025 theme-root@3725 theme-root@3813 theme-root@4513 theme-root@4603 body@5643 state-div@5707 cmt-$@5722 route-root@5813 main@9617 cmt-$@23001 r-script@23087 nextF@23123 nextF@23137 nextF@23182 theme-root@23717","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"food","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":283,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3025 theme-root@3725 theme-root@3813 theme-root@4513 theme-root@4603 body@5643 state-div@5707 cmt-$@5722 route-root@5813 main@9617 cmt-$@23001 r-script@23087 nextF@23123 nextF@23137 nextF@23182 theme-root@23717","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"salon","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":286,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3037 theme-root@3737 theme-root@3825 theme-root@4525 theme-root@4615 body@5655 state-div@5719 cmt-$@5734 route-root@5825 main@9738 cmt-$@22590 r-script@22676 nextF@22712 nextF@22726 nextF@22771 theme-root@23306","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"salon","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":290,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3037 theme-root@3737 theme-root@3825 theme-root@4525 theme-root@4615 body@5655 state-div@5719 cmt-$@5734 route-root@5825 main@9738 cmt-$@22590 r-script@22676 nextF@22712 nextF@22726 nextF@22771 theme-root@23306","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"salon","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":294,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3037 theme-root@3737 theme-root@3825 theme-root@4525 theme-root@4615 body@5655 state-div@5719 cmt-$@5734 route-root@5825 main@9738 cmt-$@22590 r-script@22676 nextF@22712 nextF@22726 nextF@22771 theme-root@23306","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"professional","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":298,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3121 theme-root@3821 theme-root@3909 theme-root@4609 theme-root@4699 body@5739 state-div@5803 cmt-$@5818 route-root@5909 main@9920 cmt-$@22620 r-script@22706 nextF@22742 nextF@22756 nextF@22801 theme-root@23336","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"professional","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":302,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3121 theme-root@3821 theme-root@3909 theme-root@4609 theme-root@4699 body@5739 state-div@5803 cmt-$@5818 route-root@5909 main@9920 cmt-$@22620 r-script@22706 nextF@22742 nextF@22756 nextF@22801 theme-root@23336","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"professional","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":305,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3121 theme-root@3821 theme-root@3909 theme-root@4609 theme-root@4699 body@5739 state-div@5803 cmt-$@5818 route-root@5909 main@9920 cmt-$@22620 r-script@22706 nextF@22742 nextF@22756 nextF@22801 theme-root@23336","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"technical","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","attempt":1,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":308,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3085 theme-root@3785 theme-root@3873 theme-root@4573 theme-root@4663 body@5703 state-div@5767 cmt-$@5782 route-root@5873 main@9840 cmt-$@23010 r-script@23096 nextF@23132 nextF@23146 nextF@23191 theme-root@23726","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"technical","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","attempt":2,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":311,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3085 theme-root@3785 theme-root@3873 theme-root@4573 theme-root@4663 body@5703 state-div@5767 cmt-$@5782 route-root@5873 main@9840 cmt-$@23010 r-script@23096 nextF@23132 nextF@23146 nextF@23191 theme-root@23726","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+HYDRATION SAMPLE {"category":"technical","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","attempt":3,"throttle":4,"page":"own-owner","ok":true,"order":"div,div,div,script#_R_,script,script,next-route-announcer","rawSeq":315,"rawStatus":200,"rawOrder":"theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-root,main,cmt-$,r-script,nextF,nextF,nextF,theme-root","rawOffsets":"theme-root@3085 theme-root@3785 theme-root@3873 theme-root@4573 theme-root@4663 body@5703 state-div@5767 cmt-$@5782 route-root@5873 main@9840 cmt-$@23010 r-script@23096 nextF@23132 nextF@23146 nextF@23191 theme-root@23726","rawBodyHead":"<body class=\"min-h-screen bg-zinc-50 text-zinc-900 antialiased\"><div hidden=\"\"><!--$--><!--/$--></div><div class=\"jata-p"}
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"food","session":"first-owner","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
 PASS food: another tenant's session cannot read this draft preview — {"status":200,"markerSeen":false}
-M418 DIAG XTENANT {"kind":"positive-control","business":"food","session":"own-owner","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","status":200,"markerSeen":true}
+M418 DIAG XTENANT {"kind":"positive-control","business":"food","session":"own-owner","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","status":200,"markerSeen":true}
 PASS food: owning session still reads its own draft preview (control) — {"status":200,"markerSeen":true}
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"salon","session":"first-owner","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"salon","session":"first-owner","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
 PASS salon: another tenant's session cannot read this draft preview — {"status":200,"markerSeen":false}
-M418 DIAG XTENANT {"kind":"positive-control","business":"salon","session":"own-owner","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","status":200,"markerSeen":true}
+M418 DIAG XTENANT {"kind":"positive-control","business":"salon","session":"own-owner","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","status":200,"markerSeen":true}
 PASS salon: owning session still reads its own draft preview (control) — {"status":200,"markerSeen":true}
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"professional","session":"first-owner","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"professional","session":"first-owner","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
 PASS professional: another tenant's session cannot read this draft preview — {"status":200,"markerSeen":false}
-M418 DIAG XTENANT {"kind":"positive-control","business":"professional","session":"own-owner","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","status":200,"markerSeen":true}
+M418 DIAG XTENANT {"kind":"positive-control","business":"professional","session":"own-owner","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","status":200,"markerSeen":true}
 PASS professional: owning session still reads its own draft preview (control) — {"status":200,"markerSeen":true}
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"technical","session":"first-owner","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"technical","session":"first-owner","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
 PASS technical: another tenant's session cannot read this draft preview — {"status":200,"markerSeen":false}
-M418 DIAG XTENANT {"kind":"positive-control","business":"technical","session":"own-owner","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","status":200,"markerSeen":true}
+M418 DIAG XTENANT {"kind":"positive-control","business":"technical","session":"own-owner","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","status":200,"markerSeen":true}
 PASS technical: owning session still reads its own draft preview (control) — {"status":200,"markerSeen":true}
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"farm","session":"first-owner","route":"/dashboard/businesses/cmwb01qhs00d1b95qg6f2tfj0/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb01qhs00d1b95qg6f2tfj0/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"farm","session":"first-owner","route":"/dashboard/businesses/cmwb0twur00cxgupk70ep68xz/preview","status":200,"markerSeen":false,"diag":{"iframePresent":false,"topUrl":"/dashboard/businesses/cmwb0twur00cxgupk70ep68xz/preview","topReadyState":"complete","iframes":0,"bodyChildren":28,"bodyTextLength":17681,"markerInTopDocument":false,"passwordFields":0,"nextErrorOverlay":false,"scripts":20,"topTextHead":"◐AppearanceLime Spark / GraphiteChoose your JATA themeLime Spark / GraphiteEnergetic, modern, and action-oriented with a"}}
 PASS farm: another tenant's session cannot read this draft preview — {"status":200,"markerSeen":false}
-M418 DIAG XTENANT {"kind":"positive-control","business":"farm","session":"own-owner","route":"/dashboard/businesses/cmwb01qhs00d1b95qg6f2tfj0/preview","status":200,"markerSeen":true}
+M418 DIAG XTENANT {"kind":"positive-control","business":"farm","session":"own-owner","route":"/dashboard/businesses/cmwb0twur00cxgupk70ep68xz/preview","status":200,"markerSeen":true}
 PASS farm: owning session still reads its own draft preview (control) — {"status":200,"markerSeen":true}
 PASS SSR body order: hydration bootstrap scripts never lead the content (M11 #418 regression) — {"status":"PASS","checked":15,"required":15,"inverted":[]}
 PASS no original uploads/media writes introduced
@@ -620,43 +620,43 @@ PASS professional: exact-id fixture cleanup
 PASS technical: exact-id fixture cleanup
 PASS farm: exact-id fixture cleanup
 M418E BEGIN 26 buffered evidence lines
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"food","session":"first-owner","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","status":200,"markerSeen":
-M418 DIAG XTENANT {"kind":"positive-control","business":"food","session":"own-owner","route":"/dashboard/businesses/cmwazzmt0002fb95qaq5uul3u/preview","status":200,"markerSeen
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"salon","session":"first-owner","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","status":200,"markerSeen"
-M418 DIAG XTENANT {"kind":"positive-control","business":"salon","session":"own-owner","route":"/dashboard/businesses/cmwb002g5004rb95qm5sv6e24/preview","status":200,"markerSee
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"professional","session":"first-owner","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","status":200,"mark
-M418 DIAG XTENANT {"kind":"positive-control","business":"professional","session":"own-owner","route":"/dashboard/businesses/cmwb00jwv0079b95qdtnlgwc2/preview","status":200,"ma
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"technical","session":"first-owner","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","status":200,"markerS
-M418 DIAG XTENANT {"kind":"positive-control","business":"technical","session":"own-owner","route":"/dashboard/businesses/cmwb014v900a5b95qc95n0nll/preview","status":200,"marke
-M418 DIAG XTENANT {"kind":"cross-tenant","business":"farm","session":"first-owner","route":"/dashboard/businesses/cmwb01qhs00d1b95qg6f2tfj0/preview","status":200,"markerSeen":
-M418 DIAG XTENANT {"kind":"positive-control","business":"farm","session":"own-owner","route":"/dashboard/businesses/cmwb01qhs00d1b95qg6f2tfj0/preview","status":200,"markerSeen
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"food","session":"first-owner","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","status":200,"markerSeen":
+M418 DIAG XTENANT {"kind":"positive-control","business":"food","session":"own-owner","route":"/dashboard/businesses/cmwb0ruqs002fgupk5p2abmkf/preview","status":200,"markerSeen
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"salon","session":"first-owner","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","status":200,"markerSeen"
+M418 DIAG XTENANT {"kind":"positive-control","business":"salon","session":"own-owner","route":"/dashboard/businesses/cmwb0sas4004pgupkw3rw358t/preview","status":200,"markerSee
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"professional","session":"first-owner","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","status":200,"mark
+M418 DIAG XTENANT {"kind":"positive-control","business":"professional","session":"own-owner","route":"/dashboard/businesses/cmwb0srt00077gupko1i8deg6/preview","status":200,"ma
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"technical","session":"first-owner","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","status":200,"markerS
+M418 DIAG XTENANT {"kind":"positive-control","business":"technical","session":"own-owner","route":"/dashboard/businesses/cmwb0tc4g00a1gupkzmipj51d/preview","status":200,"marke
+M418 DIAG XTENANT {"kind":"cross-tenant","business":"farm","session":"first-owner","route":"/dashboard/businesses/cmwb0twur00cxgupk70ep68xz/preview","status":200,"markerSeen":
+M418 DIAG XTENANT {"kind":"positive-control","business":"farm","session":"own-owner","route":"/dashboard/businesses/cmwb0twur00cxgupk70ep68xz/preview","status":200,"markerSeen
 M418 GATE PASS: all required samples and checks passed
 M418E PAIR dom=div,div,div,script#_R_,script,script,next-rout raw=theme-root,theme-root,theme-root,theme-root,th :: professional a3
 M418E PAIR dom=div,div,div,script#_R_,script,script,next-rout raw=theme-root,theme-root,theme-root,theme-root,th :: technical a1
 M418E PAIR dom=div,div,div,script#_R_,script,script,next-rout raw=theme-root,theme-root,theme-root,theme-root,th :: technical a2
 M418E PAIR dom=div,div,div,script#_R_,script,script,next-rout raw=theme-root,theme-root,theme-root,theme-root,th :: technical a3
-M418E RESP seq=271 len=53039 t:40057/b/qa-retail-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=272 len=53039 t:40057/b/qa-retail-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=274 len=53039 t:40057/b/qa-retail-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=275 len=53039 t:40057/b/qa-retail-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=284 len=56173 ost:40057/b/qa-food-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=285 len=56173 ost:40057/b/qa-food-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=320 len=56173 ost:40057/b/qa-food-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=321 len=56173 ost:40057/b/qa-food-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=295 len=55021 st:40057/b/qa-salon-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=296 len=55021 st:40057/b/qa-salon-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=324 len=55021 st:40057/b/qa-salon-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=325 len=55021 st:40057/b/qa-salon-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=304 len=53037 7/b/qa-professional-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=305 len=53037 7/b/qa-professional-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=328 len=53037 7/b/qa-professional-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=329 len=53037 7/b/qa-professional-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=316 len=55984 0057/b/qa-technical-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=317 len=55984 0057/b/qa-technical-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=332 len=55984 0057/b/qa-technical-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=333 len=55984 0057/b/qa-technical-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=336 len=54868 ost:40057/b/qa-farm-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
-M418E RESP seq=337 len=54868 ost:40057/b/qa-farm-21da65eb?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=268 len=52931 t:44615/b/qa-retail-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=269 len=52931 t:44615/b/qa-retail-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=272 len=52931 t:44615/b/qa-retail-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=273 len=52931 t:44615/b/qa-retail-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=282 len=56487 ost:44615/b/qa-food-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=283 len=56487 ost:44615/b/qa-food-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=318 len=56487 ost:44615/b/qa-food-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=319 len=56487 ost:44615/b/qa-food-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=293 len=55021 st:44615/b/qa-salon-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=294 len=55021 st:44615/b/qa-salon-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=322 len=55021 st:44615/b/qa-salon-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=323 len=55021 st:44615/b/qa-salon-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=304 len=54843 5/b/qa-professional-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=305 len=54843 5/b/qa-professional-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=326 len=54843 5/b/qa-professional-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=327 len=54843 5/b/qa-professional-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=314 len=55972 4615/b/qa-technical-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=315 len=55972 4615/b/qa-technical-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=330 len=55972 4615/b/qa-technical-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=331 len=55972 4615/b/qa-technical-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=334 len=52787 ost:44615/b/qa-farm-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
+M418E RESP seq=335 len=52787 ost:44615/b/qa-farm-88cf6be8?preview=draft&v=0 :: theme-root,theme-root,theme-root,theme-root,theme-root,body,state-div,cmt-$,route-ro
 M418E END
 530 passed, 0 failed, 0 skipped. Authenticated production-HTTP/browser/native-DB checks; synthetic entitlement, NOT provider payment/physical Android/full engine proof. Temporary server stopped.
 HYDRATION SAMPLES required=15 ok=15 failed=0 unresolved=0 missing=0 malformed=0 auxiliary=66 duplicates=0
@@ -869,9 +869,9 @@ PASS  compressed: unsupported/unsafe GLB graph retains image, no canvas or uncau
 PASS  reduce: live change disposes3D and restores static immediately  ({"reason":"reduced-motion","mode":"static","canvasCount":0,"canvasVisible":false,"imageVisible":true})
 PASS  save-data: live change disposes3D and restores static immediately  ({"reason":"save-data","mode":"static","canvasCount":0,"canvasVisible":false,"imageVisible":true})
 PASS  context loss: static image, removed canvas, no uncaught exception  ({"reason":"model-load-failed","mode":"static","canvasCount":0,"canvasVisible":false,"imageVisible":true})
-PASS  turntable: finite8-second budget stops actual GPU draws  (draws=483->483)
-PASS  manual keyboard: orbit renders on demand after automatic budget  (draws=483->484)
-PASS  manual touch: orbit works without hover/keyboard  (draws=484->485)
+PASS  turntable: finite8-second budget stops actual GPU draws  (draws=484->484)
+PASS  manual keyboard: orbit renders on demand after automatic budget  (draws=484->485)
+PASS  manual touch: orbit works without hover/keyboard  (draws=485->486)
 22 passed, 0 failed, 0 skipped
 ```
 

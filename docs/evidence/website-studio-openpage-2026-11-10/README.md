@@ -5,8 +5,8 @@ No production data, deployment, payment configuration or plan pricing was change
 Canvas / Website / classic editor tabs are intentionally still present, and the customer-facing name
 remains **Website Studio** at KES 999 / 30 days.
 
-Code verification for the category-authority fixes was run at `9e18fbf`; the final commit also adds
-one PostgreSQL-only test and this evidence. The authenticated database/browser evidence below was
+Code and test verification for the category-authority fixes and the PostgreSQL generation test was
+run at `d534797`. This evidence-only commit follows it; no application code changes after that SHA. The authenticated database/browser evidence below was
 produced by that CI run on disposable PostgreSQL, never against production.
 
 ## What this evidence proves — and what it does not
@@ -85,10 +85,10 @@ client. They are **PASS** unless marked otherwise.
 
 | Job | Evidence |
 | --- | --- |
-| `Prisma, tenant tests, typecheck and production build` (run 42869947754, 10m01s) | `prisma validate` + `generate` + `migrate deploy`, full database-backed vitest suite, isolated Website Studio PostgreSQL suites, **typecheck**, **production build**, and **authenticated Website Studio browser acceptance** all passed. No skips are permitted by this workflow. |
-| `Journey against a real database` (run 42869947953, 14m45s) | Full native DB suite **4791 passed**; experience journey **17/17**; Business POS journey **33/33**; authenticated production HTTP/browser/DB journeys for retail, food, salon, professional, technical and farm. Includes draft save/retrieval, monotonic revisions, stale-write refusal without overwrite, preview/live isolation, publication snapshots, published restore, cross-tenant session isolation, customer rendering on `/b/[slug]`, and no original-media/provider writes. Full log: `github-authenticated-acceptance.md`. |
-| `Exact candidate applies on disposable PostgreSQL 18` (3m46s) | PASS. |
-| `Real-Chrome six-viewport capture on a disposable database` (9m23s) | PASS. |
+| `Prisma, tenant tests, typecheck and production build` (run 42873770347, 10m03s) | `prisma validate` + `generate` + `migrate deploy`, full database-backed vitest suite, isolated Website Studio PostgreSQL suites, **typecheck**, **production build**, and **authenticated Website Studio browser acceptance** all passed. No skips are permitted by this workflow. |
+| `Journey against a real database` (run 42873770478, 14m25s) | Full native DB suite **4797 passed**; experience journey **17/17**; Business POS journey **33/33**; authenticated production HTTP/browser/DB journeys for retail, food, salon, professional, technical and farm. Includes draft save/retrieval, monotonic revisions, stale-write refusal without overwrite, preview/live isolation, publication snapshots, published restore, cross-tenant session isolation, customer rendering on `/b/[slug]`, and no original-media/provider writes. Full log: `github-authenticated-acceptance.md`. |
+| `Exact candidate applies on disposable PostgreSQL 18` (3m08s) | PASS. |
+| `Real-Chrome six-viewport capture on a disposable database` (9m02s) | PASS. |
 | `Migrations + schema on PostgreSQL 18`, `Production build path on PostgreSQL 18`, `Schema, types, unit suite, build`, `Migrations and PostgreSQL suite` | PASS. |
 | `Static (install, generate, lint, typecheck, audit)` | PASS. |
 | `D2 — build, audit and controls on the candidate tree` | PASS. |
@@ -101,20 +101,21 @@ real user, real business row, real Studio guard and real read model: understand,
 candidates, refine a generated candidate, deny a foreign tenant with 403, require a session with 401,
 and refuse a category switch through the refinement payload. It also proves the legacy
 `Business.category = "Restaurant"` value resolves to the `food` profile. It is skipped in the
-no-database sandbox and executed by the CI database workflows; its result is part of the final PR run.
+no-database sandbox; the CI database workflows executed it and the check is **PASS** (the full native
+DB suite grew from 4791 to **4797** passing tests).
 
 ### Acceptance matrix
 
 | Requirement | Result | Evidence |
 | --- | --- | --- |
-| Authenticated generation and refinement API requests | **CI-covered by the final database run** (`openpage-authenticated-postgres.test.ts`); mocked-route coverage is PASS 14/14 | `openpage-integration.test.ts`, PR final run |
+| Authenticated generation and refinement API requests | **PASS** (6/6 PostgreSQL route tests; mocked-route coverage 14/14) | `openpage-authenticated-postgres.test.ts` in run 42873770478 / 42873770347; `openpage-integration.test.ts` |
 | Draft save/retrieval, revision creation and rollback | **PASS** | CI journey: monotonic revisions, stale edit refused without overwrite, published restore is draft-only; `serverContext`/Experience tests |
 | Asset upload/retrieval | **PASS for the supported contract; BLOCKED for durable binary upload** | Inline bytes are refused with 503 `inline_media_persistence_disabled`; hosted-path media references are accepted and renderer assets survive. Durable object storage/provider acceptance is deferred by the owner, so a real binary upload was **not** performed. |
 | Business-to-business tenant isolation | **PASS** | CI: another tenant's session cannot read a draft preview (`markerSeen:false`); foreign generation returns 403 before a read; security suite |
 | Subscription entitlement enforcement | **PASS with synthetic entitlement** | Publish is 403 while unpaid, 200 after the synthetic stored entitlement; KES 999 / 30 days unchanged. Not a live payment-provider test. |
 | Live `/b/[slug]` rendering and publication | **PASS** | CI: exact reviewed version published and snapshotted, customer sees content, no-JS/mobile rendering, later draft does not alter live site |
 | Browser journey and screenshots | **PASS** | local `check.log` + five fresh PNGs; CI authenticated browser acceptance PASS |
-| GitHub checks | **PASS except the pre-existing programme-completeness gate** | `github-checks.log` |
+| GitHub checks | **PASS except the pre-existing programme-completeness gate** (19 pass, 1 fail, 1 skip; see the exact table in `github-checks.log`) | `github-checks.log` |
 
 ## Review fixes in this branch
 
