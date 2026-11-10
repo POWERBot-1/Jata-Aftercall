@@ -14,6 +14,9 @@ import { WorkspaceHero, WorkspacePanel, WorkspaceSectionHead } from "@/component
 import { ArrowRight, BookOpen, Bot, CalendarDays, Check, CreditCard, Receipt, ShieldCheck, Smartphone, Sparkles, Store, Wand2 } from "lucide-react";
 import { PlanCard } from "@/components/workspace/PlanCard";
 import { WORKSPACE_HERO_PHOTO } from "@/lib/workspaceImagery";
+import { FRONT_DESK_TIER_KEYS, FRONT_DESK_TIER_PRICING, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
+import { buildMarketingCatalogue, frontDeskTierStatus, isPriceMatchedRow, VOICE_SELLING_CONDITIONS } from "@/lib/productCatalogue";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Subscription" };
@@ -168,7 +171,19 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   // The complete catalogue in the marketing order — the single authoritative source shared with
   // the homepage and /pricing, so the three surfaces can never disagree. A stored `PlanConfig`
   // row always wins; the canonical fallback rows fill only genuinely missing slots.
-  const catalogue: HomepagePlanCard[] = homepagePlanCards(plansResult.all.length > 0 ? plansResult.all : FALLBACK_PLANS);
+  const catalogue: HomepagePlanCard[] = buildMarketingCatalogue(plansResult.all, homepagePlanCards);
+  // The Front Desk family is a separate customer-facing offer group: every approved tier
+  // remains visible when its PlanConfig row is missing, while status stays fail-closed.
+  const voiceReadiness = getVoiceReadiness();
+  const frontDeskTiers = FRONT_DESK_TIER_KEYS.map((key) => {
+    const approved = FRONT_DESK_TIER_PRICING[key];
+    const stored = plansResult.all.find((plan) => plan.key === key);
+    const catalogueMatch = isPriceMatchedRow(stored, key);
+    return {
+      ...approved,
+      status: frontDeskTierStatus({ key, catalogueMatch, voiceCanSell: voiceReadiness.canSell }),
+    };
+  });
 
   // The complete AI Front Desk 2.0 family for the catalogue section: all four tiers at their
   // approved prices with the same catalogue/provider availability the public surfaces show,
@@ -353,6 +368,39 @@ export default async function SubscriptionPage({ searchParams }: Props) {
           </section>
         </>
       )}
+
+      <section id="front-desk-tiers" aria-labelledby="front-desk-tiers-title" className="scroll-mt-28">
+        <WorkspaceSectionHead
+          id="front-desk-tiers-title"
+          title="AI Front Desk 2.0 — all four packages"
+          meta="Approved tiers remain visible even when catalogue activation is pending"
+        />
+        <WorkspacePanel>
+          <p className="ws-muted ws-small">
+            These are informational package offers. A missing or mismatched active PlanConfig row means the tier cannot be purchased yet; Voice additionally requires all provider and commercial readiness checks. No entitlement is granted by viewing this list.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {frontDeskTiers.map((tier) => (
+              <article key={tier.key} data-plan={tier.key} className="flex flex-col gap-2 rounded-xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] p-4">
+                <p className="font-semibold">{tier.name}</p>
+                <p><strong>KES {formatNumber(tier.priceKES)}</strong> <span className="ws-muted text-sm">per {tier.durationDays} days</span></p>
+                <StatusPill tone="neutral">{tier.status}</StatusPill>
+                {tier.key === AI_FRONT_DESK_VOICE_KEY && !voiceReadiness.canSell ? (
+                  <div className="ws-muted ws-tiny">
+                    <p>Pending before sale or live calls:</p>
+                    <ul className="list-disc pl-5">
+                      {VOICE_SELLING_CONDITIONS.map((condition) => <li key={condition}>{condition}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+                <Link href={tier.key === AI_FRONT_DESK_VOICE_KEY ? "/products/ai-front-desk#voice" : "/products/ai-front-desk"} className="jata-btn jata-btn-secondary jata-btn-sm mt-auto">
+                  View package details
+                </Link>
+              </article>
+            ))}
+          </div>
+        </WorkspacePanel>
+      </section>
 
       {/* The complete offer catalogue — shared source and order with the homepage and /pricing.
           Read-only: listing an offer never subscribes, renews or charges anything, and each card

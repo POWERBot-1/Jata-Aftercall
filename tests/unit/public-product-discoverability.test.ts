@@ -287,6 +287,30 @@ describe("public navigation entry points", () => {
   });
 });
 
+describe("customer-facing plan visibility surfaces", () => {
+  it("renders all four approved Front Desk tiers on the public homepage", () => {
+    const homepage = read("app/page.tsx");
+    expect(homepage).toContain('id="front-desk-packages"');
+    expect(homepage).toContain("FRONT_DESK_TIER_KEYS.map");
+    expect(homepage).toContain("FRONT_DESK_TIER_PRICING[key]");
+    expect(homepage).toContain("frontDeskTierStatus(");
+    expect(homepage).toContain('"/products/ai-front-desk#voice"');
+    expect(homepage).toContain("Explore every JATA AFTERCALL product and package");
+  });
+
+  it("renders the resilient complete catalogue and all four tiers in customer Subscription", () => {
+    const subscription = read("app/dashboard/subscription/page.tsx");
+    expect(subscription).toContain("buildMarketingCatalogue(plansResult.all, homepagePlanCards)");
+    expect(subscription).toContain('id="front-desk-tiers"');
+    expect(subscription).toContain("FRONT_DESK_TIER_KEYS.map");
+    expect(subscription).toContain("FRONT_DESK_TIER_PRICING[key]");
+    expect(subscription).toContain("frontDeskTierStatus(");
+    // The payable cards still use only real active PlanConfig rows and server checkout URLs.
+    expect(subscription).toContain("plansResult.list.map");
+    expect(subscription).toContain("getCheckoutUrl(selected.id, plan.id)");
+  });
+});
+
 describe("Vercel preview build configuration", () => {
   it("forces every deployment, including PR previews, to build (vercel.json overrides the dashboard)", () => {
     const config = JSON.parse(read("vercel.json"));

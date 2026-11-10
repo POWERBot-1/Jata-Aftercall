@@ -18,6 +18,9 @@ import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUD
 import { isVerifiedDemoRecord } from "@/lib/demoContent";
 import { isPublicDemoRow } from "@/lib/demoContact";
 import { DEMO_PAYMENT_PREFIX } from "@/lib/demoData";
+import { FRONT_DESK_TIER_KEYS, FRONT_DESK_TIER_PRICING, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
+import { frontDeskTierStatus, isPriceMatchedRow, VOICE_SELLING_CONDITIONS } from "@/lib/productCatalogue";
+import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +62,19 @@ export default async function HomePage() {
   // without visiting /products first (customer-interface completion directive).
   const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS)
     .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE");
+  // Keep the complete four-tier family visible on the customer homepage even when some
+  // PlanConfig rows are absent. These cards are informational; checkout still requires a
+  // real, price-matched active row and the existing server-side payment gates.
+  const voiceReadiness = getVoiceReadiness();
+  const frontDeskTiers = FRONT_DESK_TIER_KEYS.map((key) => {
+    const approved = FRONT_DESK_TIER_PRICING[key];
+    const stored = storedPlans.find((plan) => plan.key === key);
+    const catalogueMatch = isPriceMatchedRow(stored, key);
+    return {
+      ...approved,
+      status: frontDeskTierStatus({ key, catalogueMatch, voiceCanSell: voiceReadiness.canSell }),
+    };
+  });
 
   // The four AI Front Desk 2.0 tiers, at the approved tier prices, with availability from
   // the same price-matched catalogue row and Voice provider gate /products uses. The grid
@@ -253,6 +269,38 @@ export default async function HomePage() {
               dashboard. The separate owner products — Business POS, JATA BOS PRO and JATA Autopilot — are sold per
               business: they are not part of your page plan, each is paid for in its own workspace, and each switches on
               only once the payment is confirmed.
+            </p>
+          </div>
+        </section>
+
+        {/* AI Front Desk 2.0 — customer-visible family, independent of partial PlanConfig rows. */}
+        <section className="lp-section lp-section--cream" id="front-desk-packages" aria-labelledby="front-desk-packages-title">
+          <div className="lp-wrap">
+            <div className="lp-section__head">
+              <div>
+                <p className="lp-kicker">AI Front Desk 2.0</p>
+                <h2 id="front-desk-packages-title" className="lp-h2">Choose your front desk package</h2>
+                <p className="lp-lede">All four approved tiers are visible here. Availability is shown honestly; seeing a package does not activate it or start payment.</p>
+              </div>
+            </div>
+            <div className="lp-plans" data-plan-count={frontDeskTiers.length}>
+              {frontDeskTiers.map((tier) => (
+                <article key={tier.key} className="lp-plan" data-plan={tier.key}>
+                  <p className="lp-plan__name">{tier.name}</p>
+                  <p className="lp-plan__price">KES {formatNumber(tier.priceKES)}</p>
+                  <p className="lp-plan__period">per {tier.durationDays} days • {tier.durationDays} days access</p>
+                  <p className="lp-plan__fine" role="status">{tier.status}</p>
+                  {tier.key === AI_FRONT_DESK_VOICE_KEY && !voiceReadiness.canSell ? (
+                    <p className="lp-plan__blurb">Awaiting provider and commercial readiness: {VOICE_SELLING_CONDITIONS.join("; ")}.</p>
+                  ) : null}
+                  <Link href={tier.key === AI_FRONT_DESK_VOICE_KEY ? "/products/ai-front-desk#voice" : "/products/ai-front-desk"} className="lp-plan__cta">
+                    View package details
+                  </Link>
+                </article>
+              ))}
+            </div>
+            <p className="lp-pricing__note">
+              <Link href="/products">Explore every JATA AFTERCALL product and package →</Link>
             </p>
           </div>
         </section>
