@@ -65,9 +65,9 @@ is filtered out; the production build has no HMR client). It also asserts exactl
 | `02-three-distinct-layouts.png` | Three real previews rendered by the customer storefront: Cinematic · Bistro, Marketplace · Modern Grill and Location-led · Street Food, with structure similarity 0% / 53% / 26%. Hero and gallery photography are present. |
 | `03-theme-and-visual-refinement.png` | Editor stage after choosing a layout, Theme tab, "Street Food" approved theme selected and repainted live. |
 | `04-editor-mobile-preview.png` | Mobile preview, a real 390 px page (previously the frame collapsed to half-width). |
-| `05-publish-controls.png` | The 13-item publication checklist and the "Publish my website" control; the stubbed publish response reports "You're live" at `/b/choma-place`. |
+| `05-publish-controls.png` | The 14-item publication checklist and the "Publish my website" control; the stubbed publish response reports "You're live" at `/b/choma-place`. |
 | `check.log` | Verbatim output of the final browser PASS run. |
-| `preview.log` | Verbatim post-build editor load check: HTTP 200, one live preview, save/publish/properties/theme controls present, no page errors. |
+| `preview.log` | Verbatim post-build editor load check: HTTP 200, one live preview, 390 px mobile frame, save/publish/properties/theme controls present, 14 of 14 checklist items passing, no page errors. |
 | `vitest.log` | Verbatim full-suite run: 4513 passed, 1 failed, 337 skipped (`vitest` exit 1, only the environmental Prisma failure). |
 | `typecheck.log` | Verbatim `npx tsc --noEmit`: exactly the same three offline-Prisma errors (`tsc` exit 1). |
 | `lint.log` | Verbatim `npm run lint`: 0 errors, 51 warnings (`eslint` exit 0). |
@@ -91,7 +91,7 @@ No `ignoreBuildErrors`, no dependency change and no Prisma workaround was commit
   the candidate previews.
 * Next 16 / React 18 prints the recurring `fetchPriority` prop warning during SSR. It predates this
   work and does not affect the acceptance flow.
-* The publish checklist uses the existing `✅` / `⚠️` emoji. Every item in the run is a pass, but this
+* The publish checklist uses the existing `✅` / `⚠️` emoji. All 14 items in the run are passes (`preview.log`), but this
   headless Chromium has no emoji font, so the screenshot renders each pass mark as a hollow box. The
   server-backed `status: "pass"` values and the enabled publish button are the functional evidence.
 * The inactive device-picker buttons in the editor are icon-only and nearly blend into the dark
