@@ -1,0 +1,3 @@
+tests/prisma/autopilot-constraints-and-concurrency.test.ts(29,29): error TS2339: Property 'PrismaClientKnownRequestError' does not exist on type 'typeof Prisma'.
+tests/prisma/experience-boundary.test.ts(34,19): error TS2694: Namespace '"/home/user/Jata-Aftercall/node_modules/.prisma/client/default".Prisma' has no exported member 'BusinessUncheckedCreateInput'.
+tests/unit/autopilot-phase1-hardening.test.ts(493,33): error TS2339: Property 'dmmf' does not exist on type 'typeof Prisma'.
