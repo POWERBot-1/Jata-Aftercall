@@ -137,7 +137,13 @@ shipped.**
   and the byte sizes gave the third and final cause: **`page.screenshot` re-applies Puppeteer's own
   tracked viewport and silently undoes a CDP metrics override**. 1366×768 stayed ~35,400 bytes at
   every tier; the downscale never reached the encoder.
-- Current code: capture through **CDP `Page.captureScreenshot`** after
+- **Current code (`b9dd943`, check run `130167430117`): 6/6 viewports published and retrieved as
+  complete JPEGs**, one annotation each (2,053–2,598 bytes), 7 viewports-worth of annotations total,
+  well inside the budget.** Inspected: 320×568 and 1366×768 both show the real Nyumbani Kitchen
+  storefront with the fictional-demo disclosure banner, the restaurant hero and headline, the sample
+  offer block and the graphite/lime action bar — mobile and desktop layouts both intact, no clipping
+  or overflow visible at this scale.
+- Implementation: capture through **CDP `Page.captureScreenshot`** after
   `Emulation.setDeviceMetricsOverride`, so the downscale actually lands, restore the original metrics
   after the loop, and record every tier's byte size in the row. If two consecutive tiers produce
   identical bytes the run reports `the browser ignored the downscale (tier byte sizes: …)` instead of
@@ -266,7 +272,7 @@ These cannot be answered by engineering. Each one is a hard blocker on the named
 | Six-viewport retrieval, run at `14d4fe4` | `retrieve-visual-evidence.mjs 130143153630` | **0/6 — BLOCKED**, budget too tight; found by the new script | 2 |
 | Six-viewport retrieval, run at `6eb1009` | `retrieve-visual-evidence.mjs 130152615805` | **0/6** — six explicit `MOTION_VISUAL_MISSING_*` errors exposed the unused tier width | 1 |
 | Six-viewport retrieval, run at `b9ecbe7` | `retrieve-visual-evidence.mjs 130159647906` | **0/6** — the same errors plus identical tier byte sizes exposed the Puppeteer viewport reset | 1 |
-| Six-viewport round trip, current code | measured on the real capture | first fitting tier is genuinely downscaled (100 px), 1 part, complete JPEG | 0 |
+| **Six-viewport retrieval, run at `b9dd943`** | `retrieve-visual-evidence.mjs 130167430117` | **6/6 complete JPEGs**, one annotation each, 2,053–2,598 bytes | **0** |
 | Authenticated real-DB browser journey (local) | `npm run test:browser:studio-authenticated` | **BLOCKED** — no isolated DB/Chrome | 2 |
 | `prisma generate` (local) | `bash scripts/lib/prisma-generate.sh` | **BLOCKED** — `binaries.prisma.sh` unreachable | 1 |
 
