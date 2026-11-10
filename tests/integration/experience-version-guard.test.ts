@@ -10,7 +10,8 @@
  *    compared with published versions when they exist, and reported as "no-history" when they do not.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createExperienceDocument } from "@/lib/experience/document";
+import { createExperienceDocument, normalizeExperienceDocument, themeOf } from "@/lib/experience/document";
+import { templateForDocument } from "@/lib/experience/templateFamilies";
 
 const mocks = vi.hoisted(() => ({
   session: { userId: "user-a", role: "OWNER" } as any,
@@ -145,6 +146,125 @@ describe("PATCH: whole-document writes must name their base version", () => {
   it("rejects another tenant's business before any version check or write", async () => {
     const response = await PATCH(jsonRequest({ businessId: FOREIGN, document: baseDocument(), expectedDraftVersion: 3 }));
     expect(response.status).toBe(403);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH: art direction on the current document format", () => {
+  // Regression: the partial-update branch allowlisted brand, settings, theme, category and the
+  // design-intent strings, but not artDirection. The request returned 200 and the draft version
+  // advanced while the stored family never changed, so a template-family edit looked saved and had
+  // no effect on the rendered website.
+  const direction = { version: 1, family: "fullscreen-media", goal: "enquire", personality: "warm", audience: "local", density: "balanced" };
+  /** A real format-2 draft: art direction only exists in format 2. */
+  const currentDocument = () => normalizeExperienceDocument({ ...baseDocument(), version: 2, artDirection: direction } as any, "food");
+
+  beforeEach(() => {
+    const doc = currentDocument();
+    expect(doc.version).toBe(2);
+    mocks.experience = { ...mocks.experience, draftJson: JSON.stringify(doc), categoryKey: "food" };
+  });
+
+  it("stores the named family, keeps the rest of the draft, and advances the version", async () => {
+    const before = currentDocument();
+    const response = await PATCH(jsonRequest({ businessId: OWNED, artDirection: direction, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(200);
+    const args = mocks.experienceUpdate.mock.calls[0][0];
+    expect(args.where).toEqual({ businessId: OWNED, draftVersion: 3 });
+    const written = JSON.parse(args.data.draftJson);
+    expect(written.version).toBe(2);
+    expect(written.artDirection).toEqual(direction);
+    expect(written.sections.map((s: { type: string }) => s.type)).toEqual(before.sections.map((s) => s.type));
+    expect(written.brand).toEqual(before.brand);
+    expect(mocks.revision).toHaveBeenCalledTimes(1);
+  });
+
+  it("actually changes the rendered treatment, not just the stored field", async () => {
+    // fullscreen-media renders an overlay poster hero; minimal renders a band. If the family only
+    // reached storage but not the renderer, this assertion would fail even though the PATCH returned 200.
+    const before = themeOf(currentDocument()).treatment;
+    const response = await PATCH(jsonRequest({ businessId: OWNED, artDirection: { ...direction, family: "minimal" }, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(200);
+    const written = JSON.parse(mocks.experienceUpdate.mock.calls[0][0].data.draftJson);
+    expect(written.artDirection.family).toBe("minimal");
+    const after = themeOf(written).treatment;
+    expect(after.heroStyle).not.toBe(before.heroStyle);
+    expect(after.heroMinHeight).not.toBe(before.heroMinHeight);
+  });
+
+  it("does not disturb the stored art direction when the update does not mention it", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, brand: { primaryColor: "#123456" }, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(200);
+    const written = JSON.parse(mocks.experienceUpdate.mock.calls[0][0].data.draftJson);
+    expect(written.artDirection).toEqual(direction);
+    expect(written.brand.primaryColor).toBe("#123456");
+  });
+
+  it.each([
+    ["an unknown family", { ...direction, family: "not-a-family" }],
+    ["a missing axis", { version: 1, family: "editorial", goal: "sell" }],
+    ["the wrong version", { ...direction, version: 2 }],
+    ["a string instead of an object", "editorial"],
+    ["null", null],
+  ])("refuses %s with 400 and writes nothing", async (_label, artDirection) => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, artDirection, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("experience_schema_invalid");
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH: legacy format-1 drafts stay editable", () => {
+  // A format-1 draft is customer content that predates art direction. It must keep loading, editing
+  // and saving. Before this guard, asking such a draft for an art direction threw out of
+  // normalizeExperienceDocument and surfaced as a 500 with no explanation.
+  const v1 = () => baseDocument();
+  beforeEach(() => {
+    expect(v1().version).toBe(1);
+    mocks.experience = { ...mocks.experience, draftJson: JSON.stringify(v1()), categoryKey: "food" };
+  });
+
+  it("still saves an ordinary edit and leaves the document in format 1", async () => {
+    const before = v1();
+    const response = await PATCH(jsonRequest({ businessId: OWNED, brand: { primaryColor: "#0F766E" }, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(200);
+    const written = JSON.parse(mocks.experienceUpdate.mock.calls[0][0].data.draftJson);
+    expect(written.version).toBe(1);
+    expect(written.artDirection).toBeUndefined();
+    expect(written.brand.primaryColor).toBe("#0F766E");
+    expect(written.sections.map((s: { type: string }) => s.type)).toEqual(before.sections.map((s) => s.type));
+  });
+
+  it("keeps a legacy draft rendered on the legacy theme axis (no art direction applied)", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, brand: { primaryColor: "#0F766E" }, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(200);
+    const written = JSON.parse(mocks.experienceUpdate.mock.calls[0][0].data.draftJson);
+    expect(templateForDocument(written)).toBeNull();
+  });
+
+  it("explains that art direction needs format 2 (400) instead of failing with a 500, and writes nothing", async () => {
+    const before = mocks.experience.draftJson;
+    const response = await PATCH(jsonRequest({
+      businessId: OWNED,
+      artDirection: { version: 1, family: "editorial", goal: "enquire", personality: "warm", audience: "local", density: "balanced" },
+      expectedDraftVersion: 3,
+    }));
+    expect(response.status).toBe(400);
+    expect(response.status).not.toBe(500);
+    const body = await response.json();
+    expect(body.code).toBe("experience_schema_invalid");
+    expect(body.error).toMatch(/format 2/i);
+    expect(mocks.experienceUpdate).not.toHaveBeenCalled();
+    // The customer's stored draft is untouched, character for character.
+    expect(mocks.experience.draftJson).toBe(before);
+    expect(mocks.revision).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unsupported document version supplied as a whole document, without writing", async () => {
+    const response = await PATCH(jsonRequest({ businessId: OWNED, document: { ...v1(), version: 99 }, expectedDraftVersion: 3 }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("experience_schema_invalid");
     expect(mocks.experienceUpdate).not.toHaveBeenCalled();
   });
 });

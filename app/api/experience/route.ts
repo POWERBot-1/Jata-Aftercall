@@ -28,6 +28,7 @@ import {
 } from "@/lib/experience/document";
 import { moveSectionTo } from "@/lib/studio/canvas";
 import { isValidThemeKey } from "@/lib/experience/themes";
+import { parseArtDirection } from "@/lib/experience/templateFamilies";
 import { buildArtDirectedCandidate, defaultDesignGoal } from "@/lib/experience/artDirector";
 import { validateExperienceDocument, validateExperienceJson } from "@/lib/experience/schema";
 import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
@@ -428,7 +429,17 @@ export async function PATCH(req: Request) {
       }
       document = schema.document;
     } else {
-      // Partial updates: brand, settings, theme, category.
+      // Partial updates: brand, settings, theme, category, art direction.
+      // An unsupported art direction is a client error, not a server fault, so it is refused with a
+      // 400 before anything is written instead of surfacing parseArtDirection's throw as a 500.
+      let artDirection = document.artDirection;
+      if (body?.artDirection !== undefined) {
+        try {
+          artDirection = parseArtDirection(body.artDirection);
+        } catch {
+          return NextResponse.json({ error: "That design direction is not supported. Nothing was changed.", code: "experience_schema_invalid" }, { status: 400 });
+        }
+      }
       const next = {
         ...document,
         brand: body?.brand ? { ...document.brand, ...body.brand } : document.brand,
@@ -439,8 +450,23 @@ export async function PATCH(req: Request) {
         // document, so it travels with the draft and drives future AI generation (§44).
         photographyStyle: typeof body?.photographyStyle === "string" ? body.photographyStyle : document.photographyStyle,
         designDirectionKey: typeof body?.designDirectionKey === "string" ? body.designDirectionKey : document.designDirectionKey,
+        // The chosen template family lives here, and it is what makes one family render differently
+        // from another. It used to be dropped by this branch: the request returned 200 and the draft
+        // version advanced, but the stored family never changed, so a design-family edit looked saved
+        // and had no effect. An unsupported value is refused rather than ignored.
+        artDirection,
       };
-      document = normalizeExperienceDocument(next, next.categoryKey);
+      // Art direction is a format-2 concept. A format-1 draft cannot carry one, and normalize
+      // refuses rather than transforming it — turn that refusal into a client error so the caller
+      // learns why nothing changed instead of getting a 500.
+      try {
+        document = normalizeExperienceDocument(next, next.categoryKey);
+      } catch (error) {
+        return NextResponse.json(
+          { error: (error as Error)?.message || "This change is not supported. Nothing was changed.", code: "experience_schema_invalid" },
+          { status: 400 },
+        );
+      }
     }
 
     const checked = validateExperienceDocument(document);
