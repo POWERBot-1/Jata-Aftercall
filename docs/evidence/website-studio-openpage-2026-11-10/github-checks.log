@@ -1,0 +1,21 @@
+programme-completeness	fail	13s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947587/job/130018209486
+D2 — build, audit and controls on the candidate tree	pass	3m34s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947851/job/130018210338
+Exact candidate applies on disposable PostgreSQL 18	pass	3m46s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947851/job/130018211447
+Failure paths actually fail	pass	1m20s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947936/job/130018211296
+Journey against a real database	pass	14m45s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947953/job/130018210984
+Migration target guard	pass	11s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947953/job/130018210490
+Migrations + schema on PostgreSQL 18	pass	2m47s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947936/job/130018210879
+Migrations and PostgreSQL suite	pass	2m25s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869948192/job/130020344779
+Prisma, tenant tests, typecheck and production build	pass	10m1s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947754/job/130018210471
+Production build path on PostgreSQL 18	pass	2m55s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947936/job/130018211388
+Schema reconciliation proposal closes the drift	pass	3m4s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947936/job/130018211873
+Schema, types, unit suite, build	pass	3m33s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869948192/job/130018211962
+Static (install, generate, lint, typecheck, audit)	pass	2m26s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947936/job/130018211356
+Vercel Preview Comments	pass	0	https://vercel.com/github
+full-suite	pass	2m25s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869948107/job/130018213705
+Read-only smoke	skipping	0	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42870168997/job/130019071747
+Real-Chrome six-viewport capture on a disposable database	pass	9m23s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947794/job/130018210538
+Release gate (aggregate)	pass	2s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947936/job/130020054581
+Vercel	pass	0	https://vercel.com/powerbot-1/jata-aftercall/5XTjRF1ve4yEmYrATMUZytvjkaCX
+capture	pass	14m55s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947584/job/130018209674
+instruction-integrity	pass	16s	https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/42869947587/job/130018210039

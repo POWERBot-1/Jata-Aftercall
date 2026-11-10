@@ -1,1 +1,11 @@
-{"httpStatus":200,"mobilePreviewWidthPx":390,"previews":1,"heading":"Choma Place","hasSaveOrSaved":true,"hasPublish":true,"hasPublishAction":true,"hasProperties":true,"hasTheme":true,"checklistItems":14,"checklistPasses":14,"errors":[]}
+Post-build editor load check (dev server, offline Prisma fallback)
+GET /dev/website-studio-preview?view=editor -> HTTP 200
+[data-studio-preview] nodes: 1
+Business name present: True
+Draft indicator: Draft v3
+Save control state present ('Draft saved'): True
+Publish control present: True
+Properties panel present: True
+Theme panel present: True
+Mobile preview frame width: 390px
+Page errors: 0
