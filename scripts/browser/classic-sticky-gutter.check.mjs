@@ -31,6 +31,25 @@ if (!CHROME || !existsSync(CHROME)) {
 }
 
 const BASE = (process.env.BASE_URL || "http://localhost:4100").replace(/\/$/, "");
+
+// The same isolation gate as scripts/motion/disposable-browser-evidence.mjs, so this check can only
+// ever measure the disposable harness — never a real deployment. Reusing the exact guard keeps the
+// two evidence channels honest in the same way.
+const guarded = new URL(BASE);
+if (
+  guarded.protocol !== "http:" ||
+  !["localhost", "127.0.0.1"].includes(guarded.hostname) ||
+  guarded.port !== "4100" ||
+  !process.env.CI ||
+  process.env.MOTION_ISOLATED !== "1" ||
+  process.env.DATABASE_URL !== "postgresql://jata:jata@localhost:5432/jata_e2e?schema=public" ||
+  process.env.AUTH_SECRET !== "interactive-business-e2e-test-secret"
+) {
+  console.error(
+    "BLOCKED / NOT RUN: refusing a non-isolated target. Needs CI=1, MOTION_ISOLATED=1, the jata_e2e database and the test AUTH_SECRET.",
+  );
+  process.exit(2);
+}
 const SLUG = process.env.CLASSIC_SLUG || "nyumbani-kitchen";
 const SHOTS = process.env.SHOT_DIR || join(process.cwd(), ".cache", "verification", "classic-sticky");
 mkdirSync(SHOTS, { recursive: true });

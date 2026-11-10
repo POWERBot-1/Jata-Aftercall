@@ -353,10 +353,14 @@ jobs:
           npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
           # DEF-1 (§M.4): quick-action-bar labels must stay inside their own controls at 320-430px.
-          npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log
+          # A silent non-zero exit here used to be invisible in the failure comment: the summary
+          # section did not list these logs. Annotate, then fail loudly.
+          npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log || {
+            echo "::error::test:browser:actionbar failed (see Quick-action-bar section)"; exit 1; }
           # The CLASSIC page's sticky contact bar (the element the 320x568 capture actually showed),
           # measured at deviceScaleFactor 2 so the Share-edge gutter is a number, not a guess.
-          npm run test:browser:classic-sticky 2>&1 | tee /tmp/step-classic-sticky-browser.log
+          npm run test:browser:classic-sticky 2>&1 | tee /tmp/step-classic-sticky-browser.log || {
+            echo "::error::test:browser:classic-sticky failed or was BLOCKED (exit 2) — see Classic sticky bar section"; exit 1; }
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
           npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
@@ -436,7 +440,7 @@ jobs:
               '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-control-denial.log', '/tmp/step-hydration-browser.log',
               '/tmp/step-replay-hydration.log',  '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
               '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
-              '/tmp/step-actionbar-browser.log',
+              '/tmp/step-actionbar-browser.log', '/tmp/step-classic-sticky-browser.log',
               '/tmp/step-family-browser.log', '/tmp/step-media-local-browser.log', '/tmp/step-studio-smoke.log',
             ];
             const signatureLines = [];
@@ -472,6 +476,8 @@ jobs:
               ['Motion browser', '/tmp/step-motion-browser.log', 4000],
               ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
               ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
+              ['Quick-action-bar / classic sticky bar', '/tmp/step-actionbar-browser.log', 2500],
+              ['Classic sticky bar (native device scale)', '/tmp/step-classic-sticky-browser.log', 2500],
               ['Family browser', '/tmp/step-family-browser.log', 2500],
               ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
               ['Local browser server', '/tmp/step-browser-server.log', 1000],
