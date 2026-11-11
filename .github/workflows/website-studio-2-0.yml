@@ -150,6 +150,12 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       AUTH_SECRET: website-studio-journey-disposable-secret
+      # prisma/schema.prisma references env("DATABASE_URL") and env("DIRECT_URL"), and an
+      # unresolvable variable is a hard P1012 even for `prisma validate`. These are schema-resolution
+      # placeholders for the build: this job never connects and never touches a database. A real
+      # DATABASE_URL here would imply server-side proof this job deliberately does not claim.
+      DATABASE_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
+      DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
       STUDIO_BASE_URL: http://127.0.0.1:3100
       STUDIO_EVIDENCE_DIR: .cache/verification/studio-openpage
     steps:

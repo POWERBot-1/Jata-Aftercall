@@ -48,3 +48,19 @@ describe("prompt-to-website journey is wired into CI", () => {
     expect(job).not.toContain("JATA_ALLOW_FIXTURE_SEED");
   });
 });
+
+// Prisma resolves env("DATABASE_URL") and env("DIRECT_URL") when it loads the schema, and an
+// unresolvable variable is a P1012 — even for `validate`. The first version of this job omitted both
+// and failed before the browser ever started.
+describe("prompt-to-website journey declares schema-resolution placeholders", () => {
+  it("sets DATABASE_URL and DIRECT_URL so prisma validate can resolve the schema", () => {
+    expect(job).toContain("DATABASE_URL: postgresql://journey_placeholder:");
+    expect(job).toContain("DIRECT_URL: postgresql://journey_placeholder:");
+  });
+
+  it("uses a placeholder, not a database, so nothing can connect", () => {
+    // Any real-looking URL here would quietly imply server-side proof this job does not claim.
+    expect(job).not.toContain("localhost:5432/jata_e2e");
+    expect(job).toContain("never connects");
+  });
+});
