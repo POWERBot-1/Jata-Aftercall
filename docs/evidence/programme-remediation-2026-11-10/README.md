@@ -300,6 +300,46 @@ rewritten. `git diff origin/main -- docs/agents/PROGRAMME_READINESS.json` adds R
 - **Website Studio / OpenPage:** untouched by this cycle. No route, component, API, schema or pricing
   file was modified; the additive Studio restoration from the previous cycle is intact.
 
+## 8b. Share-edge question — ANSWERED: not a defect
+
+The 320x568 capture suggested the Share control sat flush against the screen edge on the classic
+business page. **Measured, and it does not.** The suspicion came from thumbnail scale, not from CSS.
+
+Run `42988827162` at `0ee3f1e`, real Chrome, `deviceScaleFactor: 2` (the same setting as the capture),
+CSS pixels:
+
+| Width | first control | Share (last) | symmetry | inner padding | min target | page overflow |
+|---|---|---|---|---|---|---|
+| 320 px | 12 px | 12 px | 0 px | 12 / 12 | 46.08 px | 0 |
+| 360 px | 12 px | 12 px | 0 px | 12 / 12 | 46.08 px | 0 |
+| 390 px | 12 px | 12 px | 0 px | 12 / 12 | 46.08 px | 0 |
+| 430 px | 12 px | 12 px | 0 px | 12 / 12 | 46.08 px | 0 |
+
+`CLASSIC STICKY 320px gutterLeft=12px gutterRight=12px symmetry=0px minHeight=46.08px pageOverflowX=0px dpr=2`
+
+The gutter is structural: `BusinessPage.tsx` renders a full-bleed wrapper
+(`safe-bottom fixed inset-x-0 bottom-0`, side padding 0) with an inner `mx-auto max-w-[720px] px-3`
+container, so `px-3` = 12 px is the inset and it is identical on both sides. **No CSS was changed**,
+which is what the directive required: the defect could not be confirmed, so nothing was "fixed".
+
+Two measurement faults of my own were found and corrected on the way, both worth recording because
+each would have produced a false verdict:
+
+1. The first version asserted padding on the *wrapper*; the wrapper is deliberately full-bleed and the
+   inner container holds the gutter. The assertion failed, and the `::error::` guard added moments
+   earlier then aborted the step, so `Family browser` and `Local raster pixels` never ran. Corrected in
+   `85ecf96`.
+2. The isolation gate required `MOTION_ISOLATED`, a flag scoped to the motion capture job and never
+   exported into this step, so the check reported BLOCKED on every run (`840b37d`). An inherited
+   `BASE_URL` of `/` also crashed it with exit 1 — the code reserved for a real failure — which would
+   have read as a Share-edge defect; it now exits 2 (`0ee3f1e`, with 4 tests pinning the gate).
+
+### Related: the experience-storefront bar
+
+`.eb-actionbar` is a different component and was already measured: `innermost=14.4px`, `symmetry=0px`
+at 320/360/375/390/430 px (run `130197190288`). Both bars keep a real, symmetric inset; the 8 px floor
+in `actionbar-layout.check.mjs` and this check is the same standard.
+
 ## 8a. Full-resolution evidence — attempted and blocked at the network boundary
 
 The six captures retrieved through the annotation channel are thumbnails (~100 px). Full-resolution
