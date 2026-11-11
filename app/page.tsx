@@ -248,6 +248,23 @@ export default async function HomePage() {
               </p>
             </div>
 
+            <div className="lp-front-desk" id="mjengo-os">
+              <p className="lp-kicker lp-kicker--light">Business management</p>
+              <h3 className="lp-h2 lp-h2--light">MJENGO OS</h3>
+              <p className="lp-lede lp-lede--light">
+                A dedicated workspace for business operations — sales, stock, procurement, customers,
+                accounting and reports. Separate from Business POS and JATA BOS PRO.
+              </p>
+              <div className="mk-grid">
+                <article className="mk-card" data-product="MJENGO_OS">
+                  <h3>MJENGO OS</h3>
+                  <p className="mk-card__price">KES 2,000 / 30 days</p>
+                  <p>Explore the product, its workspace modules and current availability.</p>
+                  <Link href="/products/mjengo-os">View MJENGO OS details →</Link>
+                </article>
+              </div>
+            </div>
+
             <p className="lp-pricing__note">
               Prices are shown in Kenyan shillings. Plans renew for the period you choose and can be changed from your
               dashboard. The separate owner products — Business POS, JATA BOS PRO and JATA Autopilot — are sold per
