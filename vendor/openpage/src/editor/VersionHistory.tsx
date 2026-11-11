@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Clock, RotateCcw, Loader2 } from 'lucide-react'
+import { X, Clock, RotateCcw, Loader2, Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { useEditorStore } from '@openpage/store/editorStore'
 import { useConfigStore } from '@openpage/store/configStore'
@@ -11,6 +11,15 @@ type Revision = {
   source: string
   createdById: string
   createdAt: string
+  config: SiteConfig
+}
+
+type Publication = {
+  version: number
+  draftVersion: number
+  note: string | null
+  publishedById: string
+  publishedAt: string
   config: SiteConfig
 }
 
@@ -27,12 +36,17 @@ function timeAgo(value: string): string {
 
 export function VersionHistory() {
   const { historyOpen, toggleHistory, activeProjectId } = useEditorStore()
-  const { websiteId, draftVersion, ready } = useOpenPagePersistence()
+  const {
+    websiteId, draftVersion, publishedVersion, ready, setDraftVersion,
+    setPublishedVersion, setWebsiteStatus,
+  } = useOpenPagePersistence()
   const setConfig = useConfigStore((s) => s.setConfig)
   const panelRef = useRef<HTMLDivElement>(null)
   const [revisions, setRevisions] = useState<Revision[]>([])
+  const [publications, setPublications] = useState<Publication[]>([])
   const [loading, setLoading] = useState(false)
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null)
+  const [restoringPublication, setRestoringPublication] = useState<number | null>(null)
 
   useEffect(() => {
     if (!historyOpen || !ready) return
@@ -42,10 +56,13 @@ export function VersionHistory() {
       .then(async (response) => {
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Could not load saved history.')
-        return data.document?.revisions ?? []
+        return data.document ?? { revisions: [], publications: [] }
       })
-      .then((items: Revision[]) => {
-        if (!cancelled) setRevisions(items)
+      .then((document) => {
+        if (!cancelled) {
+          setRevisions(document.revisions ?? [])
+          setPublications(document.publications ?? [])
+        }
       })
       .catch((error) => {
         if (!cancelled) toast.error(error instanceof Error ? error.message : 'Could not load saved history.')
@@ -54,20 +71,48 @@ export function VersionHistory() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [historyOpen, ready, websiteId, draftVersion])
+  }, [historyOpen, ready, websiteId, draftVersion, publishedVersion])
 
-  async function restore(revision: Revision) {
-    if (revision.draftVersion === draftVersion || restoringVersion !== null) return
+  async function restoreDraft(revision: Revision) {
+    if (revision.draftVersion === draftVersion || restoringVersion !== null || restoringPublication !== null) return
     setRestoringVersion(revision.draftVersion)
     try {
-      // The normal JATA autosave path creates a new immutable revision from this restored snapshot.
+      // The normal JATA autosave path records the restored snapshot as a new immutable draft revision.
       setConfig(revision.config)
-      toast.success(`Restored saved version ${revision.draftVersion}. Saving to JATA…`)
+      toast.success(`Restored saved draft v${revision.draftVersion}. Saving to JATA…`)
       toggleHistory()
     } catch {
-      toast.error('Could not restore this saved version.')
+      toast.error('Could not restore this saved draft.')
     } finally {
       setRestoringVersion(null)
+    }
+  }
+
+  async function restorePublication(publication: Publication) {
+    if (restoringVersion !== null || restoringPublication !== null) return
+    setRestoringPublication(publication.version)
+    try {
+      const response = await fetch('/api/studio/openpage/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          websiteId,
+          targetVersion: publication.version,
+          expectedDraftVersion: draftVersion,
+          expectedPublishedVersion: publishedVersion,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'The saved publication could not be restored.')
+      setDraftVersion(data.draftVersion)
+      setPublishedVersion(data.publishedVersion)
+      setWebsiteStatus('PUBLISHED')
+      toast.success(`Publication v${publication.version} restored as new version v${data.publishedVersion}.`)
+      window.location.reload()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not restore this publication.')
+    } finally {
+      setRestoringPublication(null)
     }
   }
 
@@ -101,7 +146,7 @@ export function VersionHistory() {
         <div className="flex items-center gap-2">
           <Clock size={14} className="text-text-2" />
           <h3 className="text-sm font-semibold">Version History</h3>
-          <span className="text-[10px] text-text-3">({revisions.length})</span>
+          <span className="text-[10px] text-text-3">({revisions.length + publications.length})</span>
         </div>
         <button onClick={toggleHistory} className="w-7 h-7 rounded flex items-center justify-center text-text-3 hover:text-text-0 hover:bg-bg-3 transition-colors" aria-label="Close version history">
           <X size={14} />
@@ -114,22 +159,46 @@ export function VersionHistory() {
             <span>Current draft</span>
             <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-green-glow text-green">v{draftVersion}</span>
           </div>
-          <div className="text-[12.5px] text-text-1">Latest saved state</div>
+          <div className="text-[12.5px] text-text-1">{publishedVersion > 0 ? `Published v${publishedVersion}` : 'Not published'}</div>
         </div>
 
+        <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-3">Published versions</div>
         {loading && <div className="p-4 flex items-center justify-center gap-2 text-[11px] text-text-3"><Loader2 size={13} className="animate-spin" /> Loading saved versions…</div>}
+        {!loading && publications.map((publication) => (
+          <button
+            key={publication.version}
+            type="button"
+            onClick={() => void restorePublication(publication)}
+            disabled={restoringVersion !== null || restoringPublication !== null || !activeProjectId}
+            className="w-full text-left p-3 rounded-lg transition-colors mb-0.5 hover:bg-bg-3 group disabled:opacity-50 disabled:cursor-default"
+            title="Restore this publication as a new live version"
+          >
+            <div className="flex items-center gap-1.5 text-[11px] text-text-2 mb-1">
+              <Globe size={11} />
+              <span>Published v{publication.version}</span>
+              <span>·</span>
+              <span>{timeAgo(publication.publishedAt)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-[12.5px] text-text-1">{publication.note || publication.config?.name || 'Website publication'}</div>
+              {restoringPublication === publication.version ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} className="text-text-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+            </div>
+          </button>
+        ))}
+        {!loading && publications.length === 0 && <div className="px-3 py-2 text-[11px] text-text-3">No published versions yet.</div>}
 
+        <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-3">Draft versions</div>
         {!loading && revisions.map((revision) => (
           <button
             key={revision.draftVersion}
             type="button"
-            onClick={() => void restore(revision)}
-            disabled={revision.draftVersion === draftVersion || restoringVersion !== null || !activeProjectId}
+            onClick={() => void restoreDraft(revision)}
+            disabled={revision.draftVersion === draftVersion || restoringVersion !== null || restoringPublication !== null || !activeProjectId}
             className="w-full text-left p-3 rounded-lg transition-colors mb-0.5 hover:bg-bg-3 group disabled:opacity-50 disabled:cursor-default"
             title={revision.draftVersion === draftVersion ? 'Current saved version' : 'Restore this version as a new draft'}
           >
             <div className="flex items-center gap-1.5 text-[11px] text-text-2 mb-1">
-              <span>v{revision.draftVersion}</span>
+              <span>Draft v{revision.draftVersion}</span>
               <span>·</span>
               <span>{timeAgo(revision.createdAt)}</span>
               <span className="ml-auto text-[9px] uppercase tracking-wide text-text-3">{revision.source}</span>
@@ -140,9 +209,8 @@ export function VersionHistory() {
             </div>
           </button>
         ))}
-
         {!loading && revisions.length === 0 && (
-          <div className="p-4 text-center text-[11px] text-text-3">No saved versions yet. Changes appear here after the first successful save.</div>
+          <div className="p-4 text-center text-[11px] text-text-3">No saved draft versions yet. Changes appear here after the first successful save.</div>
         )}
       </div>
     </div>
