@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS "PaymentDestination" (
     CONSTRAINT "PaymentDestination_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "PaymentDestination_businessId_provider_providerDestinationId_providerAccountRef_key" ON "PaymentDestination"("businessId", "provider", "providerDestinationId", "providerAccountRef");
+CREATE UNIQUE INDEX IF NOT EXISTS "PaymentDestination_businessId_provider_providerDestinationId_pr" ON "PaymentDestination"("businessId", "provider", "providerDestinationId", "providerAccountRef");
 
 CREATE INDEX IF NOT EXISTS "PaymentDestination_businessId_isActive_idx" ON "PaymentDestination"("businessId", "isActive");
 

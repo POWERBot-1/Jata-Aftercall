@@ -54,6 +54,7 @@ export function LandingFooter({ availableDemoSlugs }: { availableDemoSlugs: read
             <a href="#benefits">What you get</a>
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
+            <Link href="/products/mjengo-os">MJENGO OS</Link>
           </nav>
           <nav className="lp-footer__col" aria-label="Demo businesses">
             <p className="lp-footer__heading">Demo businesses</p>
