@@ -91,7 +91,7 @@ function setup(action: "publish" | "unpublish" = "publish") {
     studioWebsite: { updateMany: mocks.studioWebsiteUpdateMany, count: mocks.studioWebsiteCount },
     business: { updateMany: mocks.businessUpdateMany },
   };
-  mocks.transaction.mockImplementation(async (callback: (tx: typeof tx) => Promise<unknown>) => callback(tx));
+  mocks.transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(tx));
   mocks.documentUpdateMany.mockResolvedValue({ count: 1 });
   mocks.publicationCreate.mockResolvedValue({ id: "publication-1" });
   mocks.studioWebsiteUpdateMany.mockResolvedValue({ count: 1 });
