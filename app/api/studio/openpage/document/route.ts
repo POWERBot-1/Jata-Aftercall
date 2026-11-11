@@ -56,7 +56,10 @@ export async function GET(request: Request) {
     const website = await prisma.studioWebsite.findUnique({ where: { id: access.websiteId }, select: { status: true } });
     const document = await prisma.openPageSiteDocument.findUnique({
       where: { websiteId: access.websiteId },
-      include: { revisions: { orderBy: { draftVersion: "desc" }, take: 20, select: { draftVersion: true, snapshotJson: true, source: true, createdById: true, createdAt: true } } },
+      include: {
+        revisions: { orderBy: { draftVersion: "desc" }, take: 20, select: { draftVersion: true, snapshotJson: true, source: true, createdById: true, createdAt: true } },
+        publications: { orderBy: { version: "desc" }, take: 20, select: { version: true, draftVersion: true, snapshotJson: true, note: true, publishedById: true, publishedAt: true } },
+      },
     });
     return NextResponse.json({
       website: { id: access.websiteId, businessId: access.businessId, slug: access.slug, name: access.name, status: website?.status ?? "DRAFT" },
@@ -67,6 +70,7 @@ export async function GET(request: Request) {
         publishedAt: document.publishedAt,
         updatedAt: document.updatedAt,
         revisions: document.revisions.map((revision) => ({ ...revision, config: JSON.parse(revision.snapshotJson) })),
+        publications: document.publications.map((publication) => ({ ...publication, config: JSON.parse(publication.snapshotJson) })),
       } : null,
     });
   } catch (error) {
