@@ -4,6 +4,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 
 type OpenPagePersistenceValue = {
   websiteId: string;
+  businessId: string;
   draftVersion: number;
   setDraftVersion: (version: number) => void;
   publishedVersion: number;
@@ -21,6 +22,7 @@ const OpenPagePersistenceContext = createContext<OpenPagePersistenceValue | null
 
 export function OpenPagePersistenceProvider({
   websiteId,
+  businessId,
   initialDraftVersion,
   initialPublishedVersion,
   initialWebsiteStatus,
@@ -28,6 +30,7 @@ export function OpenPagePersistenceProvider({
   children,
 }: {
   websiteId: string;
+  businessId: string;
   initialDraftVersion: number;
   initialPublishedVersion: number;
   initialWebsiteStatus: string;
@@ -41,7 +44,7 @@ export function OpenPagePersistenceProvider({
   const [isSaving, setIsSaving] = useState(false);
   return (
     <OpenPagePersistenceContext.Provider value={{
-      websiteId, draftVersion, setDraftVersion, publishedVersion, setPublishedVersion,
+      websiteId, businessId, draftVersion, setDraftVersion, publishedVersion, setPublishedVersion,
       websiteStatus, setWebsiteStatus, isDirty, setIsDirty, isSaving, setIsSaving, ready,
     }}>
       {children}
