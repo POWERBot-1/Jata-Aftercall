@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useEditorStore } from '@/store/editorStore'
-import { useConfigStore } from '@/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { useConfigStore } from '@openpage/store/configStore'
 
 export function useKeyboardShortcuts() {
   const navigate = useNavigate()
