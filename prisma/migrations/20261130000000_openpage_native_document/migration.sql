@@ -40,3 +40,25 @@ ALTER TABLE "OpenPageSiteRevision"
 ADD CONSTRAINT "OpenPageSiteRevision_websiteId_fkey"
 FOREIGN KEY ("websiteId") REFERENCES "OpenPageSiteDocument"("websiteId")
 ON DELETE CASCADE ON UPDATE CASCADE;
+
+CREATE TABLE "OpenPageSitePublication" (
+  "id" TEXT NOT NULL,
+  "websiteId" TEXT NOT NULL,
+  "version" INTEGER NOT NULL,
+  "draftVersion" INTEGER NOT NULL,
+  "snapshotJson" TEXT NOT NULL,
+  "note" TEXT,
+  "publishedById" TEXT NOT NULL,
+  "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "OpenPageSitePublication_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "OpenPageSitePublication_websiteId_version_key"
+ON "OpenPageSitePublication"("websiteId", "version");
+CREATE INDEX "OpenPageSitePublication_websiteId_publishedAt_idx"
+ON "OpenPageSitePublication"("websiteId", "publishedAt");
+
+ALTER TABLE "OpenPageSitePublication"
+ADD CONSTRAINT "OpenPageSitePublication_websiteId_fkey"
+FOREIGN KEY ("websiteId") REFERENCES "OpenPageSiteDocument"("websiteId")
+ON DELETE CASCADE ON UPDATE CASCADE;
