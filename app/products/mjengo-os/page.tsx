@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
+import { getSession } from "@/lib/auth";
 import { getMjengoOsPlan } from "@/lib/pricing";
 import { MJENGO_PLAN_DURATION_DAYS, MJENGO_PLAN_PRICE_KES } from "@/lib/mjengo/entitlement";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
@@ -14,11 +15,16 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function MjengoOsProductPage() {
+  const session = await getSession();
   const plan = await getMjengoOsPlan().catch(() => null);
   const refusal = mjengoCheckoutRefusal(plan);
   const terms = plan
     ? `${formatKES(Number(plan.priceKES))} / ${plan.durationDays} days`
     : `${formatKES(MJENGO_PLAN_PRICE_KES)} / ${MJENGO_PLAN_DURATION_DAYS} days (approved terms; stored plan row unavailable)`;
+
+  // Determine the checkout entry target: authenticated users go to subscription
+  // management to select their business; unauthenticated users go to login.
+  const checkoutTarget = session ? "/dashboard/subscription" : "/login";
 
   return (
     <MarketingLayout
@@ -55,7 +61,7 @@ export default async function MjengoOsProductPage() {
           {refusal ? <p>{refusal} The product information is visible, but checkout remains fail-closed until the production readiness gate is enabled.</p> : null}
         </div>
         <div className="mk-btn-row">
-          {!refusal ? <Link href="/dashboard/mjengo" className="mk-btn">Open MJENGO OS workspace</Link> : null}
+          {!refusal ? <Link href={checkoutTarget} className="mk-btn">Get MJENGO OS</Link> : null}
           <Link href="/products" className="mk-btn mk-btn--ghost">Back to all products</Link>
         </div>
       </MarketingSection>
