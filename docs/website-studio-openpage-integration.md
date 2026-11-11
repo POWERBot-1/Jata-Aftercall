@@ -1,58 +1,77 @@
-# OpenPage upstream pin for JATA Website Studio
+# OpenPage integration into JATA Website Studio
 
 - Upstream: https://github.com/buildingopen/openpage
-- Pinned source commit: 9818eb43a88e01b23cb55752e19902d8285a853b
-- License: MIT (retain upstream LICENSE and attribution)
-- Integration target: JATA AFTERCALL Website Studio
-- Canonical document: upstream OpenPage SiteConfig JSON (theme + blocks/pages)
-- Existing entitlement: KES 999 / 30 days (unchanged)
-- Tenant boundary: authenticated JATA business membership/ownership; server-side persistence only
+- Pinned upstream commit: `9818eb43a88e01b23cb55752e19902d8285a853b`
+- License: MIT; upstream license and attribution retained in this directory
+- Canonical editor document: OpenPage `SiteConfig` JSON
+- Supported native block registry: 19 block types
+- JATA Website Studio price: **KES 999 / 30 days** (unchanged)
 - Production domain: https://jataaftercall.co.ke
 
-## Non-negotiable integration boundary
+## Product boundary
 
-The upstream editor, canvas, block registry/renderers, layer and property panels, design controls, AgentPanel, JSON editor, version history, keyboard shortcuts, themes, templates, and HTML export remain the product. JATA adapters replace only app routing, authentication, persistence, AI credentials/provider, media storage, entitlement checks, and publishing.
+OpenPage's complete editor surface is the Website Studio editor. The pinned upstream source is vendored under `vendor/openpage/src`; JATA mounts its editor layout inside the authenticated business workspace.
 
-Do not translate SiteConfig into the legacy JATA Experience schema. Do not retain a parallel legacy visual editor. Do not delete existing business, customer, commerce, payment, subscription, media, or published-site records.
+The upstream standalone Vite root, project dashboard, settings route, and deployment route are not mounted as a second application. JATA replaces those outer application boundaries with its own authenticated business/workspace routing, tenant authorization, entitlement, server persistence, media library, AI provider, public rendering, and publish/rollback lifecycle. This preserves OpenPage's editing surface while avoiding a second login, browser-local project database, or upstream deploy-key path.
 
-## Compatibility findings
+The mounted editor includes the upstream canvas, toolbar, block registry/renderers, left/right sidebars, layers and properties, JSON drawer, themes, templates, keyboard shortcuts, HTML export, generation overlay, and version-history interface. The standalone OpenPage components/demo route is not a second public JATA product surface.
 
-The pinned upstream package currently declares React 19.2, React Router 7, Vite 7, Tailwind CSS 4, Zustand 5, Immer 11, @dnd-kit, and Sonner. JATA currently declares React 18.3.1 and Next.js 16.4.2. Resolve and test the React compatibility boundary deliberately; do not force-install incompatible dependencies or upgrade the whole production app blindly.
+## Implemented integration
 
-## Required completion sequence
+### Editor and document lifecycle
 
-1. Import the complete pinned upstream source and LICENSE into the JATA repository.
-2. Port the complete editor into the Next.js authenticated route without dropping upstream capabilities.
-3. Replace projectsStore localStorage persistence with tenant-scoped server APIs and durable SiteConfig/version records.
-4. Replace Gemini/direct upstream generation and deploy handlers with JATA-controlled server adapters; keep secrets server-only.
-5. Render published public sites from the canonical OpenPage SiteConfig and native block registry.
-6. Verify tenant isolation, draft/version/undo/redo, templates/themes, AI generation, HTML export, preview, publish, and rollback.
-7. Verify current KES 999 / 30-day subscription gate and existing customer/site data remain unchanged.
-8. Pass CI and real-browser acceptance before merge.
-9. Deploy only after release acceptance; then verify the official public domain.
+- The native OpenPage editor is mounted at the authenticated JATA Website Studio route.
+- JATA resolves a default `StudioWebsite` for the selected business and passes its opaque website identity to the editor.
+- OpenPage's browser-local project/config persistence is replaced by authenticated server APIs.
+- Debounced autosave writes canonical `SiteConfig` JSON with optimistic draft-version compare-and-swap.
+- Each successful save creates an immutable `OpenPageSiteRevision` snapshot in the same transaction.
+- The Version History panel reads server-backed draft revisions and immutable publication snapshots. Draft restoration uses the normal autosave path; publication restoration creates a new rollback publication.
+- The JATA-native publish/unpublish lifecycle requires the authorized website, active entitlement, a saved draft, and exact version checks.
 
-This manifest is an integration pin and acceptance contract, not evidence that the complete source has already been imported or deployed.
+### Multi-tenant authorization
 
+- `StudioWebsite` resolves through its workspace/business relation; the schema enforces the workspace/business pairing.
+- Access requires the business role plus active workspace and website memberships. Workspace/site permissions can reduce, but cannot exceed, the business permission ceiling.
+- Document, revision, publication, media, generation and publish/rollback operations are scoped to the authorized website/business.
+- Cross-tenant read/write/publish/export refusal is a required acceptance gate, not inferred solely from the schema.
 
-## Verified source and JATA integration audit (2026-11-11)
+### AI, media and rendering
 
-The pinned upstream tree was enumerated from the Git object API: 117 entries, with 59 source files under `src/`. The source includes 19 registered block types and the full editor route, panels, stores, templates, themes, generation, and HTML export. The project is a standalone Vite application; `src/App.tsx` owns a `BrowserRouter`, and `src/main.tsx` mounts its own React root. It is not a drop-in Next.js component.
+- Site generation is routed through JATA's server-side design engine; provider credentials are not placed in browser code.
+- Image fields in the OpenPage properties panel use JATA's tenant-scoped media picker. Video blocks retain their upstream YouTube/Vimeo URL model.
+- Public default and nested-page routes resolve the exact published OpenPage snapshot and render it through the pinned upstream block registry and theme system.
+- Existing JATA Experience/Business Page data is preserved. The legacy renderer remains the compatibility fallback until a native OpenPage publication is authoritative for that website.
+- The upstream AgentPanel remains an editor-side component; its inline block-edit suggestions are distinct from JATA's server-side prompt-to-site generation and from the separate AI Front Desk product.
 
-The following incompatibilities are confirmed by source inspection:
+## Pricing and entitlement
 
-1. **Persistence is browser-local today.** `src/store/projectsStore.ts` uses Zustand `persist` with the key `openpage-projects`; `src/store/configStore.ts` also persists browser state. This must be replaced with authenticated, business-scoped server persistence. Merely embedding the editor would create device-local projects and would not meet JATA's ownership or durability requirements.
-2. **The data contracts differ.** OpenPage's canonical `SiteConfig` is `{ name, pages, blocks, theme }`, with blocks typed as a registry of 19 types. JATA's existing `ExperienceDocument` is a different category/brand/settings/sections contract. Do not coerce one into the other or silently discard fields.
-3. **JATA has a separate additive per-site content/publication data plane.** `StudioWebsiteContent` stores versioned draft/published JSON; `StudioWebsiteDraftRevision` and `StudioWebsiteVersion` retain history. The existing public storefront and legacy `BusinessExperience` compatibility path are governed by `lib/experience/publication-state.ts`. OpenPage JSON cannot be written into that data plane and assumed to render: the public storefront currently expects the JATA experience document. A canonical OpenPage renderer and a deliberate route/publication adapter are required before any OpenPage site can be published.
-4. **Routing is standalone.** Upstream uses React Router routes for dashboard/editor/components/deploy/settings and a browser-root mount. JATA must expose the editor under its authenticated business route, pass the authorized business/site identity from the server, and remove or replace upstream project selection and deploy routes without losing editor capabilities.
-5. **Generation and deployment are server boundaries.** Upstream generation/deploy modules must not receive provider secrets in the browser or bypass JATA's draft/publish state machine, entitlement gate, media policy, or tenant checks.
+The server-authoritative entitlement constants remain:
 
-### Required architecture before implementation can be accepted
+- Plan key: `INTERACTIVE_BUSINESS`
+- Price: `KES 999`
+- Duration: `30 days`
 
-- Keep upstream `SiteConfig` JSON as the canonical editor document; preserve unknown/forward-compatible block properties.
-- Add an explicit, validated SiteConfig document schema and a tenant-scoped persistence adapter over the existing per-site content/version records (or a separately reviewed additive model if the current model cannot represent the document safely).
-- Add a server-authorized load/save API with optimistic version checks. Never trust a client-supplied businessId/siteId without the existing tenant guard.
-- Add a native public SiteConfig renderer using the same pinned block registry and themes. Public requests must resolve only the exact site's published snapshot through the existing publication-state machine; draft JSON must never be public.
-- Preserve all existing ExperienceDocument and BusinessExperience records as read-only compatibility data during the cutover. Do not destructively migrate or overwrite them.
-- Mount the complete editor in the JATA route with a scoped router strategy; do not ship a second independent Vite app or localStorage-backed project database.
+Checkout asserts the stored plan key, price and duration. The OpenPage integration does not change Paystack semantics, create subscriptions, or alter existing customer/payment records.
 
-**Current result:** source inventory and integration boundary are verified. Full source import, persistence adapter, native public renderer, route integration, tests, merge, and deployment remain NOT DONE. PR #111 is not release-ready.
+## Data and migration safety
+
+- Native OpenPage documents, draft revisions and publication snapshots use separate additive models and a dedicated migration.
+- Existing business, customer, catalogue, order, booking, payment, subscription, media and legacy Experience records are not deleted or rewritten by this integration.
+- Draft JSON is not public. Public routes resolve only the exact website's published snapshot and check the active entitlement.
+- No destructive SQL or production data backfill is part of this replacement.
+
+## Release status and remaining gates
+
+Implementation in the candidate branch is not the same as release acceptance. Before merge/deployment, the following evidence must be green on the final commit:
+
+1. Typecheck, lint, production build and dependency audit.
+2. Candidate migration rehearsal and PostgreSQL integration/security suites.
+3. Authenticated editor acceptance at mobile, tablet and desktop sizes.
+4. Tenant A cannot read, save, export, publish or roll back Tenant B's documents.
+5. Save/autosave, templates/themes, block editing, JSON, export, preview, publish/unpublish, version history and rollback flows.
+6. Existing public-page compatibility and official-domain verification after deployment.
+7. Repository-wide required programme acceptance.
+
+Vercel previously reported its daily deployment rate limit; a preview or production deployment must be verified from a successful deployment record, not inferred from a Git commit.
+
+**Current release posture:** candidate implementation is substantially integrated; merge and production deployment remain blocked until all required checks and deployment verification pass. Do not weaken or bypass a failed acceptance gate to obtain a green status.
