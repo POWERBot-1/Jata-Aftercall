@@ -7,6 +7,7 @@ import "./erp.css";
 // own sheet for the same reason erp.css does — globals.css is pinned by the original-design and
 // workspace-token contracts, so the storefront's graphite/lime identity is not appended to it.
 import "./storefront.css";
+import "./openpage-editor.css";
 import { getBaseUrl } from "@/lib/url";
 import ProductThemeProvider from "@/components/ProductThemeProvider";
 import { productThemeBootScript, productThemeCss } from "@/lib/productThemes";
