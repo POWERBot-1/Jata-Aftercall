@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     }
     if (!validateNativeConfig(config)) return NextResponse.json({ error: "The saved OpenPage document failed validation.", code: "openpage_document_invalid" }, { status: 422 });
     const snapshotJson = JSON.stringify(config);
-    if (snapshotJson.length > 1_500_000 || /data:image\\//i.test(snapshotJson)) {
+    if (snapshotJson.length > 1_500_000 || /data:image\//i.test(snapshotJson)) {
       return NextResponse.json({ error: "The document exceeds the safe publishing limits or contains inline image data. Use JATA media URLs.", code: "openpage_media_policy" }, { status: 422 });
     }
 
