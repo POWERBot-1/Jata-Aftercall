@@ -129,6 +129,14 @@ jobs:
       - name: Run the unit, integration and security suites against the database
         run: |
           set -o pipefail
+          # Distinguish a pglite-not-installed skip from a DATABASE_URL-not-configured skip.
+          # The mjengo ledger SQL suite skips when @electric-sql/pglite is absent; every other
+          # database-backed suite skips without DATABASE_URL. Reporting the wrong reason hides
+          # the real defect.
+          if [ ! -f node_modules/@electric-sql/pglite/dist/index.js ]; then
+            echo "Ledger immutability suite skipped — @electric-sql/pglite is not installed (check devDependencies and lockfile)." >&2
+            exit 1
+          fi
           npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-full-suite.log
           plain=$(sed -e 's/\x1b\[[0-9;]*m//g' /tmp/step-full-suite.log)
           # The database-backed suites self-skip without DATABASE_URL, and a skipped test is not a

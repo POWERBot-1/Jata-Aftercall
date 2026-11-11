@@ -3092,6 +3092,8 @@ model ErpJournal {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  lines          ErpJournalLine[]
+
   @@unique([businessId, journalNumber])
   @@index([businessId, entryDate])
   @@index([businessId, status])
@@ -3103,6 +3105,10 @@ model ErpJournalLine {
   businessId  String
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   journalId   String
+  // Journal lines belong to a journal. The reference is declared here and enforced by
+  // 20261127000002_ledger_line_integrity (added NOT VALID so an existing database can be repaired
+  // before the constraint is validated); without it an orphaned line could exist at all.
+  journal     ErpJournal @relation(fields: [journalId], references: [id], onDelete: Restrict)
   accountCode String
   accountId   String
   branchId    String?

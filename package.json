@@ -19,7 +19,7 @@
     "seed": "tsx prisma/seed.ts",
     "demo:restore": "tsx scripts/restore-demo-businesses.ts",
     "migrate": "bash scripts/migrate.sh",
-    "postinstall": "bash scripts/lib/prisma-generate.sh || echo 'prisma generate skipped (offline)'",
+    "postinstall": "bash scripts/lib/prisma-generate.sh",
     "test:browser:immersive": "node scripts/browser/immersive-preview.check.mjs",
     "check:models": "tsx scripts/erp/check-models.ts",
     "migrate:verify": "bash scripts/erp/migration-verify.sh all",
@@ -53,12 +53,15 @@
     "test:landing": "vitest run tests/unit/landing-content.test.ts tests/unit/landing-motion.test.ts tests/unit/demo-showcase-band.test.ts",
     "release:acceptance": "node scripts/verification/release-acceptance.mjs",
     "test:browser:agents": "node scripts/browser/agent-status.check.mjs",
+    "verify:mjengo:pg": "node scripts/verify/mjengo-postgres-verify.mjs",
+    "test:mjengo": "vitest run tests/unit/mjengo-*.test.ts",
+    "verify:mjengo:nav": "node scripts/verify/mjengo-nav-audit.mjs",
     "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs",
     "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "5.22.0",
     "@tanstack/react-table": "^9.3.1",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6",
@@ -75,6 +78,7 @@
     "ws": "^8.22.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.14",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.12",
@@ -89,7 +93,7 @@
     "pg": "8.23.1",
     "postcss": "8.5.28",
     "postcss-selector-parser": "7.1.6",
-    "prisma": "^5.22.0",
+    "prisma": "5.22.0",
     "puppeteer-core": "^25.13.0",
     "qrcode": "^1.5.4",
     "tailwindcss": "^4.3.3",

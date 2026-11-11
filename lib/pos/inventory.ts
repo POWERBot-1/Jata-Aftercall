@@ -118,18 +118,26 @@ export function checkAvailability(
   lines: SaleLineInput[],
   stock: Record<string, number>,
 ): AvailabilityResult {
-  // The same rule `recordMovement` enforces: a business that does not track stock levels is
-  // never blocked by a number it does not maintain (§47).
   if (!stockLevelsEnforced(config)) return { ok: true, shortages: [] };
-  const shortages: AvailabilityResult["shortages"] = [];
+  // Aggregate duplicate product lines before comparison — two lines of qty 1 against 1 on-hand is shortage.
+  const totals = new Map<string, { requested: number; name: string; unitKey?: string }>();
   for (const line of lines) {
     if (line.kind === "SERVICE") continue;
     if (!line.productId) continue;
-    const available = Number(stock[line.productId] ?? 0);
-    const requested = Number(line.quantity ?? 0);
-    if (!Number.isFinite(requested) || requested <= 0) continue;
-    if (requested > available) {
-      shortages.push({ productId: line.productId, name: line.name, requested, available, unitKey: line.unitKey });
+    const qty = Number(line.quantity ?? 0);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const existing = totals.get(line.productId);
+    if (existing) {
+      existing.requested += qty;
+    } else {
+      totals.set(line.productId, { requested: qty, name: line.name, unitKey: line.unitKey });
+    }
+  }
+  const shortages: AvailabilityResult["shortages"] = [];
+  for (const [productId, info] of totals) {
+    const available = Number(stock[productId] ?? 0);
+    if (info.requested > available) {
+      shortages.push({ productId, name: info.name, requested: info.requested, available, unitKey: info.unitKey });
     }
   }
   return { ok: shortages.length === 0, shortages };

@@ -50,12 +50,17 @@ describe("runtime and schema guards", () => {
   it("keeps prisma generate as a production build gate", () => {
     const build = readFileSync(path.join(root, "scripts/build.sh"), "utf8");
     expect(build).toContain('if [ -n "${DATABASE_URL:-}" ]; then');
-    expect(build).toContain("npx prisma generate");
+    expect(build).toContain("bash scripts/lib/prisma-generate.sh");
     expect(build).not.toContain("prisma migrate reset");
     expect(build).not.toContain("prisma db push");
-    const productionBranch = build.split("DATABASE_URL detected — prisma generate failure fails the build")[1]?.split("else")[0] || "";
-    expect(productionBranch).toContain("npx prisma generate");
-    expect(productionBranch).not.toContain("continuing with fallback");
+    const generateSection = build.split("Generating Prisma Client (fail-closed)...")[1] || "";
+    expect(generateSection).toContain("bash scripts/lib/prisma-generate.sh");
+    expect(generateSection).not.toContain("continuing with fallback");
+    // The wrapper itself invokes Prisma generation and fails closed on error.
+    const wrapper = readFileSync(path.join(root, "scripts/lib/prisma-generate.sh"), "utf8");
+    expect(wrapper).toContain("prisma generate");
+    expect(wrapper).toContain("set -euo pipefail");
+    expect(wrapper).not.toContain("continuing with fallback");
   });
 
   it("admits only authorized additive Prisma schema and migration changes", () => {
@@ -165,7 +170,22 @@ describe("runtime and schema guards", () => {
       "20261124000000_user_role_session_revocation",
       "20261125000000_media_storage_identity",
       "20261126000000_control_plane_foundation",
+      // MJENGO OS (KES 2,000 / 30 days) is a separate product. Its plan row is one additive
+      // INSERT guarded by key='MJENGO_OS' — keyed conflict target only, so no other plan row can
+      // be touched; the seeded amount is re-asserted, never re-priced to something else.
+      "20261127000000_mjengo_os_product",
+      // Voice call foundation shares the same timestamp bucket as MJENGO OS but sorts after it
+      // alphabetically; Prisma applies migrations in directory-name order, so this must precede
+      // the ledger migrations (01/02) to match the actual deterministic application order.
       "20261127000000_voice_call_foundation",
+      // Ledger immutability: a CHECK of the DRAFT → POSTED → REVERSED lifecycle at the database
+      // level. Triggers, trigger functions and one read-only view only; no table, column or row is
+      // created, rewritten or removed (no DROP/UPDATE/ALTER anywhere in the file).
+      "20261127000001_ledger_immutability",
+      // Ledger line integrity: one foreign key so a journal line cannot exist without its journal.
+      // Additive and NOT VALID on purpose: new writes are enforced immediately, and an existing
+      // database can be repaired before the constraint is validated instead of failing the deploy.
+      "20261127000002_ledger_line_integrity",
       "20261128000000_business_hub_conversion",
       // Loyalty 2.0: six NEW tables and five NEW enum types for the points programme. Additive
       // only — no existing table (including the four stamp-card tables) is altered, read or

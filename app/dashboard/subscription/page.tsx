@@ -197,10 +197,13 @@ export default async function SubscriptionPage({ searchParams }: Props) {
    * never a subscription, and a row for one product never implies anything about another.
    */
   const offerStatus = (offer: HomepagePlanCard): StatusLabel & { note: string } => {
+    // The ERP workspace row is shared 1:1 per business, so a row proves nothing on its own: it
+    // only speaks for the offer whose key it actually carries. Reporting ERP_PRO here while the row
+    // says MJENGO_OS (or the reverse) is exactly the cross-product claim §67 forbids.
     const separateRow =
       offer.key === "BUSINESS_POS"
         ? posSubscription
-        : offer.key === "ERP_PRO"
+        : offer.key === "ERP_PRO" || offer.key === "MJENGO_OS"
           ? erpSubscription
           : offer.key === "JATA_AUTOPILOT"
             ? autopilotSubscription
@@ -220,9 +223,13 @@ export default async function SubscriptionPage({ searchParams }: Props) {
     return {
       label: "Not active",
       tone: "neutral",
-      note: selected
-        ? `Not on ${selected.name} yet — nothing is subscribed just by seeing this offer.`
-        : "Create or select a business to see its status.",
+      note: offer.key === "MJENGO_OS"
+        ? selected
+          ? `Not on ${selected.name}. MJENGO OS is bought inside the MJENGO OS workspace (Plan & settings) so it always follows the stored KES 2,000 / 30 days row — this page never sells it.`
+          : "MJENGO OS is bought inside its own workspace, not from this page."
+        : selected
+          ? `Not on ${selected.name} yet — nothing is subscribed just by seeing this offer.`
+          : "Create or select a business to see its status.",
     };
   };
 
