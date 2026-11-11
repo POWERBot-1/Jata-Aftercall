@@ -267,9 +267,11 @@ SQL
         -c 'SET statement_timeout = 0;' \
         -f "$MIGRATIONS_DIR/$dir/migration.sql" >/tmp/erp-scratch-migrate.log 2>&1; then
       fail "scratch migration failed at $dir"
-      # Print the cause: without it the failure is a filename, not a diagnosis.
+      # Print AND annotate the cause. Step logs are not always reachable to reviewers, and a bare
+      # filename is not a diagnosis.
       echo "--- scratch migration output ($dir) ---"
       tail -20 /tmp/erp-scratch-migrate.log || true
+      echo "::error title=ERP_SCRATCH_MIGRATION_FAILED::${dir}: $(tail -c 700 /tmp/erp-scratch-migrate.log | tr '\n' ' ' | sed 's/%/%25/g')"
       return
     fi
   done
@@ -279,6 +281,9 @@ SQL
     pass "export restored into a scratch database"
   else
     fail "export could not be restored into a scratch database (see ${TMPDIR:-/tmp}/erp-restore.log)"
+    echo "--- pg_restore output ---"
+    tail -25 "${TMPDIR:-/tmp}/erp-restore.log" || true
+    echo "::error title=ERP_RESTORE_FAILED::$(tail -c 700 "${TMPDIR:-/tmp}/erp-restore.log" | tr '\n' ' ' | sed 's/%/%25/g')"
   fi
   local live restored
   live=$(scalar 'select count(*) from "ErpJournalLine"')
@@ -343,6 +348,7 @@ SQL
       recovered=0
       echo "--- recovery migration failed ($migration) ---"
       tail -20 /tmp/erp-recovery.log || true
+      echo "::error title=ERP_RECOVERY_FAILED::${migration}: $(tail -c 700 /tmp/erp-recovery.log | tr '\n' ' ' | sed 's/%/%25/g')"
     fi
   done
   if [ "$recovered" = "1" ]; then
