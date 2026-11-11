@@ -15,6 +15,8 @@ export function OpenPageEditor({ websiteId, websiteName }: Props) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(0);
+  const [publishedVersion, setPublishedVersion] = useState(0);
+  const [websiteStatus, setWebsiteStatus] = useState("DRAFT");
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +50,8 @@ export function OpenPageEditor({ websiteId, websiteName }: Props) {
           }],
         });
         setDraftVersion(saved?.draftVersion ?? 0);
+        setPublishedVersion(saved?.publishedVersion ?? 0);
+        setWebsiteStatus(data.website?.status ?? "DRAFT");
         setReady(true);
       } catch (caught) {
         if (!cancelled) setError(caught instanceof Error ? caught.message : "Unable to load this website.");
@@ -69,7 +73,7 @@ export function OpenPageEditor({ websiteId, websiteName }: Props) {
       ) : !ready ? (
         <div className="flex h-full items-center justify-center text-sm text-zinc-300">Loading your website editor…</div>
       ) : (
-        <OpenPagePersistenceProvider websiteId={websiteId} initialDraftVersion={draftVersion} ready={ready}>
+        <OpenPagePersistenceProvider websiteId={websiteId} initialDraftVersion={draftVersion} initialPublishedVersion={publishedVersion} initialWebsiteStatus={websiteStatus} ready={ready}>
           <EditorLayout />
         </OpenPagePersistenceProvider>
       )}
