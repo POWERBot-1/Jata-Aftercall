@@ -816,10 +816,10 @@ try {
     check(`cross-tenant ${method} ${path.split("?")[0]} refused`, response.status === 403 && !response.body?.document && !response.body?.versions && !response.body?.bookings && !response.body?.revisions && !response.body?.report && !response.body?.enquiries);
   }
   check("cross-tenant attempts do not mutate foreign draft/live", JSON.stringify(await snapshot(second.id)) === JSON.stringify(foreignBefore));
-  await first.ownerPage.goto(`${origin}/dashboard/businesses/${second.id}/design`, { waitUntil: "networkidle0" });
+  await first.ownerPage.goto(`${origin}/dashboard/businesses/${second.id}/studio`, { waitUntil: "networkidle0" });
   const foreignPage = await first.ownerPage.evaluate(() => ({ text: document.body.textContent,
-    design: Boolean(document.querySelector('input[type="color"]')), noindex: document.querySelector('meta[name="robots"]')?.content.includes("noindex") }));
-  check("foreign owner workspace is not-found/noindex and does not leak its design", foreignPage.noindex && foreignPage.text.includes("could not be found") && !foreignPage.text.includes(second.itemName) && !foreignPage.design);
+    editor: Boolean(document.querySelector(".openpage-editor-root")), noindex: document.querySelector('meta[name="robots"]')?.content.includes("noindex") }));
+  check("foreign owner workspace is not-found/noindex and does not leak its design", foreignPage.noindex && foreignPage.text.includes("could not be found") && !foreignPage.text.includes(second.itemName) && !foreignPage.editor);
   await publicState(first.ownerPage, second, `QA unpublished ${second.category} ${runId}`, false, "?preview=draft");
   const archGroups = new Map();
   for (const entry of signatures) {
