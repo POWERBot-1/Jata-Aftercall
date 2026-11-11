@@ -297,6 +297,10 @@ function createFallbackPrisma(): any {
     studioWebsiteVersion: emptyModel(),
     studioWebsiteDraftRevision: emptyModel(),
     studioWebsiteMember: emptyModel(),
+    // Native OpenPage documents and immutable draft snapshots follow the same fail-closed
+    // offline contract; no fallback write may appear to save a real website.
+    openPageSiteDocument: emptyModel(),
+    openPageSiteRevision: emptyModel(),
     experienceVersion: {
       findMany: async () => [],
       findUnique: async () => null,
