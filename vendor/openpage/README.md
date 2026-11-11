@@ -18,3 +18,19 @@ This directory is a source-preservation import, not yet a production-integrated 
 7. Run tenant isolation, persistence, rendering, publish/rollback, accessibility, and browser acceptance tests before enabling the new editor in production.
 
 Do not import upstream API routes or deploy configuration into JATA without a separate security review. This source pin intentionally excludes upstream `api/`, root Vite configuration, and upstream package manifests.
+
+## JATA persistence foundation added on the replacement branch
+
+- `OpenPageSiteDocument` is a separate Prisma model keyed by the authorized `StudioWebsite`.
+- `app/api/studio/openpage/document/route.ts` provides authenticated GET/PUT access through `assertStudioWebsiteAccess`.
+- Saves use optimistic draft-version compare-and-swap and validate OpenPage's native `SiteConfig` shape and the 19 supported block types.
+- Migration: `20261130000000_openpage_native_document`.
+- The new document table is deliberately separate from `StudioWebsiteContent` and `BusinessExperience`; existing Experience documents and publication snapshots are not overwritten.
+
+## Remaining hard blockers
+
+- The upstream editor shell is still not mounted in the JATA Website Studio route.
+- Upstream Zustand persistence still needs to be replaced by a tenant-bound API adapter; the new API is not yet wired to the editor.
+- The public page renderer does not yet render native OpenPage JSON.
+- Publication, rollback, media-library references, and the existing KES 999 / 30-day entitlement have not yet been connected to the native OpenPage document.
+- No migration has been applied to production. No live site has been switched to this format.
