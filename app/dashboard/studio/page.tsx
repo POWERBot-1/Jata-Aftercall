@@ -47,7 +47,19 @@ export default async function StudioIndexPage() {
   };
   type EntitlementRow = { businessId: string; status: string };
 
-  const [experiences, entitlements] = await Promise.all([
+  type NativeWebsiteRow = {
+    businessId: string;
+    status: string;
+    openPageDocument: {
+      draftJson: string | null;
+      publishedJson: string | null;
+      draftVersion: number;
+      publishedVersion: number;
+    } | null;
+  };
+  type EntitlementRow = { businessId: string; status: string };
+
+  const [experiences, entitlements, nativeWebsites] = await Promise.all([
     prisma.businessExperience
       .findMany({
         where: { businessId: { in: businesses.map((business) => business.id) } },
@@ -57,9 +69,29 @@ export default async function StudioIndexPage() {
     prisma.interactiveBusinessEntitlement
       .findMany({ where: { businessId: { in: businesses.map((business) => business.id) } }, select: { businessId: true, status: true } })
       .catch(() => [] as EntitlementRow[]) as Promise<EntitlementRow[]>,
+    prisma.studioWebsite
+      .findMany({
+        where: { businessId: { in: businesses.map((business) => business.id) }, isDefault: true },
+        select: {
+          businessId: true,
+          status: true,
+          openPageDocument: { select: { draftJson: true, publishedJson: true, draftVersion: true, publishedVersion: true } },
+        },
+      })
+      .catch(() => [] as NativeWebsiteRow[]) as Promise<NativeWebsiteRow[]>,
   ]);
 
   const experienceByBusiness = new Map(experiences.map((row) => [row.businessId, row]));
+  const entitlementByBusiness = new Map(entitlements.map((row) => [row.businessId, row.status]));
+  const nativeByBusiness = new Map(nativeWebsites.map((row) => [row.businessId, row]));
+  const liveCount = businesses.filter((business) => {
+    const native = nativeByBusiness.get(business.id);
+    if (native?.status === "PUBLISHED") return Boolean(native.openPageDocument?.publishedJson);
+    if (native && native.status !== "DRAFT") return false;
+    return business.isPublished;
+  }).length;
+
+
   const entitlementByBusiness = new Map(entitlements.map((row) => [row.businessId, row.status]));
   const liveCount = businesses.filter((business) => business.isPublished).length;
 
@@ -106,9 +138,16 @@ export default async function StudioIndexPage() {
           <ul className="ws-stack">
             {businesses.map((business) => {
               const experience = experienceByBusiness.get(business.id) || null;
+              const native = nativeByBusiness.get(business.id) || null;
               const entitlement = entitlementStatusLabel(entitlementByBusiness.get(business.id) || "NONE");
-              const state = experienceStatusLabel(experience?.status || "DRAFT");
-              const hasUnpublishedChanges = Boolean(experience?.draftJson) && experience?.draftJson !== experience?.publishedJson;
+              const state = experienceStatusLabel(native?.status || experience?.status || "DRAFT");
+              const nativePublished = native?.status === "PUBLISHED" && Boolean(native.openPageDocument?.publishedJson);
+              const legacyFallbackLive = (!native || native.status === "DRAFT") && business.isPublished;
+              const siteIsLive = nativePublished || legacyFallbackLive;
+              const hasUnpublishedChanges = native
+                ? Boolean(native.openPageDocument?.draftJson) && native.openPageDocument?.draftJson !== native.openPageDocument?.publishedJson
+                : Boolean(experience?.draftJson) && experience?.draftJson !== experience?.publishedJson;
+              const publishedVersion = native?.openPageDocument?.publishedVersion ?? experience?.publishedVersion ?? 0;
               return (
                 <WorkspaceDoor
                   key={business.id}
@@ -118,25 +157,25 @@ export default async function StudioIndexPage() {
                   meta={`${categoryLabel(business.category)}${business.location ? ` · ${business.location}` : ""} · ${getBusinessUrl(business.slug)}`}
                   pills={
                     <>
-                      <StatusPill tone={business.isPublished ? "success" : "neutral"} icon={<Globe size={11} />}>
-                        {business.isPublished ? "Live" : "Draft"}
+                      <StatusPill tone={siteIsLive ? "success" : "neutral"} icon={<Globe size={11} />}>
+                        {siteIsLive ? "Live" : "Draft"}
                       </StatusPill>
                       {/* The business pill already says Live/Draft. Render the site-state pill only
                           when it adds information — a hidden site, or a site state that disagrees
                           with the business record — never as a second identical "Live". */}
-                      {state.label !== (business.isPublished ? "Live" : "Draft") ? (
+                      {state.label !== (siteIsLive ? "Live" : "Draft") ? (
                         <StatusPill tone={state.tone}>{state.label}</StatusPill>
                       ) : null}
                       <StatusPill tone={entitlement.tone}>Package: {entitlement.label}</StatusPill>
                       {hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
-                      {experience ? <StatusPill tone="neutral">Version {experience.publishedVersion}</StatusPill> : null}
+                      {publishedVersion > 0 ? <StatusPill tone="neutral">Version {publishedVersion}</StatusPill> : null}
                     </>
                   }
                   note={
                     <p className="ws-muted ws-tiny">
                       {hasUnpublishedChanges
                         ? "You have saved changes customers cannot see yet. Open the preview, check them, then publish."
-                        : business.isPublished
+                        : siteIsLive
                           ? "Your site is live. Editing here never changes what customers see until you publish."
                           : "This site is still a draft. Publish it to give customers the full experience."}
                     </p>
@@ -147,7 +186,7 @@ export default async function StudioIndexPage() {
                         <Wand2 size={15} aria-hidden="true" /> Open AI Website Studio <ArrowRight size={15} aria-hidden="true" />
                       </Link>
                       <Link className="jata-btn jata-btn-secondary" href={getBusinessUrl(business.slug)} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink size={15} aria-hidden="true" /> {business.isPublished ? "View site" : "Preview"}
+                        <ExternalLink size={15} aria-hidden="true" /> {siteIsLive ? "View site" : "Preview"}
                       </Link>
                       <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}/photos`}>
                         <ImageIcon size={15} aria-hidden="true" /> Photos
