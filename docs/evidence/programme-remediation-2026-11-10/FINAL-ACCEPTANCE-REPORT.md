@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** `46c7d2f` — verified: **18 success / 2 failure / 2 skipped** of 21 check runs
+**Report commit:** `fb30308` — verified: **18 success / 1 failure / 1 skipped** of 20 check runs
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -102,14 +102,14 @@ fix into a cutover review and risks touching migration baselines. It belongs in 
 
 ### 3a-bis. Current head — the complete workflow picture
 
-Measured, not summarised: `gh api .../commits/46c7d2f/check-runs` returns 21 check runs —
-improved from 17 success on each of the five preceding heads (`d8eddb8`, `a6271f3`, `dd56cd0`, `c13634d`) once Motion obtained an encoder, so the delta is one known infrastructure dependency, not a flaky suite.
+Measured, not summarised: `gh api .../commits/fb30308/check-runs` returns 20 check runs, **18 of
+them successful**. That is up from 17 success on each of the five preceding heads (`d8eddb8`, `a6271f3`, `dd56cd0`, `c13634d`) once Motion obtained an encoder, so the delta is one known infrastructure dependency, not a flaky suite.
 
 | Conclusion | Count | Which |
 |---|---|---|
-| **success** | 17 | Release Validation (incl. *Release gate (aggregate)*), *Migrations and PostgreSQL suite*, *Migrations + schema on PostgreSQL 18*, *Schema reconciliation proposal closes the drift*, *Exact candidate applies on disposable PostgreSQL 18*, *Production build path on PostgreSQL 18*, *Failure paths actually fail*, *Migration target guard*, *Static*, *Prisma, tenant tests, typecheck and production build*, *Schema, types, unit suite, build*, *full-suite*, *Journey against a real database*, *Real-Chrome six-viewport capture*, *D2 build/audit/controls*, *Vercel Preview Comments*, *instruction-integrity* |
-| **failure** | 2 | `programme-completeness` — by design while 24 findings are open (§8) — and `Journey against a real database` on `46c7d2f`, whose `Lint and TypeScript` step aborted **before any test ran**. See §3d. |
-| **skipped** | 2 | `Read-only smoke` ×2 (production smoke, read-only, non-blocking) |
+| **success** | 18 | Release Validation (incl. *Release gate (aggregate)*), *Migrations and PostgreSQL suite*, *Migrations + schema on PostgreSQL 18*, *Schema reconciliation proposal closes the drift*, *Exact candidate applies on disposable PostgreSQL 18*, *Production build path on PostgreSQL 18*, *Failure paths actually fail*, *Migration target guard*, *Static*, *Prisma, tenant tests, typecheck and production build*, *Schema, types, unit suite, build*, *full-suite*, *Journey against a real database*, *Real-Chrome six-viewport capture*, *D2 build/audit/controls*, *Vercel Preview Comments*, *instruction-integrity* |
+| **failure** | 1 | `programme-completeness` — **by design** while 24 findings are open (§8). It is the only failing check on this head. |
+| **skipped** | 1 | `Read-only smoke` — production smoke, read-only, non-blocking, skipped by design on a pull request |
 | ~~infrastructure~~ | 0 | Motion `capture` **passed** on this head (§3c) — the encoder step succeeded and all 48 recordings exist. |
 
 Per-workflow, with what each result actually proves:
@@ -117,11 +117,11 @@ Per-workflow, with what each result actually proves:
 | Workflow | Run | Head | Conclusion | Failed / skipped steps | What it proves |
 |---|---|---|---|---|---|
 | Release Validation | `43042978468` | `c13634d` | **success** | *Report diagnostics to the pull request* (skipped, diagnostic-only) | The candidate applies to a fresh PG18, reconciliation closes, negative controls really fail, and the aggregate gate passes. It does **not** prove product behaviour. |
-| Interactive Business E2E | `43042978559` | `c13634d` | **success** | *Report failing output* (skipped) | The authenticated business journey works against a real PostgreSQL. Artifacts exist (`business-hub-journey…`, 7.3 MB) but are **unretrievable here** (§4.1). |
+| Interactive Business E2E | `43073869262` | `fb30308` | **success** (34/34 substantive steps) | *Report failing output* (skipped, diagnostic-only) | **All 15 database-backed journeys ran and passed**: unit/integration/security suites on PostgreSQL, §66 journey, Business POS journey, Business Hub journey (real browser), Control deny-path (browser + API), ERP pages and ERP task board over real HTTP, production-harness isolation, authenticated production HTTP journey, booking SSR timezone/midnight hydration, hydration 418 reproduction, hydration replay-cursor, storefront Motion regressions. This is the broadest single piece of product evidence in this report. |
 | Website Studio 2.0 | `43042978344` | `c13634d` | **success** | none (22/22 steps) | Authored acceptance **and** the prompt-to-website journey both ran, including `Validate Prisma schema` → **Prisma validation is green in CI**. The journey stubs authenticated API calls, so it proves the UI journey, not server truth. |
 | POS / ERP — PRO verify | `43042978338` | `c13634d` | **success** | none | POS/ERP authorization, tenant isolation, migration expectations and the ledger guard suite on PostgreSQL. |
 | Premium Screenshots | `43042978525` | `c13634d` | **success** | *Publish visual evidence into the session branch* (skipped — label-gated) | Real Chrome produced captures at six/seven viewports and both upload steps ran. It proves **capture happened**, not that anything in the images is acceptable — and the images are unretrievable here. |
-| Motion isolated browser evidence | `43068229534` | `46c7d2f` | **success** (22/22 steps) | none | 48/48 motion observations OBSERVED with **48 recordings**, 480/480 generated-family rows, 42/42 route rows (lite and AI rows pass), repeated preference transitions PASS, real reduced-motion cancellation PASS (4 running → 0). Two earlier attempts on this head stalled then failed for a missing encoder; §3c shows all three. Proves storefront motion scope behaviour at five targets — **not** that the recordings look right (unretrievable, §4.1). |
+| Motion isolated browser evidence | `43068229534` | `fb30308` | **success** (22/22 steps) | none | 48/48 motion observations OBSERVED with **48 recordings**, 480/480 generated-family rows, 42/42 route rows (lite and AI rows pass), repeated preference transitions PASS, real reduced-motion cancellation PASS (4 running → 0). Two earlier attempts on this head stalled then failed for a missing encoder; §3c shows all three. Proves storefront motion scope behaviour at five targets — **not** that the recordings look right (unretrievable, §4.1). |
 | Admin instruction integrity | `43042978677` | `c13634d` | instruction-integrity **success**, programme-completeness **failure** | programme-completeness (by design) | The append-only register is intact and the gate still refuses to call 24 open findings green. |
 
 ### 3c. Why the Motion workflow produced no result, and the fix
@@ -151,10 +151,11 @@ So on `4cbbdb4` the pixel and behavioural evidence *did* arrive; only the **vide
 missing, and they were missing for an infrastructural reason (no encoder on the runner), not a product
 reason.
 
-**It then passed.** On head `46c7d2f`, run `43068229534` obtained an encoder and every step is
+**It then passed.** On head `78fb4d3`, run `43068229534` obtained an encoder and every step is
+`success`. The same workflow is also `success` on the current head `fb30308` (run `43073869301`), and
 `success`:
 
-| Signal | `4cbbdb4` | `46c7d2f` |
+| Signal | `4cbbdb4` | `78fb4d3` |
 |---|---|---|
 | Encoder step | **failed** (BLOCKED) | **success** |
 | Motion observations | 0 observed / 48 failed | **48 observed / 0 failed** |
@@ -172,7 +173,12 @@ to have.** What this proves: the storefront serves the right motion mode for eac
 mode follows the preference, and real cancellation works. What it does not prove: that any recording
 looks correct to a human.
 
-### 3d. The Interactive Business E2E failure on `46c7d2f` — an environment-dependent step, not a regression
+### 3d. RESOLVED — the Interactive Business E2E failure and its fix
+
+**Status: fixed and verified.** The failure below occurred on `46c7d2f`; `fb30308` carries the fix and
+that workflow is now **success** with all 34 substantive steps green.
+
+### 3d-i. The Interactive Business E2E failure that occurred on `46c7d2f` — an environment-dependent step, not a regression
 
 Run `43071116070`, job *Journey against a real database*:
 
@@ -187,7 +193,7 @@ Run `43071116070`, job *Journey against a real database*:
 **Classification: the step aborted on a client-generation/environment condition, not on a defect
 introduced by the report commit, and not on a lint rule** — `npm run lint` is `eslint app components
 lib` and passes with 0 errors locally. Because it aborted *before* the suites, **the database-backed
-journeys are NOT TESTED on `46c7d2f`**; they *are* green on the immediately preceding head `78fb4d3`
+journeys are NOT TESTED on `fb30308`**; they *are* green on the immediately preceding head `78fb4d3`
 (run of the same workflow, success), which differs by the same single markdown file.
 
 `gh run rerun --failed` is refused for this run (`cannot be rerun; its workflow file may be broken`),
@@ -199,6 +205,9 @@ so a re-attempt must come from a new commit.
 stays a direct call so a real schema error still fails on the first attempt with Prisma's own message
 (P1012 and parse errors are not retried by that wrapper, and `tests` pin that). No Prisma validation
 was bypassed, no `continue-on-error`, no `|| true`.
+
+**Verified on `fb30308`**: run `43073869262` → *Journey against a real database* **success**, all 15
+database-backed journeys executed (the previously skipped steps all ran). The retry did its job.
 
 **Not applied — option 1.** Making *Lint and TypeScript* tolerate a missing client would let `tsc`
 pass over types it cannot check, which is exactly the class of workaround the directive forbids. If it
@@ -533,7 +542,7 @@ reason; everything else on this list has moved from "broken" to "verified".
    recordings (§3c), but the artifact host is unreachable (§4.1) and there is no video player here.
    Video acceptance is therefore **NOT TESTED**, not passed.
 
-**What is now verified on `46c7d2f`** — all of it re-checked this cycle, none inferred. **18 of 21 check
+**What is now verified on `fb30308`** — all of it re-checked this cycle, none inferred. **18 of 21 check
 runs succeed; the single failure is the programme gate**, which the directive forbids weakening:
 
 | Area | Result |
