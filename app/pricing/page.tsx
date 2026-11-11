@@ -8,6 +8,7 @@ import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue"
 import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
+import { MJENGO_PLAN_PRICE_KES, MJENGO_PLAN_DURATION_DAYS } from "@/lib/mjengo/entitlement";
 
 export const metadata: Metadata = { title: "Pricing and subscriptions — JATA AFTERCALL", description: "Transparent JATA AFTERCALL plan prices, payment, renewal, cancellation and refund information." };
 export const dynamic = "force-dynamic";
@@ -93,7 +94,7 @@ export default async function PricingPage() {
   );
   const mjengoPlan = await getMjengoOsPlan().catch(() => null);
   const mjengoRefusal = mjengoCheckoutRefusal(mjengoPlan);
-  const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.key === "MJENGO_OS" && Number(mjengoPlan.priceKES) > 0 && Number(mjengoPlan.durationDays) > 0);
+  const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.key === "MJENGO_OS" && Number(mjengoPlan.priceKES) === MJENGO_PLAN_PRICE_KES && Number(mjengoPlan.durationDays) === MJENGO_PLAN_DURATION_DAYS);
   const mjengoTerms = mjengoPlanValid && mjengoPlan ? `${formatNumber(Number(mjengoPlan.priceKES))} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable";
 
   return (
