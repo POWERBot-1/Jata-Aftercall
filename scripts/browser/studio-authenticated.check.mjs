@@ -250,6 +250,53 @@ async function clickText(page, selector, text, exact = true) {
 async function snapshot(businessId) {
   return prisma.businessExperience.findUniqueOrThrow({ where: { businessId } });
 }
+async function waitForOpenPageVersion(websiteId, expectedVersion, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const saved = await prisma.openPageSiteDocument.findUnique({ where: { websiteId } });
+    if (saved && saved.draftVersion >= expectedVersion) return saved;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`OpenPage draft did not reach version ${expectedVersion} within ${timeoutMs}ms.`);
+}
+async function openPageEditorUI(page, fixture) {
+  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/studio`, { waitUntil: "networkidle0" });
+  await page.waitForSelector(".openpage-editor-root", { timeout: 20000 });
+  const website = await prisma.studioWebsite.findUniqueOrThrow({ where: { businessId: fixture.id } });
+  fixture.studioWebsiteId = website.id;
+  const initial = await api(page, `/api/studio/openpage/document?websiteId=${encodeURIComponent(website.id)}`);
+  check(`${fixture.category}: tenant-scoped OpenPage document read`, initial.status === 200 && initial.body?.document === null);
+  await clickText(page, ".openpage-editor-root button", "Add Hero Block");
+  const first = await waitForOpenPageVersion(website.id, 1);
+  const firstConfig = JSON.parse(first.draftJson);
+  check(`${fixture.category}: native OpenPage editor autosaves first block`, firstConfig.pages?.[0]?.blocks?.[0]?.type === "hero" && first.draftVersion === 1);
+  const firstRevision = await prisma.openPageSiteRevision.findUnique({ where: { websiteId_draftVersion: { websiteId: website.id, draftVersion: 1 } } });
+  check(`${fixture.category}: first autosave creates immutable revision snapshot`, Boolean(firstRevision) && JSON.parse(firstRevision.snapshotJson).pages?.[0]?.blocks?.[0]?.type === "hero");
+  const fieldHandle = await page.waitForFunction(() => [...document.querySelectorAll(".openpage-editor-root label")].find((label) => label.textContent.trim() === "Headline")?.querySelector("input"));
+  const headlineInput = fieldHandle.asElement();
+  if (!headlineInput) throw new Error("OpenPage hero headline input was not rendered.");
+  const headline = `QA OpenPage ${fixture.category} ${runId}`;
+  await headlineInput.click({ clickCount: 3 });
+  await page.keyboard.down("Control"); await page.keyboard.press("A"); await page.keyboard.up("Control");
+  await headlineInput.type(headline);
+  await headlineInput.press("Tab");
+  const second = await waitForOpenPageVersion(website.id, 2);
+  const secondConfig = JSON.parse(second.draftJson);
+  const savedHeadline = secondConfig.pages?.[0]?.blocks?.[0]?.props?.headline;
+  check(`${fixture.category}: OpenPage inspector edit persists through JATA API`, second.draftVersion === 2 && savedHeadline === headline);
+  const revisions = await prisma.openPageSiteRevision.findMany({ where: { websiteId: website.id }, orderBy: { draftVersion: "asc" } });
+  check(`${fixture.category}: immutable server revision history is complete`, revisions.length === 2 && revisions[0].draftVersion === 1 && revisions[1].draftVersion === 2);
+  const localState = await page.evaluate(() => ({ config: localStorage.getItem("openpage-config"), projects: localStorage.getItem("openpage-projects") }));
+  check(`${fixture.category}: OpenPage content is not persisted in browser local storage`, localState.config === null && localState.projects === null);
+  await clickText(page, ".openpage-editor-root button[aria-label]", "Mobile");
+  const mobile = await page.evaluate(() => {
+    const root = document.querySelector(".openpage-editor-root");
+    const canvas = [...document.querySelectorAll('[role="region"][aria-label^="Site preview"]')][0];
+    return { root: Boolean(root), canvas: canvas?.getAttribute("aria-label") || "", overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 };
+  });
+  check(`${fixture.category}: OpenPage mobile viewport control renders without page overflow`, mobile.root && mobile.canvas.includes("mobile") && !mobile.overflow, JSON.stringify(mobile));
+  fixture.openPageDraftVersion = second.draftVersion;
+}
 async function patch(page, fixture, change) {
   const prior = await snapshot(fixture.id);
   const response = await api(page, "/api/experience", "PATCH", { businessId: fixture.id, expectedDraftVersion: prior.draftVersion, ...change });
