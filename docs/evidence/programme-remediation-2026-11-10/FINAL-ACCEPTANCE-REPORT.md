@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** `d8eddb8` — verified: 17 success / 2 failure / 2 skipped of 21 check runs
+**Report commit:** `8044c33` — verified: 17 success / 2 failure / 2 skipped of 21 check runs
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -102,8 +102,8 @@ fix into a cutover review and risks touching migration baselines. It belongs in 
 
 ### 3a-bis. Current head — the complete workflow picture
 
-Measured, not summarised: `gh api .../commits/d8eddb8/check-runs` returns 21 check runs —
-the identical result as `a6271f3`, `dd56cd0` and `c13634d` before it, so the state is stable across four heads, not a lucky run.
+Measured, not summarised: `gh api .../commits/8044c33/check-runs` returns 21 check runs —
+the identical result as `d8eddb8`, `a6271f3`, `dd56cd0` and `c13634d` before it, so the state is stable across five consecutive heads, not a lucky run.
 
 | Conclusion | Count | Which |
 |---|---|---|
@@ -477,7 +477,7 @@ reason; everything else on this list has moved from "broken" to "verified".
 6. **The Motion workflow still has no result on this head** (§3c). Its 37-minute stall is fixed, but
    a stall fixed is not evidence obtained.
 
-**What is now verified on `d8eddb8`** — all of it re-checked this cycle, none inferred (17 of 21 check
+**What is now verified on `8044c33`** — all of it re-checked this cycle, none inferred (17 of 21 check
 runs success, the two failures are the programme gate and the encoder block):
 
 | Area | Result |
