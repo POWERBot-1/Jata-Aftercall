@@ -17,6 +17,10 @@ on:
       - "tests/integration/storefront-per-site-publication-postgres.test.ts"
       - "tests/integration/studio-publication-state-machine-postgres.test.ts"
       - "tests/unit/website-studio-*.test.ts"
+      # The prompt-to-website journey's own wiring test: a change to it can weaken or
+      # disable the acceptance step, so it must run the acceptance.
+      - "tests/unit/prompt-to-website-journey-wiring.test.ts"
+      - "tests/unit/classic-sticky-actionbar-gutter.test.ts"
       - "tests/unit/publication-state-machine.test.ts"
       - "tests/unit/storefront-public-content.test.ts"
       - "tests/unit/storefront-motion-inheritance.test.ts"
