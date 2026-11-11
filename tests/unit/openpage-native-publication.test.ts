@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   studioWebsiteUpdateMany: vi.fn(),
   studioWebsiteCount: vi.fn(),
   businessFindUnique: vi.fn(),
+  businessExperienceFindUnique: vi.fn(),
   businessUpdateMany: vi.fn(),
   documentFindUnique: vi.fn(),
   transaction: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@/lib/db", () => ({
       findUnique: mocks.businessFindUnique,
       updateMany: mocks.businessUpdateMany,
     },
+    businessExperience: { findUnique: mocks.businessExperienceFindUnique },
     openPageSiteDocument: { findUnique: mocks.documentFindUnique },
     $transaction: mocks.transaction,
   },
@@ -79,6 +81,7 @@ function setup(action: "publish" | "unpublish" = "publish") {
     status: action === "publish" ? "DRAFT" : "PUBLISHED",
   });
   mocks.businessFindUnique.mockResolvedValue({ id: "business-1", slug: "nyumbani-kitchen", status: "ACTIVE" });
+  mocks.businessExperienceFindUnique.mockResolvedValue(null);
   mocks.documentFindUnique.mockResolvedValue({
     websiteId: "site-1",
     draftJson,
@@ -156,6 +159,41 @@ describe("native OpenPage publication API", () => {
 
     expect(response.status).toBe(403);
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("preserves a still-published legacy Experience when native OpenPage is unpublished", async () => {
+    setup("unpublish");
+    mocks.businessExperienceFindUnique.mockResolvedValue({ status: "PUBLISHED" });
+    const response = await POST(request({
+      websiteId: "site-1",
+      expectedDraftVersion: 1,
+      expectedPublishedVersion: 1,
+      action: "unpublish",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.businessExperienceFindUnique).toHaveBeenCalledWith({
+      where: { businessId: "business-1" },
+      select: { status: true },
+    });
+    expect(mocks.businessUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("clears the outer published flag only when no native or legacy site remains published", async () => {
+    setup("unpublish");
+    mocks.businessExperienceFindUnique.mockResolvedValue({ status: "DRAFT" });
+    const response = await POST(request({
+      websiteId: "site-1",
+      expectedDraftVersion: 1,
+      expectedPublishedVersion: 1,
+      action: "unpublish",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.businessUpdateMany).toHaveBeenCalledWith({
+      where: { id: "business-1", status: "ACTIVE" },
+      data: { isPublished: false },
+    });
   });
 
   it("unpublishes without deleting the saved publication snapshot", async () => {
