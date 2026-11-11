@@ -98,7 +98,7 @@ export async function PUT(request: Request) {
   }
 
   const validated = validateSiteConfig(body.config);
-  if (!validated.ok) return NextResponse.json({ error: validated.error, code: "openpage_schema_invalid" }, { status: 422 });
+  if ("error" in validated) return NextResponse.json({ error: validated.error, code: "openpage_schema_invalid" }, { status: 422 });
 
   let serialized: string;
   try {
