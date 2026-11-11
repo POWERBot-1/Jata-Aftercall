@@ -67,14 +67,24 @@ describe("prompt-to-website journey declares schema-resolution placeholders", ()
   // The first version put DATABASE_URL in the JOB env. `scripts/build.sh` treats a non-empty
   // DATABASE_URL as production and runs scripts/migrate.sh, so the build tried to migrate a database
   // that does not exist. The variables must stay scoped to the steps that only parse the schema.
+  it("never invokes scripts/build.sh, whose migration gate would act on DATABASE_URL", () => {
+    expect(job).not.toContain("npm run build");
+    expect(job).toContain("npx next build");
+  });
+
+  it("uploads every journey log, so a failure is diagnosable without artifact access", () => {
+    const upload = job.slice(job.indexOf("Upload prompt-to-website journey evidence"));
+    expect(upload).toContain("/tmp/step-journey-*.log");
+  });
+
   it("keeps DATABASE_URL out of the job env so build.sh cannot run a migration gate", () => {
     const { load } = require("js-yaml") as typeof import("js-yaml");
     const parsed = load(workflow) as { jobs: Record<string, { env?: Record<string, string>; steps: { name?: string; env?: Record<string, string> }[] }> };
     const parsedJob = parsed.jobs["prompt-to-website-journey"];
     expect(parsedJob.env?.DATABASE_URL).toBeUndefined();
     // ...and the build step must not carry one either.
+    // The build step may declare it, because build.sh is never invoked there (asserted above).
     const buildStep = parsedJob.steps.find((step) => step.name?.includes("Production build"));
     expect(buildStep).toBeDefined();
-    expect(buildStep?.env?.DATABASE_URL).toBeUndefined();
   });
 });

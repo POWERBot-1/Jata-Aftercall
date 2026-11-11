@@ -179,14 +179,14 @@ jobs:
           node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate.log
       - name: Production build of the journey route
         env:
-          # Generate-only placeholders. build.sh skips the migration gate when DATABASE_URL is empty
-          # and takes the "offline/preview" path, which is what we want: no database exists here.
-          # Prisma still needs the variables to resolve the datasource, so they are set to loopback.
+          # Both datasource variables are loopback placeholders: Prisma cannot parse the schema
+          # without them (P1012), and `next build` needs a migrated-looking client to render.
+          # This is safe here ONLY because this step runs `next build` directly and never calls
+          # scripts/build.sh, whose migration gate would engage on a non-empty DATABASE_URL.
+          DATABASE_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
           DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
         run: |
           set -o pipefail
-          # The build is generated from the committed schema; the client was produced in the previous
-          # step, so no network fetch is expected here.
           node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate2.log
           NEXT_TELEMETRY_DISABLED=1 npx next build 2>&1 | tee /tmp/step-journey-build.log
       - name: Drive the prompt-to-website journey in a real browser
@@ -219,6 +219,6 @@ jobs:
         with:
           name: prompt-to-website-journey-${{ github.sha }}
           path: |
-            /tmp/step-journey-browser.log
+            /tmp/step-journey-*.log
             .cache/verification/studio-openpage/
           if-no-files-found: warn
