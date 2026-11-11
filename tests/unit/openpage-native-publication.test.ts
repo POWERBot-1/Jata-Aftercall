@@ -97,6 +97,7 @@ function setup(action: "publish" | "unpublish" = "publish") {
     openPageSitePublication: { create: mocks.publicationCreate },
     openPageSiteRevision: { create: mocks.revisionCreate },
     studioWebsite: { updateMany: mocks.studioWebsiteUpdateMany, count: mocks.studioWebsiteCount },
+    businessExperience: { findUnique: mocks.businessExperienceFindUnique },
     business: { updateMany: mocks.businessUpdateMany },
   };
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback(tx));
