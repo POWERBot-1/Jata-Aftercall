@@ -57,7 +57,8 @@ async function loadNativeOpenPagePath(slug: string, siteSlug: string): Promise<{
   if (!native || !(await getInteractiveEntitlement(business.id)).entitled) return null;
   const config = native.config as unknown as SiteConfig;
   const expectedPath = `/${siteSlug.split("/").filter(Boolean).join("/")}`;
-  if (!(config.pages ?? []).some((page) => page.path.replace(/\\/+$/, "") === expectedPath.replace(/\\/+$/, ""))) return null;
+  const normalizePath = (value: string) => `/${value.split("/").filter(Boolean).join("/")}`;
+  if (!(config.pages ?? []).some((page) => normalizePath(page.path) === normalizePath(expectedPath))) return null;
   return { config, businessName: business.name };
 }
 
