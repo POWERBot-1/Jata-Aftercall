@@ -240,6 +240,7 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
       <OpenPagePublicSite
         config={native.config as unknown as SiteConfig}
         pagePath="/"
+        preview={native.isPreview}
       />
     );
   }
