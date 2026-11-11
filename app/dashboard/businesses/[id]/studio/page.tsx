@@ -55,6 +55,7 @@ export default async function WebsiteStudioPage({ params }: Props) {
         <OpenPageEditor
           key={studioWebsite.websiteId}
           websiteId={studioWebsite.websiteId}
+          businessId={workspace.business.id}
           websiteName={`${workspace.business.name} Website`}
         />
       ) : (
