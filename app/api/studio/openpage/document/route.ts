@@ -53,12 +53,13 @@ export async function GET(request: Request) {
   if (!websiteId) return NextResponse.json({ error: "Choose a website first." }, { status: 400 });
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "read");
+    const website = await prisma.studioWebsite.findUnique({ where: { id: access.websiteId }, select: { status: true } });
     const document = await prisma.openPageSiteDocument.findUnique({
       where: { websiteId: access.websiteId },
       include: { revisions: { orderBy: { draftVersion: "desc" }, take: 20, select: { draftVersion: true, snapshotJson: true, source: true, createdById: true, createdAt: true } } },
     });
     return NextResponse.json({
-      website: { id: access.websiteId, businessId: access.businessId, slug: access.slug, name: access.name },
+      website: { id: access.websiteId, businessId: access.businessId, slug: access.slug, name: access.name, status: website?.status ?? "DRAFT" },
       document: document ? {
         config: JSON.parse(document.draftJson),
         draftVersion: document.draftVersion,
