@@ -9,9 +9,9 @@ import { useConfigStore } from "@/vendor/openpage/src/store/configStore";
 import { useEditorStore } from "@/vendor/openpage/src/store/editorStore";
 import { useProjectsStore } from "@/vendor/openpage/src/store/projectsStore";
 
-type Props = { websiteId: string; websiteName: string };
+type Props = { websiteId: string; businessId: string; websiteName: string };
 
-export function OpenPageEditor({ websiteId, websiteName }: Props) {
+export function OpenPageEditor({ websiteId, businessId, websiteName }: Props) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(0);
@@ -73,7 +73,7 @@ export function OpenPageEditor({ websiteId, websiteName }: Props) {
       ) : !ready ? (
         <div className="flex h-full items-center justify-center text-sm text-zinc-300">Loading your website editor…</div>
       ) : (
-        <OpenPagePersistenceProvider websiteId={websiteId} initialDraftVersion={draftVersion} initialPublishedVersion={publishedVersion} initialWebsiteStatus={websiteStatus} ready={ready}>
+        <OpenPagePersistenceProvider websiteId={websiteId} businessId={businessId} initialDraftVersion={draftVersion} initialPublishedVersion={publishedVersion} initialWebsiteStatus={websiteStatus} ready={ready}>
           <EditorLayout />
         </OpenPagePersistenceProvider>
       )}
