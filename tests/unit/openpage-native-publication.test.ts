@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   documentUpdateMany: vi.fn(),
   publicationCreate: vi.fn(),
+  publicationFindUnique: vi.fn(),
+  revisionCreate: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getSession: mocks.getSession }));
@@ -45,14 +47,16 @@ vi.mock("@/lib/db", () => ({
     },
     businessExperience: { findUnique: mocks.businessExperienceFindUnique },
     openPageSiteDocument: { findUnique: mocks.documentFindUnique },
+    openPageSitePublication: { findUnique: mocks.publicationFindUnique },
     $transaction: mocks.transaction,
   },
 }));
 
 import { POST } from "@/app/api/studio/openpage/publish/route";
+import { POST as ROLLBACK } from "@/app/api/studio/openpage/rollback/route";
 
-function request(body: Record<string, unknown>) {
-  return new Request("http://localhost/api/studio/openpage/publish", {
+function request(body: Record<string, unknown>, route = "publish") {
+  return new Request(`http://localhost/api/studio/openpage/${route}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -91,12 +95,15 @@ function setup(action: "publish" | "unpublish" = "publish") {
   const tx = {
     openPageSiteDocument: { updateMany: mocks.documentUpdateMany },
     openPageSitePublication: { create: mocks.publicationCreate },
+    openPageSiteRevision: { create: mocks.revisionCreate },
     studioWebsite: { updateMany: mocks.studioWebsiteUpdateMany, count: mocks.studioWebsiteCount },
     business: { updateMany: mocks.businessUpdateMany },
   };
   mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => callback(tx));
   mocks.documentUpdateMany.mockResolvedValue({ count: 1 });
   mocks.publicationCreate.mockResolvedValue({ id: "publication-1" });
+  mocks.publicationFindUnique.mockResolvedValue({ websiteId: "site-1", version: 1, draftVersion: 1, snapshotJson: draftJson });
+  mocks.revisionCreate.mockResolvedValue({ id: "revision-rollback" });
   mocks.studioWebsiteUpdateMany.mockResolvedValue({ count: 1 });
   mocks.studioWebsiteCount.mockResolvedValue(0);
   mocks.businessUpdateMany.mockResolvedValue({ count: 1 });
@@ -194,6 +201,77 @@ describe("native OpenPage publication API", () => {
       where: { id: "business-1", status: "ACTIVE" },
       data: { isPublished: false },
     });
+  });
+
+  it("restores an immutable publication as a new draft and publication version", async () => {
+    setup("publish");
+    const restoredSnapshot = JSON.stringify({
+      name: "Nyumbani Kitchen — restored",
+      blocks: [{ id: "hero-1", type: "hero", variant: "centered", props: { headline: "Restored publication" } }],
+    });
+    mocks.studioWebsiteFindUnique.mockResolvedValue({ id: "site-1", status: "PUBLISHED" });
+    mocks.documentFindUnique.mockResolvedValue({
+      websiteId: "site-1",
+      draftJson: JSON.stringify({ name: "Newer draft", blocks: [] }),
+      draftVersion: 4,
+      publishedVersion: 3,
+    });
+    mocks.publicationFindUnique.mockResolvedValue({
+      websiteId: "site-1",
+      version: 1,
+      draftVersion: 1,
+      snapshotJson: restoredSnapshot,
+    });
+
+    const response = await ROLLBACK(request({
+      websiteId: "site-1",
+      targetVersion: 1,
+      expectedDraftVersion: 4,
+      expectedPublishedVersion: 3,
+    }, "rollback"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      restored: true,
+      websiteId: "site-1",
+      draftVersion: 5,
+      publishedVersion: 4,
+    });
+    expect(mocks.documentUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { websiteId: "site-1", draftVersion: 4, publishedVersion: 3 },
+      data: expect.objectContaining({
+        draftJson: restoredSnapshot,
+        draftVersion: 5,
+        publishedJson: restoredSnapshot,
+        publishedVersion: 4,
+      }),
+    }));
+    expect(mocks.revisionCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ websiteId: "site-1", draftVersion: 5, snapshotJson: restoredSnapshot, source: "ROLLBACK" }),
+    }));
+    expect(mocks.publicationCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ websiteId: "site-1", version: 4, draftVersion: 5, snapshotJson: restoredSnapshot }),
+    }));
+  });
+
+  it("refuses rollback on stale draft/publication versions without writing", async () => {
+    setup("publish");
+    mocks.studioWebsiteFindUnique.mockResolvedValue({ id: "site-1", status: "PUBLISHED" });
+    mocks.documentFindUnique.mockResolvedValue({
+      websiteId: "site-1",
+      draftJson,
+      draftVersion: 5,
+      publishedVersion: 3,
+    });
+    const response = await ROLLBACK(request({
+      websiteId: "site-1",
+      targetVersion: 1,
+      expectedDraftVersion: 4,
+      expectedPublishedVersion: 3,
+    }, "rollback"));
+
+    expect(response.status).toBe(409);
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("unpublishes without deleting the saved publication snapshot", async () => {
