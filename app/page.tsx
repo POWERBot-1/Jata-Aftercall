@@ -262,6 +262,7 @@ export default async function HomePage() {
                   <p className="mk-card__price">{mjengoPlan ? `KES ${formatNumber(mjengoPlan.priceKES)} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable"}</p>
                   <p>Explore projects and jobs, materials, procurement, sales, customers, workforce, accounting and reports.</p>
                   <Link href="/products/mjengo-os">View MJENGO OS details →</Link>
+                  <Link href="/pricing#mjengo-plan">View plans →</Link>
                 </article>
               </div>
             </div>
