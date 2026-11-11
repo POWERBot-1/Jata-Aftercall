@@ -151,7 +151,9 @@ jobs:
             exit 1
           fi
           # Serve the build that was just produced and verified. No rebuild, no second schema.
-          npx next start -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
+          # Run the Next CLI directly: `npx` re-resolves and can exit asynchronously, which left no
+          # server and produced a bare readiness failure with no diagnostic.
+          node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
           ready=0
@@ -161,7 +163,14 @@ jobs:
           done
           if [ "$ready" != "1" ]; then
             echo "::error::The journey server never became ready — BLOCKED, not passed."
-            tail -40 /tmp/step-journey-server.log
+            # Never leave a readiness failure undiagnosable: ship the server log as an annotation,
+            # because artifact and job-log downloads are blocked from some review environments.
+            echo "--- server log ---"
+            tail -40 /tmp/step-journey-server.log || true
+            echo "--- port listeners ---"
+            (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null || true) | head -20
+            echo "--- direct probe ---"
+            curl -sS -o /dev/null -w "http=%{http_code} exit=%{exitcode}\n" "$STUDIO_BASE_URL/dev/website-studio-preview" 2>&1 | tail -3 || true
             exit 1
           fi
           node scripts/browser/website-studio-openpage.check.mjs 2>&1 | tee /tmp/step-journey-browser.log
