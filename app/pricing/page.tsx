@@ -182,7 +182,7 @@ export default async function PricingPage() {
         </div>
       </MarketingSection>
 
-      <MarketingSection title="MJENGO OS — business management" id="mjengo-os" tone="cream">
+      <MarketingSection title="MJENGO OS — business management" id="mjengo-plan" tone="cream">
         <div className="mk-grid">
           <article className="mk-card" data-product="MJENGO_OS">
             <h3>MJENGO OS</h3>
