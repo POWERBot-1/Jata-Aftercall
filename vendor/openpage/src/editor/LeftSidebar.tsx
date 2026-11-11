@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Search, Layout, Type, Grid3X3, DollarSign, Megaphone, PanelBottom, MessageSquare, BarChart3, HelpCircle, Users, Mail, Newspaper, Image, Plus, Minus, Flag, FileText, ImageIcon, Play, GalleryHorizontalEnd } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
+import { AgentPanel } from './AgentPanel'
 import { useConfigStore } from '@openpage/store/configStore'
 import { useEditorStore } from '@openpage/store/editorStore'
 import { blockMetadata } from '@openpage/lib/block-metadata'
@@ -95,7 +96,7 @@ function ComponentsPanel() {
   )
 }
 
-type Tab = 'layers' | 'components'
+type Tab = 'layers' | 'components' | 'agent'
 
 export function LeftSidebar() {
   const [tab, setTab] = useState<Tab>('layers')
@@ -123,8 +124,18 @@ export function LeftSidebar() {
         >
           Components
         </button>
+        <button
+          onClick={() => setTab('agent')}
+          className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+            tab === 'agent'
+              ? 'text-text-0 border-b border-green'
+              : 'text-text-3 hover:text-text-1'
+          }`}
+        >
+          AI Agent
+        </button>
       </div>
-      {tab === 'layers' ? <LayersPanel /> : <ComponentsPanel />}
+      {tab === 'layers' ? <LayersPanel /> : tab === 'components' ? <ComponentsPanel /> : <AgentPanel />}
     </div>
   )
 }
