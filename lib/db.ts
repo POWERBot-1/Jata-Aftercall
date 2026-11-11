@@ -301,6 +301,7 @@ function createFallbackPrisma(): any {
     // offline contract; no fallback write may appear to save a real website.
     openPageSiteDocument: emptyModel(),
     openPageSiteRevision: emptyModel(),
+    openPageSitePublication: emptyModel(),
     experienceVersion: {
       findMany: async () => [],
       findUnique: async () => null,
