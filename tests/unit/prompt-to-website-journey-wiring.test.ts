@@ -3,9 +3,10 @@ import { readFileSync } from "node:fs";
 
 // The prompt-to-website browser journey existed as a script but was wired into NO workflow, so the
 // acceptance it describes had never run in CI. These tests pin that it is wired in, that it cannot
-// pass without a real browser, and that its fixture-API limitation is stated in the job name.
+// pass without a real browser, and that its fixture-API limitation is stated rather than implied.
 const workflow = readFileSync(".github/workflows/website-studio-2-0.yml", "utf8");
-const job = workflow.slice(workflow.indexOf("prompt-to-website-journey:"));
+// The journey lives inside the proven build+PostgreSQL job, so scope assertions to its steps.
+const job = workflow.slice(workflow.indexOf("Prompt-to-website browser journey"));
 
 describe("prompt-to-website journey is wired into CI", () => {
   it("runs the real browser script", () => {
@@ -13,7 +14,7 @@ describe("prompt-to-website journey is wired into CI", () => {
   });
 
   it("fails closed when Chrome is absent instead of reporting a pass", () => {
-    expect(job).toContain("CHROME_PATH=\"$(command -v google-chrome || command -v chromium || true)\"");
+    expect(job).toContain('CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"');
     expect(job).toContain("NOT RUN, not passed");
   });
 
@@ -21,70 +22,55 @@ describe("prompt-to-website journey is wired into CI", () => {
     expect(job).toContain("BLOCKED, not passed");
   });
 
-  it("always uploads evidence, even on failure", () => {
+  it("always uploads evidence, including every log, even on failure", () => {
     const upload = job.slice(job.indexOf("Upload prompt-to-website journey evidence"));
     expect(upload).toContain("if: always()");
     expect(upload).toContain(".cache/verification/studio-openpage/");
+    expect(upload).toContain("/tmp/step-journey-*.log");
   });
 
-  it("states the fixture-API limitation in the job name rather than implying server truth", () => {
-    const name = /prompt-to-website-journey:\s*\n\s*name: (.+)/.exec(workflow)?.[1] ?? "";
-    expect(name.toLowerCase()).toContain("fixture api");
-    expect(name.toLowerCase()).toContain("server truth proven separately");
-  });
-
-  it("validates and generates Prisma through the engine-retry wrapper", () => {
-    expect(job).toContain("retry-prisma-engine.mjs -- npx prisma validate");
-    expect(job).toContain("retry-prisma-engine.mjs -- npx prisma generate");
+  it("states its limitation in the step name rather than implying server truth", () => {
+    const name = /- name: (Prompt-to-website browser journey[^\n]*)/.exec(workflow)?.[1] ?? "";
+    expect(name.toLowerCase()).toContain("ui journey");
+    expect(name.toLowerCase()).toContain("server truth proven above");
   });
 
   it("does not stub the server-side truth it cannot prove", () => {
     // The journey stubs authenticated API calls; that is only acceptable because tenant isolation,
-    // authz and publication are proven by the PostgreSQL suites in the sibling job. If this job ever
-    // points at a disposable database it must stop claiming the fixture limitation.
+    // authz and publication are proven by the PostgreSQL suites in the same job.
     const script = readFileSync("scripts/browser/website-studio-openpage.check.mjs", "utf8");
     expect(script).toContain("Only the authenticated");
     expect(script).toContain("stubbed");
-    expect(job).not.toContain("JATA_ALLOW_FIXTURE_SEED");
   });
 });
 
-// Prisma resolves env("DATABASE_URL") and env("DIRECT_URL") when it loads the schema, and an
-// unresolvable variable is a P1012 — even for `validate`. The first version of this job omitted both
-// and failed before the browser ever started.
-describe("prompt-to-website journey declares schema-resolution placeholders", () => {
-  it("sets DATABASE_URL and DIRECT_URL so prisma validate can resolve the schema", () => {
-    expect(job).toContain("DATABASE_URL: postgresql://journey_placeholder:");
-    expect(job).toContain("DIRECT_URL: postgresql://journey_placeholder:");
-  });
-
-  it("uses a placeholder, not a database, so nothing can connect", () => {
-    // Any real-looking URL here would quietly imply server-side proof this job does not claim.
-    expect(job).not.toContain("localhost:5432/jata_e2e");
-    expect(job).toContain("no migration command is invoked");
-  });
-
-  // The first version put DATABASE_URL in the JOB env. `scripts/build.sh` treats a non-empty
-  // DATABASE_URL as production and runs scripts/migrate.sh, so the build tried to migrate a database
-  // that does not exist. The variables must stay scoped to the steps that only parse the schema.
-  it("never invokes scripts/build.sh, whose migration gate would act on DATABASE_URL", () => {
+// The journey was first added as a standalone job that rebuilt the app. That job failed three times
+// on a second schema/build path (P1012 on validate; a placeholder DATABASE_URL triggering
+// build.sh's migration gate). Reusing the job that already has a verified build and a real
+// disposable database removes the whole class of failure — and removes any chance of the journey
+// validating a different artifact than the server-side suites did.
+describe("prompt-to-website journey reuses the verified build", () => {
+  it("starts the already-built app instead of building again", () => {
+    expect(job).toContain("npx next start");
+    expect(job).not.toContain("npx next build");
     expect(job).not.toContain("npm run build");
-    expect(job).toContain("npx next build");
   });
 
-  it("uploads every journey log, so a failure is diagnosable without artifact access", () => {
-    const upload = job.slice(job.indexOf("Upload prompt-to-website journey evidence"));
-    expect(upload).toContain("/tmp/step-journey-*.log");
+  it("introduces no second Prisma validate/generate path", () => {
+    expect(job).not.toContain("npx prisma validate");
+    expect(job).not.toContain("prisma generate");
+    expect(job).not.toContain("retry-prisma-engine");
   });
 
-  it("keeps DATABASE_URL out of the job env so build.sh cannot run a migration gate", () => {
+  it("carries no datasource placeholders of its own", () => {
+    // It runs in the job that has a real database; a placeholder URL here would be a lie about
+    // what the journey is connected to.
+    expect(job).not.toContain("journey_placeholder");
+  });
+
+  it("removes the standalone job entirely rather than leaving a dead job behind", () => {
     const { load } = require("js-yaml") as typeof import("js-yaml");
-    const parsed = load(workflow) as { jobs: Record<string, { env?: Record<string, string>; steps: { name?: string; env?: Record<string, string> }[] }> };
-    const parsedJob = parsed.jobs["prompt-to-website-journey"];
-    expect(parsedJob.env?.DATABASE_URL).toBeUndefined();
-    // ...and the build step must not carry one either.
-    // The build step may declare it, because build.sh is never invoked there (asserted above).
-    const buildStep = parsedJob.steps.find((step) => step.name?.includes("Production build"));
-    expect(buildStep).toBeDefined();
+    const parsed = load(workflow) as { jobs: Record<string, unknown> };
+    expect(Object.keys(parsed.jobs)).toEqual(["website-studio-2-0"]);
   });
 });

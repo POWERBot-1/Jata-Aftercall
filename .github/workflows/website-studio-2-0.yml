@@ -122,83 +122,31 @@ jobs:
           fi
           STUDIO_BROWSER_TEST_WRITE=1 npm run test:browser:studio-authenticated
 
-      - name: Upload Website Studio acceptance evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: website-studio-2-0-acceptance-${{ github.sha }}
-          path: |
-            /tmp/website-studio-vitest.log
-            .cache/verification/studio-authenticated/
-          if-no-files-found: warn
-          retention-days: 30
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Prompt-to-website browser journey (new business → 3 layouts → refinement →
-  # save → reopen → device previews → guarded publish controls).
-  #
-  # A SEPARATE JOB ON PURPOSE. The check drives a development fixture route in
-  # which only the authenticated API calls are stubbed; the server-side truth for
-  # authentication, tenant isolation, draft-version concurrency and publication is
-  # proven by the vitest/PostgreSQL suites in the job above. Keeping the two apart
-  # means neither can borrow the other's credibility, and the limitation is stated
-  # in the job name rather than buried in a log.
-  prompt-to-website-journey:
-    name: Prompt-to-website UI journey (fixture API; server truth proven separately)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      NEXT_TELEMETRY_DISABLED: "1"
-      AUTH_SECRET: website-studio-journey-disposable-secret
-      # NOTE deliberately: no DATABASE_URL / DIRECT_URL at job level.
-      # `scripts/build.sh` treats a non-empty DATABASE_URL as "production" and runs
-      # `scripts/migrate.sh` against it. A placeholder here therefore tries to MIGRATE a database that
-      # does not exist, which is how the first version of this job failed. The two schema-resolution
-      # variables are supplied per-step, only where Prisma needs them to parse the schema.
-      STUDIO_BASE_URL: http://127.0.0.1:3100
-      STUDIO_EVIDENCE_DIR: .cache/verification/studio-openpage
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - name: Install locked dependencies
-        run: npm ci
-      - name: Validate Prisma schema and generate the client
+      # ───────────────────────────────────────────────────────────────────────────
+      # Prompt-to-website browser journey: new business → prompt → 3 layouts →
+      # retention → refinement → save → reopen → device previews → guarded publish.
+      #
+      # Runs in THIS job, not a separate one, on purpose: this job already produces a
+      # verified production build against a real disposable PostgreSQL database. Reusing
+      # it means the journey is exercised against the same artifact the server-side
+      # suites just validated, instead of a second build that could drift.
+      #
+      # LIMITATION, stated rather than implied: the check stubs the authenticated API
+      # calls, so it proves the UI journey and asset retention — not server truth.
+      # Authentication, tenant isolation, draft-version concurrency and publication are
+      # proven by the vitest/PostgreSQL steps above in this same job.
+      - name: Prompt-to-website browser journey (UI journey; server truth proven above)
         env:
-          # Schema resolution only: Prisma raises P1012 when these are unset. Nothing connects — the
-          # host is a loopback placeholder and no migration command is invoked in this job.
-          DATABASE_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
-          DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
+          STUDIO_BASE_URL: http://127.0.0.1:3100
+          STUDIO_EVIDENCE_DIR: .cache/verification/studio-openpage
         run: |
           set -o pipefail
-          # Transport faults against the engine mirror are retried; a real schema
-          # error fails on the first attempt, unchanged.
-          node scripts/ci/retry-prisma-engine.mjs -- npx prisma validate 2>&1 | tee /tmp/step-journey-validate.log
-          node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate.log
-      - name: Production build of the journey route
-        env:
-          # Both datasource variables are loopback placeholders: Prisma cannot parse the schema
-          # without them (P1012), and `next build` needs a migrated-looking client to render.
-          # This is safe here ONLY because this step runs `next build` directly and never calls
-          # scripts/build.sh, whose migration gate would engage on a non-empty DATABASE_URL.
-          DATABASE_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
-          DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
-        run: |
-          set -o pipefail
-          node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate2.log
-          NEXT_TELEMETRY_DISABLED=1 npx next build 2>&1 | tee /tmp/step-journey-build.log
-      - name: Drive the prompt-to-website journey in a real browser
-        run: |
-          set -o pipefail
-          set -euo pipefail
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
           if [ -z "$CHROME_PATH" ] || [ ! -x "$CHROME_PATH" ]; then
             echo "::error::Chrome executable missing — prompt-to-website journey NOT RUN, not passed."
             exit 1
           fi
-          # The app under test must be a local production server; refuse anything else.
+          # Serve the build that was just produced and verified. No rebuild, no second schema.
           npx next start -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
@@ -213,7 +161,8 @@ jobs:
             exit 1
           fi
           node scripts/browser/website-studio-openpage.check.mjs 2>&1 | tee /tmp/step-journey-browser.log
-      - name: Upload prompt-to-website journey evidence
+
+      - name: Upload prompt-to-website journey evidence (including the log)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -222,3 +171,14 @@ jobs:
             /tmp/step-journey-*.log
             .cache/verification/studio-openpage/
           if-no-files-found: warn
+
+      - name: Upload Website Studio acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-studio-2-0-acceptance-${{ github.sha }}
+          path: |
+            /tmp/website-studio-vitest.log
+            .cache/verification/studio-authenticated/
+          if-no-files-found: warn
+          retention-days: 30
