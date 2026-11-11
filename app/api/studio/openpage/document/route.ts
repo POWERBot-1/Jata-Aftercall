@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertStudioWebsiteAccess } from "@/lib/experience/tenant";
+import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,10 @@ export async function PUT(request: Request) {
 
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "edit");
+    const entitlement = await getInteractiveEntitlement(access.businessId);
+    if (!entitlement.entitled) {
+      return NextResponse.json({ error: entitlement.reason, code: "website_studio_entitlement_required" }, { status: 402 });
+    }
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId } });
       if (!current) {
