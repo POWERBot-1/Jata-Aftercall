@@ -318,4 +318,4 @@ export const useConfigStore = create<ConfigState>()((set, get) => ({
 
       canUndo: () => get().undoStack.length > 0,
       canRedo: () => get().redoStack.length > 0,
-    })
+    }))
