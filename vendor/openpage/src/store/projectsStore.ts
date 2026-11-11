@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { SiteConfig } from '@/blocks/types'
 
 export interface Project {
@@ -40,9 +39,7 @@ interface ProjectsState {
   setDeployInfo: (id: string, url: string, deploymentId: string) => void
 }
 
-export const useProjectsStore = create<ProjectsState>()(
-  persist(
-    (set) => ({
+export const useProjectsStore = create<ProjectsState>()((set) => ({
       projects: [],
       addProject: (name) => {
         const id = `proj-${Date.now()}`
@@ -109,7 +106,4 @@ export const useProjectsStore = create<ProjectsState>()(
               : p
           ),
         })),
-    }),
-    { name: 'openpage-projects' }
-  )
-)
+    })
