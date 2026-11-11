@@ -196,7 +196,9 @@ jobs:
             # The check throws on its first failed assertion and prints only to stdout, which is
             # unreachable from some review environments. Annotate the tail so a failure is
             # diagnosable from the checks list, and fail with the script's own exit code.
-            echo "::error title=JOURNEY_CHECK_FAILED::$(tail -c 1200 /tmp/step-journey-browser.log | tr '\n' ' ' | sed 's/%/%25/g')"
+            # The check's own thrown message is at the TOP of its output; the tail is usually a
+            # noisy puppeteer object dump. Annotate the head, which names the failed assertion.
+            echo "::error title=JOURNEY_CHECK_FAILED::$(head -c 1200 /tmp/step-journey-browser.log | tr '\n' ' ' | sed 's/%/%25/g')"
             echo "--- browser log ---"
             tail -60 /tmp/step-journey-browser.log || true
             exit "$journey_status"

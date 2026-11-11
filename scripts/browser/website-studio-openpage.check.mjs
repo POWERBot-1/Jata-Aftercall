@@ -29,7 +29,11 @@ await fs.mkdir(evidenceDir, { recursive: true });
 const browser = await puppeteer.launch({
   executablePath: chromePath,
   headless: true,
-  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--single-process", "--no-zygote"],
+  // NOTE: `--single-process` and `--no-zygote` are deliberately NOT used. They were here to survive
+  // constrained sandboxes, but in CI they make the browser die mid-run with a CDP "socket hang up"
+  // (close code 1006) as soon as the page gets busy — which reads as a failed acceptance rather than
+  // a crashed browser. `--disable-dev-shm-usage` is the portable fix for small /dev/shm and is enough.
+  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1500, height: 1100, deviceScaleFactor: 1 });

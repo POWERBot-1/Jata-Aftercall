@@ -118,3 +118,16 @@ describe("journey failures are diagnosable from the checks list", () => {
     expect(job).toContain("PIPESTATUS[0]");
   });
 });
+
+// `--single-process` / `--no-zygote` make Chrome die mid-run in CI with a CDP "socket hang up"
+// (close code 1006) once the page gets busy, which surfaced as a failed acceptance rather than a
+// crashed browser. They were a sandbox workaround, not a CI requirement.
+describe("journey browser is not launched in a crash-prone single-process mode", () => {
+  it("omits --single-process and --no-zygote but keeps --disable-dev-shm-usage", () => {
+    const script = readFileSync("scripts/browser/website-studio-openpage.check.mjs", "utf8");
+    const launch = script.slice(script.indexOf("puppeteer.launch"), script.indexOf("puppeteer.launch") + 600);
+    expect(launch).not.toContain('"--single-process"');
+    expect(launch).not.toContain('"--no-zygote"');
+    expect(launch).toContain('"--disable-dev-shm-usage"');
+  });
+});
