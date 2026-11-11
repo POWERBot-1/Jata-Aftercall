@@ -77,7 +77,32 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });
+
   let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const websiteId = typeof body.websiteId === "string" ? body.websiteId.trim() : "";
+  const expectedDraftVersion = Number(body.expectedDraftVersion);
+  if (!websiteId || !Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 0) {
+    return NextResponse.json({ error: "Choose a website and the draft version you edited." }, { status: 400 });
+  }
+
+  const validated = validateSiteConfig(body.config);
+  if (!validated.ok) return NextResponse.json({ error: validated.error, code: "openpage_schema_invalid" }, { status: 422 });
+
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(validated.value);
+  } catch {
+    return NextResponse.json({ error: "The OpenPage document is not valid JSON." }, { status: 400 });
+  }
+  if (serialized.length > 1_500_000) return NextResponse.json({ error: "The OpenPage document exceeds the 1.5 MB limit." }, { status: 413 });
+  if (/data:image\\//i.test(serialized)) return NextResponse.json({ error: "Store images in the JATA media library and reference their URLs; inline image data is not accepted." }, { status: 422 });
+
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "edit");
     const result = await prisma.$transaction(async (tx) => {
@@ -89,26 +114,48 @@ export async function PUT(request: Request) {
             websiteId: access.websiteId,
             draftJson: serialized,
             draftVersion: 1,
-            revisions: { create: { draftVersion: 1, snapshotJson: serialized, source: "EDIT", createdById: session.userId } },
+            revisions: {
+              create: {
+                draftVersion: 1,
+                snapshotJson: serialized,
+                source: "EDIT",
+                createdById: session.userId,
+              },
+            },
           },
         });
         return { conflict: false as const, draftVersion: created.draftVersion };
       }
-      if (current.draftVersion !== expectedDraftVersion) return { conflict: true as const, currentDraftVersion: current.draftVersion };
+
+      if (current.draftVersion !== expectedDraftVersion) {
+        return { conflict: true as const, currentDraftVersion: current.draftVersion };
+      }
+
       const nextVersion = current.draftVersion + 1;
       const changed = await tx.openPageSiteDocument.updateMany({
         where: { websiteId: access.websiteId, draftVersion: expectedDraftVersion },
         data: { draftJson: serialized, draftVersion: nextVersion },
       });
       if (changed.count !== 1) {
-        const latest = await tx.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId }, select: { draftVersion: true } });
+        const latest = await tx.openPageSiteDocument.findUnique({
+          where: { websiteId: access.websiteId },
+          select: { draftVersion: true },
+        });
         return { conflict: true as const, currentDraftVersion: latest?.draftVersion ?? null };
       }
+
       await tx.openPageSiteRevision.create({
-        data: { websiteId: access.websiteId, draftVersion: nextVersion, snapshotJson: serialized, source: "EDIT", createdById: session.userId },
+        data: {
+          websiteId: access.websiteId,
+          draftVersion: nextVersion,
+          snapshotJson: serialized,
+          source: "EDIT",
+          createdById: session.userId,
+        },
       });
       return { conflict: false as const, draftVersion: nextVersion };
     });
+
     if (result.conflict) {
       return NextResponse.json({
         error: "This OpenPage draft changed in another window. Reload the latest draft.",
@@ -118,7 +165,21 @@ export async function PUT(request: Request) {
     }
     return NextResponse.json({ saved: true, websiteId, draftVersion: result.draftVersion, config: validated.value });
   } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (code === "P2002") {
+      const latest = await prisma.openPageSiteDocument.findUnique({
+        where: { websiteId },
+        select: { draftVersion: true },
+      }).catch(() => null);
+      return NextResponse.json({
+        error: "This OpenPage draft changed in another window. Reload the latest draft.",
+        code: "openpage_draft_version_conflict",
+        currentDraftVersion: latest?.draftVersion ?? null,
+      }, { status: 409 });
+    }
     const status = statusOf(error);
-    return NextResponse.json({ error: status === 404 ? "Studio website not found." : status === 403 ? "You do not have permission to edit this website." : "We could not save this OpenPage document." }, { status });
+    return NextResponse.json({
+      error: status === 404 ? "Studio website not found." : status === 403 ? "You do not have permission to edit this website." : "We could not save this OpenPage document.",
+    }, { status });
   }
 }
