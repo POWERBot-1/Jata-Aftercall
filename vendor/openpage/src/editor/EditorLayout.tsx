@@ -96,7 +96,7 @@ function useGenerationOrchestration() {
     const timeout = setTimeout(() => {
       controller.abort()
       setGenerationError('Generation timed out')
-      toast.error('Generation timed out. Try again or add a Gemini API key in Settings.')
+      toast.error('Generation timed out. Try again or start from a template.')
       clearGeneration()
     }, 30000)
 
