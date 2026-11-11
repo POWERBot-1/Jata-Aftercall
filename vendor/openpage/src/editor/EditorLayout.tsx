@@ -45,6 +45,7 @@ function useAutoSaveToProject() {
         })
         const data = await response.json().catch(() => ({}))
         if (!response.ok) {
+          setIsSaving(false);
           if (response.status === 409) {
             toast.error('This website changed in another session. Reload before continuing.')
           } else {
@@ -57,12 +58,13 @@ function useAutoSaveToProject() {
         updateProjectConfig(activeProjectId, config)
         toast.success('Draft saved to JATA')
       } catch {
+        setIsSaving(false);
         toast.error('Network error. Your latest changes are not yet saved.')
       }
     }, 700)
 
     return () => window.clearTimeout(timeout)
-  }, [config, activeProjectId, websiteId, ready, draftVersion, setDraftVersion, updateProjectConfig])
+  }, [config, activeProjectId, websiteId, ready, draftVersion, setDraftVersion, setIsDirty, setIsSaving, updateProjectConfig])
 }
 
 function useGenerationOrchestration() {
