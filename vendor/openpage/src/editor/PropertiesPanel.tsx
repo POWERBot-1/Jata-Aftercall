@@ -120,7 +120,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
         title: 'Content',
         fields: [
           { key: 'logo', label: 'Logo Text', type: 'text' },
-          { key: 'logoImage', label: 'Logo Image URL', type: 'text' },
+          { key: 'logoImage', label: 'Logo Image URL', type: 'media' },
           { key: 'copyright', label: 'Copyright', type: 'text' },
           { key: 'links', label: 'Links', type: 'array-strings' },
         ],
