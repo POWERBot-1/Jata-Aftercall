@@ -76,6 +76,7 @@ function useGenerationOrchestration() {
   const setConfig = useConfigStore((s) => s.setConfig)
   const updateProjectConfig = useProjectsStore((s) => s.updateProjectConfig)
   const renameProject = useProjectsStore((s) => s.renameProject)
+  const { websiteId } = useOpenPagePersistence()
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -92,7 +93,7 @@ function useGenerationOrchestration() {
       clearGeneration()
     }, 30000)
 
-    generateSiteConfig(generationPrompt, controller.signal)
+    generateSiteConfig(generationPrompt, websiteId, controller.signal)
       .then(({ config, source }) => {
         clearTimeout(timeout)
         if (controller.signal.aborted) return
@@ -103,7 +104,7 @@ function useGenerationOrchestration() {
         }
         clearGeneration()
         if (source === 'template') {
-          toast('Generated from template. Add a Gemini API key in Settings for AI generation.')
+          toast('Generated with JATA’s built-in design engine. Review the draft before publishing.')
         }
       })
       .catch((err) => {
@@ -119,7 +120,7 @@ function useGenerationOrchestration() {
       controller.abort()
       abortRef.current = null
     }
-  }, [isGenerating, generationPrompt]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isGenerating, generationPrompt, websiteId]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 function EditorEmptyState() {
