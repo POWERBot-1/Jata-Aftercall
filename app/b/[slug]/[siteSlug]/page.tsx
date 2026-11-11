@@ -3,6 +3,13 @@ import type { Metadata } from "next";
 import { loadStorefront, type StorefrontData } from "@/lib/experience/storefront";
 import { seoMetadataFor, structuredDataFor } from "@/lib/experience/structuredData";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
+import prisma from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { publicPageDecision } from "@/lib/publication";
+import { getDefaultOpenPageSite, resolveOpenPagePublicConfig } from "@/lib/openpage/public-site";
+import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
+import { OpenPagePublicSite } from "@/components/studio/openpage/OpenPagePublicSite";
+import type { SiteConfig } from "@/vendor/openpage/src/blocks/types";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +33,41 @@ async function loadPublicSite(slug: string, siteSlug: string): Promise<Storefron
   }
 }
 
+async function loadNativeOpenPagePath(slug: string, siteSlug: string): Promise<{ config: SiteConfig; businessName: string } | null> {
+  const business = await prisma.business.findUnique({
+    where: { slug },
+    select: { id: true, ownerId: true, isPublished: true, status: true, members: { select: { userId: true, role: true } }, name: true },
+  });
+  if (!business) return null;
+  const session = await getSession();
+  const viewer = session ? { userId: session.userId, role: session.role } : null;
+  const decision = publicPageDecision({
+    business: {
+      isPublished: business.isPublished,
+      ownerId: business.ownerId,
+      ownerMemberIds: business.members.filter((member) => member.role === "OWNER").map((member) => member.userId),
+    },
+    viewer,
+  });
+  if (decision !== "public" || business.status === "SUSPENDED") return null;
+
+  const nativeSite = await getDefaultOpenPageSite(business.id);
+  if (!nativeSite || nativeSite.status !== "PUBLISHED") return null;
+  const native = resolveOpenPagePublicConfig(nativeSite, { allowDraft: false, preferDraft: false });
+  if (!native || !(await getInteractiveEntitlement(business.id)).entitled) return null;
+  const config = native.config as unknown as SiteConfig;
+  const expectedPath = `/${siteSlug.split("/").filter(Boolean).join("/")}`;
+  if (!(config.pages ?? []).some((page) => page.path.replace(/\\/+$/, "") === expectedPath.replace(/\\/+$/, ""))) return null;
+  return { config, businessName: business.name };
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, siteSlug } = await params;
+  const native = await loadNativeOpenPagePath(slug, siteSlug);
+  if (native) return {
+    title: `${native.config.name || native.businessName} | ${native.businessName}`,
+    alternates: { canonical: `/b/${slug}/${siteSlug}` },
+  };
   const site = await loadPublicSite(slug, siteSlug);
   if (!site) return { title: "Website not found | JATA AFTERCALL", robots: { index: false, follow: false } };
   return seoMetadataFor({
@@ -41,6 +81,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PublicStudioWebsitePage({ params }: Props) {
   const { slug, siteSlug } = await params;
+  const native = await loadNativeOpenPagePath(slug, siteSlug);
+  if (native) {
+    return <OpenPagePublicSite config={native.config} pagePath={`/${siteSlug}`} />;
+  }
   const site = await loadPublicSite(slug, siteSlug);
   if (!site) notFound();
   // `ExperienceSite` is the same composition the default site uses: it supplies the
