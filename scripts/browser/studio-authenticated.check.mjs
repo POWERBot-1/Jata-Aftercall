@@ -306,10 +306,14 @@ async function patch(page, fixture, change) {
   return next;
 }
 async function publishUI(page, fixture, expectedStatus) {
-  const response = await api(page, "/api/experience/publish", "POST", { businessId: fixture.id });
+  const current = await snapshot(fixture.id);
+  const response = await api(page, "/api/experience/publish", "POST", {
+    businessId: fixture.id,
+    expectedDraftVersion: current.draftVersion,
+  });
   const detail = JSON.stringify(response.body ?? null).slice(0, 600);
   check(`${fixture.category}: authenticated publish endpoint returns ${expectedStatus}`, response.status === expectedStatus,
-    `status=${response.status}, body=${detail}`);
+    `status=${response.status}, draftVersion=${current.draftVersion}, body=${detail}`);
   return response.body;
 }
 async function preview(page, fixture, marker) {
