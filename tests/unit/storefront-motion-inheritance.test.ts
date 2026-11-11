@@ -29,7 +29,10 @@ describe("storefront motion integration contract (SSR, not browser evidence)", (
   it("detects new business pages that bypass the shell or an explicitly audited exception", () => {
     const root = "app/b/[slug]";
     const exceptions: Record<string, string[]> = {
-      "app/b/[slug]/page.tsx": ["ExperienceSite", "BusinessPage"],
+      "app/b/[slug]/page.tsx": [
+        "ExperienceSite", "BusinessPage", "OpenPagePublicSite",
+        "getDefaultOpenPageSite", "resolveOpenPagePublicConfig", "getInteractiveEntitlement",
+      ],
       "app/b/[slug]/ai/page.tsx": ["AIFrontDeskCustomerClient", "motionPreference={preference}", "motionEnabled={Boolean(storefront"],
       // A secondary Studio website renders through the SAME shared `ExperienceSite` →
       // `StorefrontShell` composition as the default site, so it inherits the shell,
@@ -37,6 +40,13 @@ describe("storefront motion integration contract (SSR, not browser evidence)", (
       // here explicitly (rather than by loosening the rule) so any future page that
       // really does bypass the shell still fails.
       "app/b/[slug]/[siteSlug]/page.tsx": ["<ExperienceSite", "shell={false}"],
+      // Native OpenPage pages intentionally render their canonical SiteConfig through the
+      // pinned upstream block registry instead of the JATA ExperienceDocument shell. This
+      // preserves the complete OpenPage design contract; route-level publication, entitlement,
+      // and exact-page resolution are asserted here, and the renderer is checked below.
+      "app/b/[slug]/[...sitePath]/page.tsx": [
+        "getDefaultOpenPageSite", "resolveOpenPagePublicConfig", "getInteractiveEntitlement", "<OpenPagePublicSite",
+      ],
     };
     for (const file of pages(root)) {
       const source = readFileSync(file, "utf8");
@@ -46,6 +56,12 @@ describe("storefront motion integration contract (SSR, not browser evidence)", (
         expect(source, `${file} must declare a restrained section recipe or be explicitly audited`).toContain('data-motion-recipe="fade"');
       }
     }
+    const nativeOpenPage = readFileSync("components/studio/openpage/OpenPagePublicSite.tsx", "utf8");
+    expect(nativeOpenPage).toContain("@/vendor/openpage/src/blocks/registry");
+    expect(nativeOpenPage).toContain("<RenderBlock");
+    expect(nativeOpenPage).toContain("data-openpage-public=\"true\"");
+    expect(nativeOpenPage).toContain("preview");
+
     const shell = readFileSync("components/storefront/StorefrontShell.tsx", "utf8");
     const classic = readFileSync("components/BusinessPage.tsx", "utf8");
     expect(shell).toContain("<RenderModeProbe");
