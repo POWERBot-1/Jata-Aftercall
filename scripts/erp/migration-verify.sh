@@ -256,10 +256,24 @@ SQL
 
   # Restore into a scratch database that has the same schema, then compare row counts.
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" -c "CREATE DATABASE $SCRATCH_DB" || { fail "could not create scratch database"; return; }
+  # Replaying the committed migrations reproduces the schema on an empty database. Two things are
+  # made explicit here because a CI step may export them globally:
+  #   - `-v ON_ERROR_STOP=1` is passed per statement (already the default set at startup below), so a
+  #     single failing file cannot leave a half-built schema that looks restored;
+  #   - the scratch connection must not inherit a statement timeout shorter than the migration chain.
   local dir
   for dir in $(ls -1 "$MIGRATIONS_DIR" | grep -E '^[0-9]{14}_' | sort); do
-    "$PSQL" "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$dir/migration.sql" >/dev/null || { fail "scratch migration failed at $dir"; return; }
+    if ! "$PSQL" "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q \
+        -c 'SET statement_timeout = 0;' \
+        -f "$MIGRATIONS_DIR/$dir/migration.sql" >/tmp/erp-scratch-migrate.log 2>&1; then
+      fail "scratch migration failed at $dir"
+      # Print the cause: without it the failure is a filename, not a diagnosis.
+      echo "--- scratch migration output ($dir) ---"
+      tail -20 /tmp/erp-scratch-migrate.log || true
+      return
+    fi
   done
+  pass "scratch database rebuilt from $(ls -1 "$MIGRATIONS_DIR" | grep -cE '^[0-9]{14}_') committed migrations"
   seed_baseline_rows "$SCRATCH_URL" || { fail "could not seed the scratch database"; return; }
   if "$PG_RESTORE" --no-owner --no-privileges --data-only --dbname="$SCRATCH_URL" "$dump" >"${TMPDIR:-/tmp}/erp-restore.log" 2>&1; then
     pass "export restored into a scratch database"
@@ -318,10 +332,18 @@ SQL
   [ "$(scalar 'select count(*) from "PosCategoryImage" where id = '\''photo_rollback'\''')" = "1" ] && pass "POS category image survived ERP rollback" || fail "POS category image was lost during ERP rollback"
   [ "$(scalar 'select count(*) from "PosCategory" where id = '\''category_rollback'\''')" = "1" ] && pass "POS category survived ERP rollback" || fail "POS category was lost during ERP rollback"
 
-  # Recovery: re-apply the ERP migration on the rolled-back database.
+  # Recovery: re-apply the ERP migrations on the rolled-back database, then the ledger migrations that
+  # own the guards and the integrity view removed above. Without the latter the recovery would restore
+  # tables but leave the financial safeguards off, which is exactly the state that must never exist.
   local recovered=1
-  for migration in "${ERP_MIGRATIONS[@]}"; do
-    "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$migration/migration.sql" >/dev/null 2>&1 || recovered=0
+  for migration in "${ERP_MIGRATIONS[@]}" "20261127000001_ledger_immutability" "20261127000002_ledger_line_integrity"; do
+    if ! "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q\
+        -c 'SET statement_timeout = 0;'\
+        -f "$MIGRATIONS_DIR/$migration/migration.sql" >/tmp/erp-recovery.log 2>&1; then
+      recovered=0
+      echo "--- recovery migration failed ($migration) ---"
+      tail -20 /tmp/erp-recovery.log || true
+    fi
   done
   if [ "$recovered" = "1" ]; then
     pass "ERP migrations re-applied after rollback (recovery path)"
@@ -335,6 +357,9 @@ SQL
   guards_after=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_trigger where tgname in ('ErpJournal_delete_guard','ErpJournal_immutable') and not tgisinternal")
   [ "$guards_after" = "2" ] && pass "ledger guards restored after recovery" || fail "ledger guards missing after recovery ($guards_after of 2)"
   [ -n "$("$PSQL" "$DB_URL" -tAc "select 1 from pg_views where viewname = 'ErpJournalIntegrity'")" ] && pass "ErpJournalIntegrity view restored after recovery" || fail "ErpJournalIntegrity view missing after recovery"
+  local line_fk
+  line_fk=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_constraint where contype = 'f' and conrelid = '\"ErpJournalLine\"'::regclass and confrelid = '\"ErpJournal\"'::regclass")
+  [ "${line_fk:-0}" -ge 1 ] && pass "ErpJournalLine -> ErpJournal reference restored after recovery" || fail "journal line reference missing after recovery"
 
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true
   rm -f "$dump"
