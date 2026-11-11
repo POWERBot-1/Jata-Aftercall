@@ -130,7 +130,6 @@ const MEASURE = () => {
     minHeight: actions.length ? Math.min(...actions.map((a) => a.height)) : null,
     minWidth: actions.length ? Math.min(...actions.map((a) => a.width)) : null,
     pageOverflowX: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
-    stalePadding: /^0(px)?$/.test(wrapStyle.paddingLeft) && /^0(px)?$/.test(wrapStyle.paddingRight),
   };
 };
 
@@ -176,9 +175,15 @@ try {
     check(`${width}px: the bar is horizontally symmetric`,
       m.symmetry !== null && m.symmetry <= 1,
       `left/right delta=${m.symmetry}px`);
-    check(`${width}px: the gutter comes from padding, not from a shrunken bar`,
-      !m.stalePadding && m.containerPadding !== null && m.containerPadding.left >= MIN_EDGE_GUTTER - 0.5,
-      `container padding L=${m.containerPadding?.left}/R=${m.containerPadding?.right}, wrapper padding L=${m.wrapperPadding.left}`);
+    // The wrapper is full-bleed by design (inset-x-0, side padding 0) and the INNER container carries
+    // the gutter. A shrunken bar would instead show a wide gutter with zero inner padding.
+    check(`${width}px: the gutter comes from inner padding, not from a shrunken bar`,
+      m.containerPadding !== null &&
+        m.containerPadding.left >= MIN_EDGE_GUTTER - 0.5 &&
+        m.containerPadding.left === m.containerPadding.right &&
+        m.wrapperPadding.left === 0 &&
+        m.wrapperPadding.right === 0,
+      `inner padding L=${m.containerPadding?.left}/R=${m.containerPadding?.right} (wrapper L=${m.wrapperPadding.left}/R=${m.wrapperPadding.right} = full-bleed)`);
     check(`${width}px: no horizontal page overflow`, m.pageOverflowX <= 0, `pageOverflowX=${m.pageOverflowX}px`);
     check(`${width}px: every control is a 44px touch target`, m.minHeight >= 43.5, `minHeight=${m.minHeight}px`);
     check(`${width}px: no uncaught page errors`, errors.length === 0, errors.slice(0, 2).join(" | ") || "none");
