@@ -1,5 +1,6 @@
 import type { SiteConfig, BlockConfig, ThemeConfig } from '@openpage/blocks/types'
 import { blockMetadata } from '@openpage/lib/block-metadata'
+import { getTemplateForPrompt } from '@openpage/lib/templates'
 
 const VALID_BLOCK_TYPES = new Set<string>(blockMetadata.map((b) => b.type))
 const VARIANT_MAP = Object.fromEntries(blockMetadata.map((b) => [b.type, new Set(b.variants)]))
