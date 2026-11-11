@@ -37,7 +37,7 @@ function timeAgo(value: string): string {
 export function VersionHistory() {
   const { historyOpen, toggleHistory, activeProjectId } = useEditorStore()
   const {
-    websiteId, draftVersion, publishedVersion, ready, setDraftVersion,
+    websiteId, draftVersion, publishedVersion, websiteStatus, ready, setDraftVersion,
     setPublishedVersion, setWebsiteStatus,
   } = useOpenPagePersistence()
   const setConfig = useConfigStore((s) => s.setConfig)
@@ -159,7 +159,7 @@ export function VersionHistory() {
             <span>Current draft</span>
             <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold bg-green-glow text-green">v{draftVersion}</span>
           </div>
-          <div className="text-[12.5px] text-text-1">{publishedVersion > 0 ? `Published v${publishedVersion}` : 'Not published'}</div>
+          <div className="text-[12.5px] text-text-1">{websiteStatus === 'PUBLISHED' ? `Published v${publishedVersion}` : publishedVersion > 0 ? `Previously published v${publishedVersion} · currently offline` : 'Not published'}</div>
         </div>
 
         <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-text-3">Published versions</div>
