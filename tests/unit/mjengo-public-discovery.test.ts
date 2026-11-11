@@ -9,7 +9,7 @@ describe("mjengo: public product discovery", () => {
     const page = readFileSync(path.join(root, "app/products/mjengo-os/page.tsx"), "utf8");
     expect(page).toContain("MJENGO OS");
     expect(page).toContain("mjengoCheckoutRefusal");
-    expect(page).toContain("KES");
+    expect(page).toContain("MJENGO_PLAN_PRICE_KES");
   });
 
   it("links MJENGO OS from the homepage, product catalogue and marketing footer", () => {
