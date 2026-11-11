@@ -29,6 +29,9 @@ on:
       - "docs/WEBSITE_STUDIO_2_0_IMPLEMENTATION_PLAN.md"
       - "scripts/browser/studio-authenticated.check.mjs"
       - "scripts/browser/studio-journey-safety.mjs"
+      - "scripts/browser/website-studio-openpage.check.mjs"
+      - "app/dev/website-studio-preview/**"
+      - "components/studio/**"
       - ".github/workflows/website-studio-2-0.yml"
   workflow_dispatch:
 
@@ -129,3 +132,75 @@ jobs:
             .cache/verification/studio-authenticated/
           if-no-files-found: warn
           retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Prompt-to-website browser journey (new business → 3 layouts → refinement →
+  # save → reopen → device previews → guarded publish controls).
+  #
+  # A SEPARATE JOB ON PURPOSE. The check drives a development fixture route in
+  # which only the authenticated API calls are stubbed; the server-side truth for
+  # authentication, tenant isolation, draft-version concurrency and publication is
+  # proven by the vitest/PostgreSQL suites in the job above. Keeping the two apart
+  # means neither can borrow the other's credibility, and the limitation is stated
+  # in the job name rather than buried in a log.
+  prompt-to-website-journey:
+    name: Prompt-to-website UI journey (fixture API; server truth proven separately)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      AUTH_SECRET: website-studio-journey-disposable-secret
+      STUDIO_BASE_URL: http://127.0.0.1:3100
+      STUDIO_EVIDENCE_DIR: .cache/verification/studio-openpage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate Prisma schema and generate the client
+        run: |
+          set -o pipefail
+          # Transport faults against the engine mirror are retried; a real schema
+          # error fails on the first attempt, unchanged.
+          node scripts/ci/retry-prisma-engine.mjs -- npx prisma validate 2>&1 | tee /tmp/step-journey-validate.log
+          node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate.log
+      - name: Production build of the journey route
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/step-journey-build.log
+      - name: Drive the prompt-to-website journey in a real browser
+        run: |
+          set -o pipefail
+          set -euo pipefail
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$CHROME_PATH" ] || [ ! -x "$CHROME_PATH" ]; then
+            echo "::error::Chrome executable missing — prompt-to-website journey NOT RUN, not passed."
+            exit 1
+          fi
+          # The app under test must be a local production server; refuse anything else.
+          npx next start -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null "$STUDIO_BASE_URL/dev/website-studio-preview" 2>/dev/null; then ready=1; break; fi
+            sleep 2
+          done
+          if [ "$ready" != "1" ]; then
+            echo "::error::The journey server never became ready — BLOCKED, not passed."
+            tail -40 /tmp/step-journey-server.log
+            exit 1
+          fi
+          node scripts/browser/website-studio-openpage.check.mjs 2>&1 | tee /tmp/step-journey-browser.log
+      - name: Upload prompt-to-website journey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-to-website-journey-${{ github.sha }}
+          path: |
+            /tmp/step-journey-browser.log
+            .cache/verification/studio-openpage/
+          if-no-files-found: warn
