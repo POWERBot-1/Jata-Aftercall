@@ -54,6 +54,7 @@ export function MarketingFooter() {
           <Link href="/products/ai-front-desk">AI Business Front Desk</Link>
           <Link href="/products/website-studio">Website Studio</Link>
           <Link href="/products/business-pos">Business POS</Link>
+          <Link href="/products/mjengo-os">MJENGO OS</Link>
           <Link href="/pricing">Compare plans</Link>
         </nav>
         <nav aria-label="Working demos">
