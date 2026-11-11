@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** `b292d4c`, amended below by `734b76c` (merge with `main`) and the follow-up below
+**Report commit:** this commit; the acceptance evidence it cites is from head `c13634d`
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -78,7 +78,42 @@ Prisma Client, not a schema or migration defect. Migration steps in the same job
 fix into a cutover review and risks touching migration baselines. It belongs in its own PR off
 `main`.
 
-### 3b. Outstanding workflow, stated plainly
+### 3a-bis. Current head — the complete workflow picture
+
+Measured, not summarised: `gh api .../commits/c13634d/check-runs` returns 21 check runs.
+
+| Conclusion | Count | Which |
+|---|---|---|
+| **success** | 17 | Release Validation (incl. *Release gate (aggregate)*), *Migrations and PostgreSQL suite*, *Migrations + schema on PostgreSQL 18*, *Schema reconciliation proposal closes the drift*, *Exact candidate applies on disposable PostgreSQL 18*, *Production build path on PostgreSQL 18*, *Failure paths actually fail*, *Migration target guard*, *Static*, *Prisma, tenant tests, typecheck and production build*, *Schema, types, unit suite, build*, *full-suite*, *Journey against a real database*, *Real-Chrome six-viewport capture*, *D2 build/audit/controls*, *Vercel Preview Comments*, *instruction-integrity* |
+| **failure** | 1 | `programme-completeness` — by design while 24 findings are open (§8) |
+| **skipped** | 2 | `Read-only smoke` ×2 (production smoke, read-only, non-blocking) |
+| **not usable** | 1 | Motion `capture` — stalled 37 min on an apt call, **fixed** in `4cbbdb4` (§3c) |
+
+Per-workflow, with what each result actually proves:
+
+| Workflow | Run | Head | Conclusion | Failed / skipped steps | What it proves |
+|---|---|---|---|---|---|
+| Release Validation | `43042978468` | `c13634d` | **success** | *Report diagnostics to the pull request* (skipped, diagnostic-only) | The candidate applies to a fresh PG18, reconciliation closes, negative controls really fail, and the aggregate gate passes. It does **not** prove product behaviour. |
+| Interactive Business E2E | `43042978559` | `c13634d` | **success** | *Report failing output* (skipped) | The authenticated business journey works against a real PostgreSQL. Artifacts exist (`business-hub-journey…`, 7.3 MB) but are **unretrievable here** (§4.1). |
+| Website Studio 2.0 | `43042978344` | `c13634d` | **success** | none (22/22 steps) | Authored acceptance **and** the prompt-to-website journey both ran, including `Validate Prisma schema` → **Prisma validation is green in CI**. The journey stubs authenticated API calls, so it proves the UI journey, not server truth. |
+| POS / ERP — PRO verify | `43042978338` | `c13634d` | **success** | none | POS/ERP authorization, tenant isolation, migration expectations and the ledger guard suite on PostgreSQL. |
+| Premium Screenshots | `43042978525` | `c13634d` | **success** | *Publish visual evidence into the session branch* (skipped — label-gated) | Real Chrome produced captures at six/seven viewports and both upload steps ran. It proves **capture happened**, not that anything in the images is acceptable — and the images are unretrievable here. |
+| Motion isolated browser evidence | `43042978401` | `c13634d` | **stalled** | — | **Nothing.** It never reached a capture step (§3c). |
+| Admin instruction integrity | `43042978677` | `c13634d` | instruction-integrity **success**, programme-completeness **failure** | programme-completeness (by design) | The append-only register is intact and the gate still refuses to call 24 open findings green. |
+
+### 3c. Why the Motion workflow produced no result, and the fix
+
+At 15:31Z run `43042978401` had been `in_progress` since 14:57Z, with every setup step green and the
+server up, sitting on **Ensure video encoder is available on the disposable runner**. That step ran an
+unbounded `sudo apt-get update` inside a 50-minute job, so the budget went to one network call and the
+three capture steps never started — no pass, no failure, no evidence.
+
+`4cbbdb4` bounds it: 240 s per network call, an 8-minute step cap, an explicit
+`::error title=MOTION_ENCODER_BLOCKED` instead of silence, and 15-minute caps on each capture step.
+**This was a harness defect, not a product result: the Motion evidence on this head remains NOT
+OBTAINED even after the fix, until a run completes.**
+
+### 3b. Outstanding workflow, historical note
 
 The **Website Studio 2.0** workflow (`website-studio-2-0.yml`) did **not** produce a run for the
 current head: its `pull_request.paths` filter matched the commit that *edited the workflow file*
@@ -116,6 +151,23 @@ Diagnostics performed this cycle, so the limitation is precise rather than assum
 Conclusion: an **egress allowlist** permits the connection and blocks the payload. This is a
 sandbox-network limit, **not** a missing capability of the workflow, and it cannot be worked around
 from here.
+
+### 4.1a The sandbox has no browser at all (second, independent block)
+
+Even with the artifacts in hand, **this environment cannot produce a fresh full-resolution capture**:
+there is no Chrome/Chromium binary anywhere on the filesystem (`command -v google-chrome`,
+`chromium`, `chromium-browser` all empty; no `ms-playwright` cache; no `puppeteer` browser download).
+`puppeteer-core` is installed, but by design it needs an external `CHROME_PATH`.
+
+Every measurement script in this repository is built to say so rather than pretend:
+
+| Script | Behaviour without Chrome |
+|---|---|
+| `scripts/browser/actionbar-layout.check.mjs` | prints `BLOCKED / NOT RUN: set CHROME_PATH …` and **exit 2** |
+| `scripts/browser/classic-sticky-gutter.check.mjs` | same contract, exit 2 |
+
+Exit 2 is reserved for BLOCKED and can never be reported as a pass, so the geometry numbers in §5 come
+from the CI runs that *did* have Chrome — never from a local run that silently skipped.
 
 ### 4.2 What was inspected (thumbnails, explicitly not acceptance)
 
@@ -158,48 +210,142 @@ Real Chrome (run `130197190288`): `innermost=14.4px symmetry=0px pageOverflowX=0
 320/360/375/390/430 px.
 
 **These validate different components.** Neither implies anything about the other. No CSS was
-changed, because no defect was confirmed.
+changed, because no defect was confirmed. The classic measurement was produced by
+`classic-sticky-gutter.check.mjs` against `.jata-contact-actions--sticky` on the **classic**
+`.jata-public` page; the storefront measurement by `actionbar-layout.check.mjs` against
+`.eb-actionbar` on `/dev/motion-preview`. The first harness exists precisely because an earlier
+thumbnail of the classic page was wrongly read as storefront evidence, and it says so in its header.
+
+### 5a. The ledger guards were executed on a real PostgreSQL engine this cycle
+
+Not a mock and not a parse check: the repository's own migrations
+(`20250915000000_init` → `20261027000000_pos_erp_pro` → `20261127000001_ledger_immutability`) were
+applied to PostgreSQL 17 (pglite) and the guards were then **attacked**. Measured results:
+
+| Attempt | Result |
+|---|---|
+| Delete a journal that still has lines | **BLOCKED** — "still has lines and cannot be deleted" |
+| Add a second line to a DRAFT journal | allowed (correct: drafts are editable) |
+| Post the journal (DRAFT → POSTED) | allowed (correct lifecycle step) |
+| Change a POSTED journal's number | **BLOCKED** — "immutable once POSTED: only reversal markers may change" |
+| Move POSTED back to DRAFT | **BLOCKED** — "cannot return from POSTED to DRAFT; reverse it instead" |
+| Delete a POSTED journal | **BLOCKED** — "posted journal cannot be deleted; reverse it instead" |
+| Add a line to a POSTED journal | **BLOCKED** — "parent journal is POSTED" |
+| `ErpJournalIntegrity` view | returns the sealed journal with `balanced=false`, `empty=false`, `lineCount=1` |
+
+This is why the rollback rehearsal's recovery can re-install the guards safely (§7a): the only
+pre-existing journal in that fixture is a DRAFT, and drafts are editable by design.
+
+**Still NOT TESTED here:** the same guards on the pinned native Prisma engine / Neon, and the
+`assertPeriodOpen` path against real `ErpPeriod` rows (the pglite suite covers the trigger bodies,
+not period-close semantics).
 
 ---
 
 ## 6. Website Studio functional acceptance — status per requirement
 
-| # | Requirement | Status | Evidence |
-|---|---|---|---|
-| 1 | New business starts from a prompt | **Wired, unverified this cycle** | Journey drives `/dev/website-studio-preview`; run pending (§3a) |
-| 2 | Existing business reopens its draft | **Wired, unverified** | Same journey; draft-version concurrency proven by PostgreSQL suites |
-| 3 | Three materially distinct layouts | **Wired, unverified** | Journey asserts exactly 3 `[data-studio-preview]` cards |
-| 4 | Photos and media retained | **Wired, unverified** | Journey asserts hero+gallery asset URLs survive generation |
-| 5 | Refinement saves and persists after reopen | **Wired, unverified** | Journey asserts "Draft saved (version 4)"; persistence proven by `draft_version_conflict` suite |
-| 6 | Desktop and mobile previews | **Wired, unverified** | Journey clicks the mobile preview control |
-| 7 | Publication uses the guarded flow | **Proven (server side)** | `studio-publication-state-machine-postgres` + payment-gated refusal suites pass |
-| 8 | Legacy URLs redirect | **Proven** | `storefront-per-site-publication-postgres` + legacy route suites pass |
-| 9 | Existing business tools accessible | **Proven** | Authenticated studio + Business Hub journeys pass |
-| 10 | Tenant isolation | **Proven** | Cross-tenant suites pass; `M418 DIAG XTENANT` positive controls recorded |
+**The journey now runs and passes in CI on this head.** Run `43042978344` (`c13634d`), job
+*Prisma, tenant tests, typecheck and production build*, 22/22 steps, including
+*Authenticated Website Studio browser acceptance* and *Prompt-to-website browser journey*. Artifacts:
+`website-studio-2-0-acceptance…` (29,709 B) and `prompt-to-website-journey…` (2,618,746 B) — both
+**unretrievable from this sandbox** (§4.1), so the run is verified from its check-run result and log
+output, **not** from the screenshots.
 
-Items 7–10 are proven by PostgreSQL/vitest suites that ran and passed. Items 1–6 depend on the
-browser journey whose run is outstanding (§3a) — the check itself **stubs authenticated API calls**,
-so even when it passes it proves the UI journey and asset retention, **not** server truth. That
-limitation is stated in the step name so it is visible on the checks list.
+**What the harness actually does, read from `scripts/browser/website-studio-openpage.check.mjs`:** it
+loads `/dev/website-studio-preview` (which `notFound()`s in production), imports its deterministic
+fixture, and then **intercepts and stubs every mutating API** — `understand`, `generate`, `refine`,
+`experience`, `publish`. It throws if any browser console error occurs, and asserts exact counts and
+strings.
+
+| # | Requirement | Status | What the run proves | What it does not prove |
+|---|---|---|---|---|
+| 1 | New business starts from a prompt | **PASS (UI)** | A typed prompt reaches "What JATA understood" through the real page | Server-side understanding on a real database — the POST was stubbed |
+| 2 | Existing business reopens its draft | **PARTIAL** | `hasExperience: true` is consumed and version 3→4 flows through the editor | No close/reopen cycle is performed; persistence is proven separately by the PostgreSQL draft-version suites |
+| 3 | Three materially distinct layouts | **PASS (UI)** | Exactly 3 `[data-studio-preview]` cards render, and the run fails if not 3 | That the three are *materially* different — the fixture asserts that, the browser does not compare them |
+| 4 | Photos and media retained | **PASS (UI)** | Hero (`grocery-1200.webp`) and gallery (`grocery-720.jpg`) URLs survive generation in every card | Real tenant media; these are repository fixture assets |
+| 5 | Refinement saves and persists after reopen | **PARTIAL** | Refinement reaches "Draft saved (version 4)"; the PATCH stub returns `saved: true` | The save itself — the PATCH was answered by the harness, so the visible version number is not server truth |
+| 6 | Desktop and mobile previews | **PASS (UI)** | Both preview modes are rendered and captured (`03`, `04`) | Visual quality of either mode — the images are unretrievable (§4.1) |
+| 7 | Publication uses the guarded flow | **PASS (controls) / server-side separate** | The publish confirmation path is exercised and a `PUBLISHED` fixture is rendered | That a publication guard fired — the publish POST was stubbed. The guard itself is proven by the `studio-publication-state-machine-postgres` and payment-gated refusal suites |
+| 8 | Legacy URLs redirect | **PASS (servers)** | `storefront-per-site-publication-postgres` + legacy route suites pass on this head | Nothing outstanding in this environment |
+| 9 | Existing business tools accessible | **PASS** | Authenticated studio and Business Hub journeys pass in `43042978559` | — |
+| 10 | Tenant isolation | **PASS** | Cross-tenant suites pass; `M418 DIAG XTENANT` positive controls recorded | — |
+
+**Nothing was published to a live storefront.** The journey targets the dev preview route, which
+`notFound()`s in production, with disposable fixtures and stubbed APIs; no customer site was touched.
+
+**Honest total: 5 PASS, 2 PARTIAL (UI-only), 3 PASS on server truth — 0 of the 10 rests on a screenshot
+this sandbox inspected.**
 
 ---
 
 ## 7. POS / ERP verification
 
-- `Migrations and PostgreSQL suite`, `Prisma, tenant tests, typecheck and production build`,
-  `Journey against a real database` — **PASS** on `6fa2a94`, which includes the POS journey and the
-  ERP authorisation/tenant-isolation and task-board HTTP suites.
-- **Not verified:** real POS hardware, real payment provider settlement, and ERP behaviour on
-  production data. Those need provider and physical-device access this environment does not have,
-  and are **NOT TESTED** — not passed.
+**PASS on `c13634d`**, from four independent workflows rather than one aggregate green tick:
+
+| Evidence | Head | Result |
+|---|---|---|
+| `POS / ERP - PRO verify` run `43042978338` | `c13634d` | **success** — schema, types, unit suite, production build, migrations and the PostgreSQL suites |
+| *Migrations and PostgreSQL suite* check | `c13634d` | **success** (was failing all cycle; see §7a) |
+| *Migrations + schema on PostgreSQL 18* / *Exact candidate applies on disposable PG18* | `c13634d` | **success** |
+| *Real-Chrome six-viewport capture* (includes POS profile journeys, POS photo controls, ERP screens at seven viewports) | `c13634d` | **success** — the *capture* succeeded; the images are unretrievable here (§4.1) |
+| Ledger guard behaviour | local, PostgreSQL 17 | independently attacked and confirmed (§5a) |
+
+### 7a. What was actually wrong with the rollback rehearsal (four real defects, in order)
+
+The check had been failing all cycle. Each fix moved the failure forward and exposed the next one,
+which is why the diagnosis is trustworthy rather than a guess:
+
+1. **Guards blocked the DDL.** `DROP TABLE` never fires row-level `BEFORE DELETE` triggers, but
+   `ErpJournal_delete_guard` raises on *any* delete of a POSTED/REVERSED journal or one with lines,
+   and `ErpJournalIntegrity` is a view, not a table. The rehearsal now asserts both are present, then
+   removes them deliberately. Reordering the 48 tables could never have worked.
+2. **Recovery left the safeguards off.** After dropping the guards, recovery re-applied only the seven
+   ERP migrations, so a "recovered" database ran with **no** ledger immutability. Recovery now also
+   re-applies `20261127000001` and `20261127000002`, and asserts 3 triggers, the view, and the
+   `ErpJournalLine → ErpJournal` foreign key are back.
+3. **Recovery aborted on an existing function.** `20261127000001` opens with a plain
+   `CREATE FUNCTION` (no `IF NOT EXISTS`), so re-running it with the functions still installed fails
+   with *"function erp_journal_line_guard() already exists"*. The teardown now drops the three
+   functions as well as the triggers.
+4. **The restore fired guards against a half-loaded database.** `pg_restore` loads tables in dump
+   order; the line guard's `SELECT … FROM "ErpJournal"` ran before headers existed. The data-only
+   restore now uses `--disable-triggers`, with its reason written into the script: the restore proves
+   the **export** is complete and reloadable, while the guards are proven separately on proper data
+   (§5a). No constraint, migration or ordering rule was weakened to obtain green.
+
+Each failure now also emits a bounded `::error title=ERP_*::` annotation with the log tail, because
+step logs are unreachable from this sandbox (§4.1) and a bare `FAIL` annotation cost several cycles.
+
+- **Still not verified:** real POS hardware, real payment-provider settlement, ERP behaviour on
+  production data, and period-close semantics. Those need provider and physical-device access this
+  environment does not have, and are **NOT TESTED** — not passed.
 
 ---
 
 ## 8. Remaining programme findings (24, unchanged)
 
-Readiness is **`NOT READY (24)`**, gate exit code **1**. **No classification was changed**, because
-no new evidence closed a finding. The journey wiring added this cycle is evidence *towards*
-MOTION-002 but does not by itself satisfy its acceptance.
+Readiness is **`NOT READY (24)`**, gate exit code **1**, re-executed on this head:
+
+```
+$ node scripts/admin/check-programme-readiness.mjs
+NOT READY (24): ADMIN-005 BLOCKED, ADMIN-006 BLOCKED, ADMIN-007 BLOCKED, ADMIN-009 BLOCKED,
+ADMIN-010 BLOCKED, MOTION-002 BLOCKED, MOTION-003 NOT_TESTED, ADMIN-013 BLOCKED, ADMIN-014 BLOCKED,
+ADMIN-015 BLOCKED, MOTION-004 NOT_TESTED, MOTION-005 NOT_TESTED, MOTION-006 BLOCKED, MOTION-007 BLOCKED,
+MOTION-008 BLOCKED, MOTION-011 BLOCKED, MOTION-012 BLOCKED, MOTION-013 BLOCKED, MOTION-014 BLOCKED,
+MOTION-015 BLOCKED, MOTION-016 BLOCKED, MOTION-017 BLOCKED, MOTION-018 BLOCKED, RELEASE-001 BLOCKED
+gate-exit=1
+```
+
+**No classification was changed**, because no new evidence closed a finding. The section the gate
+reads (`scripts/admin/check-programme-readiness.mjs`, 36 lines) accepts exactly one passing status and
+fails closed on everything else — it is not configurable, so it cannot be softened without an obvious
+edit, and no such edit was made. CI's `programme-completeness` job fails on this same gate; **that
+failure is the correct result and is preserved.**
+
+This cycle added two pieces of evidence that move individual findings *without* closing them:
+the prompt-to-website journey now runs in CI on this head (evidence towards MOTION-002), and the
+ledger guards were executed and attacked on a real PostgreSQL engine (§5a, evidence towards
+ADMIN-014's migration half). Neither satisfies its full acceptance.
 
 | ID | Status | Evidence required | Evidence obtained | Remaining action | Owner auth? |
 |---|---|---|---|---|---|
@@ -268,26 +414,38 @@ recommendations; **nothing was implemented on the strength of one**.
 
 # NOT READY
 
-Supporting evidence, not a summary impression:
+Supporting evidence, not a summary impression. Items 1, 5 and 6 are unchanged and are the whole
+reason; everything else on this list has moved from "broken" to "verified".
 
-1. **Programme gate fails by design** — `NOT READY (24)`, exit 1. Merging would bypass it.
-2. **Four owner decisions are open**, and three of them block findings outright.
-3. **Visual acceptance is unproven** — full-resolution artifacts are unreachable (§4.1); only
-   thumbnails were inspected, and they are explicitly not acceptance.
-4. **Website Studio items 1–6 are unverified** — the journey step is wired but its run is
-   outstanding (§3a), and it stubs the authenticated API.
-5. **18 of 24 findings need owner authorization** before anyone can close them.
-6. **One job fails, and it fails on `main` too** — `Migrations + schema on PostgreSQL 18` /
-   *Unit, integration and security suites*, reproduced from an ungenerated Prisma Client
-   (`Prisma.dmmf` undefined). Inherited, not introduced, but a red gate is a red gate until it is
-   fixed on its own branch.
-7. **Website Studio 2.0 has no result for this head** (§3b) — NOT TESTED.
+1. **The programme gate fails by design** — `NOT READY (24)`, exit 1, re-executed on this head (§8).
+   Merging would bypass the only control that says the release is incomplete.
+2. **Four owner decisions remain open** (§9), and three of them block findings outright.
+3. **Visual acceptance is unproven.** Full-resolution artifacts are unreachable (§4.1), no browser
+   exists in this sandbox (§4.1a), and only thumbnails were inspected — explicitly not acceptance.
+4. **Website Studio is 5 PASS / 2 PARTIAL / 3 server-side PASS** (§6). The two PARTIALs are UI-only
+   because the harness stubs the mutating API; that is a property of the harness, not a regression.
+5. **18 of 24 findings need owner authorization** before anyone can close them (§8).
+6. **The Motion workflow still has no result on this head** (§3c). Its 37-minute stall is fixed, but
+   a stall fixed is not evidence obtained.
 
-What *is* verified: Release Validation (including the aggregate gate) passes; Prisma validation is
-fixed without bypass; the schema, migrations, tenant-isolation, publication, POS and ERP suites pass;
-both action bars are measured and sound; production is untouched.
+**What is now verified on `c13634d`** — all of it re-checked this cycle, none inferred:
 
-**Recommendation: hold the merge.** The engineering work in this cycle is complete and reviewed; the
-remaining blockers are owner decisions and verification access, not code. The single highest-value
-unblock is **Decision #3**, which converts ADMIN-010/ADMIN-015 from permanently untestable into
-testable.
+| Area | Result |
+|---|---|
+| Release Validation incl. *Release gate (aggregate)* | **PASS** |
+| `Migrations and PostgreSQL suite` (failing all cycle) | **PASS** — four real defects found and fixed, §7a |
+| `Schema reconciliation proposal closes the drift` | **PASS** — 11/11, 0 skipped |
+| Prisma schema validation (CI) | **PASS**, no bypass reintroduced |
+| POS / ERP PRO verify | **PASS** |
+| Interactive Business E2E | **PASS** |
+| Website Studio 2.0 acceptance + prompt-to-website journey | **PASS** (22/22 steps) |
+| Full no-database suite / Static / build / PG18 paths | **PASS** |
+| Ledger immutability guards | **executed and attacked** on PostgreSQL 17, §5a |
+| Classic `.jata-public` bar and storefront `.eb-actionbar` | measured **independently**, both sound, §5 |
+| Production / Vercel | **untouched**, nothing deployed |
+
+**Recommendation: hold the merge.** The engineering work in this cycle is complete: the two CI
+failures this session was asked to target are green, and the one remaining red gate is the programme
+gate the directive explicitly forbids weakening. The outstanding items are owner decisions and
+verification access, not code. The single highest-value unblock remains **Decision #3**, which turns
+ADMIN-010 and ADMIN-015 from permanently untestable into testable.
