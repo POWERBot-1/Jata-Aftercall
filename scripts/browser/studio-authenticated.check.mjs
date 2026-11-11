@@ -307,7 +307,9 @@ async function patch(page, fixture, change) {
 }
 async function publishUI(page, fixture, expectedStatus) {
   const response = await api(page, "/api/experience/publish", "POST", { businessId: fixture.id });
-  check(`${fixture.category}: authenticated publish endpoint returns ${expectedStatus}`, response.status === expectedStatus);
+  const detail = JSON.stringify(response.body ?? null).slice(0, 600);
+  check(`${fixture.category}: authenticated publish endpoint returns ${expectedStatus}`, response.status === expectedStatus,
+    `status=${response.status}, body=${detail}`);
   return response.body;
 }
 async function preview(page, fixture, marker) {
