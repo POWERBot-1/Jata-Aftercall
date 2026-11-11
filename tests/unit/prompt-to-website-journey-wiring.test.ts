@@ -53,7 +53,7 @@ describe("native OpenPage editor acceptance is wired into the authenticated rele
 
   it("keeps the existing public Experience renderer regression coverage", () => {
     expect(authenticated).toContain("private preview faithfully shows owner-enabled recipe fact");
-    expect(authenticated).toContain("customer sees content");
+    expect(authenticated).toContain("publicState(visitor, fixture");
     expect(authenticated).toContain("exact reviewed content/version published and snapshotted");
   });
 });
