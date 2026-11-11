@@ -49,3 +49,34 @@ describe("classic sticky action bar keeps a real edge inset", () => {
     expect(2.75 * 16).toBe(44);
   });
 });
+
+// The isolation gate's behaviour is itself a control: it must refuse anything that is not the
+// disposable harness (exit 2 = BLOCKED, distinct from exit 1 = a real failed check). Pinning it stops
+// a future edit from quietly turning this measurement into something that can point at production.
+describe("classic sticky check refuses non-disposable targets", () => {
+  const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
+  const SCRIPT = "scripts/browser/classic-sticky-gutter.check.mjs";
+  // Any existing executable satisfies the CHROME_PATH presence test; the gate runs before launch.
+  const run = (env: Record<string, string | undefined>) =>
+    spawnSync(process.execPath, [SCRIPT], {
+      encoding: "utf8",
+      timeout: 30000,
+      env: { PATH: process.env.PATH, CHROME_PATH: process.execPath, ...env },
+    });
+
+  it("blocks when CI is not set", () => {
+    const r = run({ DATABASE_URL: "postgresql://jata:jata@localhost:5432/jata_e2e?schema=public", AUTH_SECRET: "interactive-business-e2e-test-secret" });
+    expect(r.status).toBe(2);
+    expect(`${r.stdout}${r.stderr}`).toContain("refusing a non-isolated target");
+  });
+
+  it("blocks when the database is not the disposable one", () => {
+    const r = run({ CI: "1", DATABASE_URL: "postgresql://user:pw@db.production.example/app", AUTH_SECRET: "interactive-business-e2e-test-secret" });
+    expect(r.status).toBe(2);
+  });
+
+  it("blocks when AUTH_SECRET is not the test secret", () => {
+    const r = run({ CI: "1", DATABASE_URL: "postgresql://jata:jata@localhost:5432/jata_e2e?schema=public", AUTH_SECRET: "a-real-secret" });
+    expect(r.status).toBe(2);
+  });
+});

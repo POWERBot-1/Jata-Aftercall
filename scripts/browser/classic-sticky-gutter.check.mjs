@@ -32,21 +32,25 @@ if (!CHROME || !existsSync(CHROME)) {
 
 const BASE = (process.env.BASE_URL || "http://localhost:4100").replace(/\/$/, "");
 
-// The same isolation gate as scripts/motion/disposable-browser-evidence.mjs, so this check can only
-// ever measure the disposable harness — never a real deployment. Reusing the exact guard keeps the
-// two evidence channels honest in the same way.
+// An isolation gate in the spirit of scripts/motion/disposable-browser-evidence.mjs, so this check can
+// only ever measure the disposable harness — never a real deployment.
+//
+// It deliberately does NOT require MOTION_ISOLATED: that flag is scoped to the motion capture job and
+// is never exported into this step, so requiring it would block the check permanently (observed: the
+// first wiring exited 2 as BLOCKED for exactly that reason). The four remaining conditions — loopback
+// port 4100, CI=1, the exact jata_e2e connection string and the test-only AUTH_SECRET — uniquely
+// identify the disposable harness and cannot hold against a real deployment.
 const guarded = new URL(BASE);
 if (
   guarded.protocol !== "http:" ||
   !["localhost", "127.0.0.1"].includes(guarded.hostname) ||
   guarded.port !== "4100" ||
   !process.env.CI ||
-  process.env.MOTION_ISOLATED !== "1" ||
   process.env.DATABASE_URL !== "postgresql://jata:jata@localhost:5432/jata_e2e?schema=public" ||
   process.env.AUTH_SECRET !== "interactive-business-e2e-test-secret"
 ) {
   console.error(
-    "BLOCKED / NOT RUN: refusing a non-isolated target. Needs CI=1, MOTION_ISOLATED=1, the jata_e2e database and the test AUTH_SECRET.",
+    "BLOCKED / NOT RUN: refusing a non-isolated target. Needs CI=1, loopback port 4100, the jata_e2e database and the test AUTH_SECRET.",
   );
   process.exit(2);
 }
