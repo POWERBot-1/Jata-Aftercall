@@ -595,6 +595,7 @@ try {
     const entitled = await api(ownerPage, `/api/experience?businessId=${fixture.id}`);
     check(`${category}: synthetic stored entitlement recognized`, entitled.body?.entitlement?.entitled === true && entitled.body?.validation?.ready === true,
       `status=${entitled.status}, entitled=${Boolean(entitled.body?.entitlement?.entitled)}, failed=${(entitled.body?.validation?.checks ?? []).filter((item) => item.status === "fail").map((item) => item.id).join(",")}`);
+    await openPageEditorUI(ownerPage, fixture);
     const published = await publishUI(ownerPage, fixture, 200);
     // The existing publication validator omits only the draft editing timestamp. Every content field must match.
     const reviewedDocument = JSON.parse(edited.draftJson);
