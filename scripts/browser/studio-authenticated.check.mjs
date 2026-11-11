@@ -808,6 +808,8 @@ try {
     [`/api/experience/versions?businessId=${second.id}`, "GET"],
     [`/api/experience/history?businessId=${second.id}`, "GET"],
     [`/api/studio/health?businessId=${second.id}`, "GET"],
+    [`/api/studio/openpage/document?websiteId=${second.studioWebsiteId}`, "GET"],
+    ["/api/studio/openpage/document", "PUT", { websiteId: second.studioWebsiteId, expectedDraftVersion: second.openPageDraftVersion, config: JSON.parse((await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: second.studioWebsiteId } })).draftJson) }],
     [`/api/bookings?businessId=${salon.id}`, "GET"],
     [`/api/storefront/enquiry?businessId=${professional.id}`, "GET"],
     [`/api/storefront/enquiry?businessId=${technical.id}`, "GET"],
