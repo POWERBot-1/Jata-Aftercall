@@ -31,9 +31,12 @@ describe("mjengo: public product discovery", () => {
     const homepage = read("app/page.tsx");
     const catalogue = read("app/products/page.tsx");
     const footer = read("components/marketing/MarketingShell.tsx");
+    const navbar = read("components/Navbar.tsx");
     expect(homepage).toContain('href="/products/mjengo-os"');
+    expect(homepage).toContain('href="/pricing#mjengo-plan"');
     expect(catalogue).toContain('href="/products/mjengo-os"');
     expect(footer).toContain('href="/products/mjengo-os"');
+    expect(navbar).toContain('{ href: "/products/mjengo-os", label: "MJENGO OS" }');
   });
 
   it("uses the stored MJENGO plan rather than hardcoded public prices", () => {
