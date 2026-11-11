@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { FolderOpen, Layers, Briefcase, UtensilsCrossed, Building2, BookOpen } from 'lucide-react'
 import { CanvasToolbar } from './CanvasToolbar'
@@ -15,6 +14,7 @@ import { useProjectsStore } from '@/store/projectsStore'
 import { generateSiteConfig } from '@/lib/generate-site'
 import { templateMeta, buildTemplate } from '@/lib/templates'
 import { hexToRgb } from '@/lib/theme-presets'
+import { useOpenPagePersistence } from '@/components/studio/openpage/OpenPagePersistenceContext'
 
 const templateIcons: Record<string, typeof Briefcase> = {
   Briefcase, UtensilsCrossed, Building2, BookOpen,
@@ -24,20 +24,45 @@ function useAutoSaveToProject() {
   const config = useConfigStore((s) => s.config)
   const activeProjectId = useEditorStore((s) => s.activeProjectId)
   const updateProjectConfig = useProjectsStore((s) => s.updateProjectConfig)
+  const { websiteId, draftVersion, setDraftVersion, ready } = useOpenPagePersistence()
   const loadedConfigRef = useRef<string | null>(null)
 
-  // Snapshot the config at load time so we can diff
   useEffect(() => {
     loadedConfigRef.current = JSON.stringify(config)
-  }, [activeProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProjectId, websiteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!activeProjectId) return
+    if (!ready || !activeProjectId || activeProjectId !== websiteId) return
     const serialized = JSON.stringify(config)
-    // Only save when config actually differs from what was loaded
     if (serialized === loadedConfigRef.current) return
-    updateProjectConfig(activeProjectId, config)
-  }, [config, activeProjectId, updateProjectConfig])
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/studio/openpage/document', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ websiteId, expectedDraftVersion: draftVersion, config }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          if (response.status === 409) {
+            toast.error('This website changed in another session. Reload before continuing.')
+          } else {
+            toast.error(typeof data.error === 'string' ? data.error : 'OpenPage could not save this draft.')
+          }
+          return
+        }
+        loadedConfigRef.current = serialized
+        setDraftVersion(data.draftVersion)
+        updateProjectConfig(activeProjectId, config)
+        toast.success('Draft saved to JATA')
+      } catch {
+        toast.error('Network error. Your latest changes are not yet saved.')
+      }
+    }, 700)
+
+    return () => window.clearTimeout(timeout)
+  }, [config, activeProjectId, websiteId, ready, draftVersion, setDraftVersion, updateProjectConfig])
 }
 
 function useGenerationOrchestration() {
@@ -96,7 +121,6 @@ function useGenerationOrchestration() {
 }
 
 function EditorEmptyState() {
-  const navigate = useNavigate()
   const addProject = useProjectsStore((s) => s.addProject)
   const setConfig = useConfigStore((s) => s.setConfig)
   const setActiveProject = useEditorStore((s) => s.setActiveProject)
@@ -117,7 +141,7 @@ function EditorEmptyState() {
         <p className="text-text-2 text-[13px] mb-6">Open a project from the Dashboard, or start from a template.</p>
 
         <button
-          onClick={() => navigate('/')}
+          onClick={() => window.location.assign('/dashboard')}
           className="px-5 py-2 rounded-xl bg-green text-black text-[13px] font-semibold hover:bg-green-dim active:scale-[0.97] transition-all mb-6"
         >
           Go to Dashboard
