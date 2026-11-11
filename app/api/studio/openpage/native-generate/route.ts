@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     const loaded = await loadStudioGenerationContext(access.businessId);
-    if (!loaded.ok) {
+    if ("error" in loaded) {
       return NextResponse.json({ error: loaded.error, ...(loaded.code ? { code: loaded.code } : {}) }, { status: loaded.status });
     }
     const { context } = loaded;
