@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** `c841cde` — verified: **18 success / 1 failure / 2 skipped** of 21 check runs
+**Report commit:** `78fb4d3` — verified: **18 success / 1 failure / 2 skipped** of 21 check runs
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -102,7 +102,7 @@ fix into a cutover review and risks touching migration baselines. It belongs in 
 
 ### 3a-bis. Current head — the complete workflow picture
 
-Measured, not summarised: `gh api .../commits/c841cde/check-runs` returns 21 check runs —
+Measured, not summarised: `gh api .../commits/78fb4d3/check-runs` returns 21 check runs —
 improved from 17 success on each of the five preceding heads (`d8eddb8`, `a6271f3`, `dd56cd0`, `c13634d`) once Motion obtained an encoder, so the delta is one known infrastructure dependency, not a flaky suite.
 
 | Conclusion | Count | Which |
@@ -121,7 +121,7 @@ Per-workflow, with what each result actually proves:
 | Website Studio 2.0 | `43042978344` | `c13634d` | **success** | none (22/22 steps) | Authored acceptance **and** the prompt-to-website journey both ran, including `Validate Prisma schema` → **Prisma validation is green in CI**. The journey stubs authenticated API calls, so it proves the UI journey, not server truth. |
 | POS / ERP — PRO verify | `43042978338` | `c13634d` | **success** | none | POS/ERP authorization, tenant isolation, migration expectations and the ledger guard suite on PostgreSQL. |
 | Premium Screenshots | `43042978525` | `c13634d` | **success** | *Publish visual evidence into the session branch* (skipped — label-gated) | Real Chrome produced captures at six/seven viewports and both upload steps ran. It proves **capture happened**, not that anything in the images is acceptable — and the images are unretrievable here. |
-| Motion isolated browser evidence | `43064730313` | `c841cde` | **success** (22/22 steps) | none | 48/48 motion observations OBSERVED with **48 recordings**, 480/480 generated-family rows, 42/42 route rows (lite and AI rows pass), repeated preference transitions PASS, real reduced-motion cancellation PASS (4 running → 0). Two earlier attempts on this head stalled then failed for a missing encoder; §3c shows all three. Proves storefront motion scope behaviour at five targets — **not** that the recordings look right (unretrievable, §4.1). |
+| Motion isolated browser evidence | `43068229534` | `78fb4d3` | **success** (22/22 steps) | none | 48/48 motion observations OBSERVED with **48 recordings**, 480/480 generated-family rows, 42/42 route rows (lite and AI rows pass), repeated preference transitions PASS, real reduced-motion cancellation PASS (4 running → 0). Two earlier attempts on this head stalled then failed for a missing encoder; §3c shows all three. Proves storefront motion scope behaviour at five targets — **not** that the recordings look right (unretrievable, §4.1). |
 | Admin instruction integrity | `43042978677` | `c13634d` | instruction-integrity **success**, programme-completeness **failure** | programme-completeness (by design) | The append-only register is intact and the gate still refuses to call 24 open findings green. |
 
 ### 3c. Why the Motion workflow produced no result, and the fix
@@ -151,10 +151,10 @@ So on `4cbbdb4` the pixel and behavioural evidence *did* arrive; only the **vide
 missing, and they were missing for an infrastructural reason (no encoder on the runner), not a product
 reason.
 
-**It then passed.** On head `c841cde`, run `43064730313` obtained an encoder and every step is
+**It then passed.** On head `78fb4d3`, run `43068229534` obtained an encoder and every step is
 `success`:
 
-| Signal | `4cbbdb4` | `c841cde` |
+| Signal | `4cbbdb4` | `78fb4d3` |
 |---|---|---|
 | Encoder step | **failed** (BLOCKED) | **success** |
 | Motion observations | 0 observed / 48 failed | **48 observed / 0 failed** |
@@ -163,7 +163,7 @@ reason.
 | Generated families | 480/480 | **480/480**, 0 failures |
 | Route behaviour | 42 rows, 0 errors | 42 rows, 0 errors; `aiRowsPass: true` |
 | Viewport thumbnails | 6/6 | 6/6 (decoded, 100×178 … 180×101) |
-| Artifacts | 2.4 MB / 21 MB / 17.9 MB | **2.4 MB / 21 MB / 29 MB** |
+| Artifacts | 2.4 MB / 21 MB / 17.9 MB | **2.41 MB / 21.0 MB / 28.8 MB** (recordings included) |
 
 The 29 MB `motion-partial-c841cde…` artifact is the one that now contains the recordings. **It remains
 unretrievable from this sandbox** (§4.1), so the recordings are asserted by the harness's own
@@ -498,7 +498,7 @@ reason; everything else on this list has moved from "broken" to "verified".
    recordings (§3c), but the artifact host is unreachable (§4.1) and there is no video player here.
    Video acceptance is therefore **NOT TESTED**, not passed.
 
-**What is now verified on `c841cde`** — all of it re-checked this cycle, none inferred. **18 of 21 check
+**What is now verified on `78fb4d3`** — all of it re-checked this cycle, none inferred. **18 of 21 check
 runs succeed; the single failure is the programme gate**, which the directive forbids weakening:
 
 | Area | Result |
