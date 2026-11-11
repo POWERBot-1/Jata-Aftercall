@@ -91,11 +91,16 @@ jobs:
           console.log('Full-security release acceptance stays OPEN while any finding remains; not provider/device/engine proof.');
           JS
 
+      # `validate` stays direct so a real schema error fails on the first attempt with Prisma's own
+      # message. Only `generate` goes through the transport-retry wrapper (the same one Release
+      # Validation uses): on run 43071116070 generate's engine download hit a transport fault, the
+      # client stayed ungenerated, and `tsc --noEmit` then aborted this step -- which skipped all 15
+      # database-backed journeys below it. P1012 and parse errors are NOT retried by that wrapper.
       - name: Generate Prisma client
         run: |
           set -o pipefail
           bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-schema-validate.log
-          bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
+          node scripts/ci/retry-prisma-engine.mjs -- bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
 
       - name: Lint and TypeScript
         run: |
