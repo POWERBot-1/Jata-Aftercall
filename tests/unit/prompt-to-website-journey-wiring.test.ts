@@ -51,7 +51,10 @@ describe("prompt-to-website journey is wired into CI", () => {
 // validating a different artifact than the server-side suites did.
 describe("prompt-to-website journey reuses the verified build", () => {
   it("starts the already-built app instead of building again", () => {
-    expect(job).toContain("npx next start");
+    // The CLI is invoked directly: `npx next start` re-resolves and can exit asynchronously,
+    // which left no server and produced a bare, undiagnosable readiness failure.
+    expect(job).toContain("node_modules/next/dist/bin/next start");
+    expect(job).not.toContain("npx next start");
     expect(job).not.toContain("npx next build");
     expect(job).not.toContain("npm run build");
   });
