@@ -21,6 +21,10 @@ import { listLivePromotions } from "@/lib/business-hub/promotions";
 import { isLoyaltyEnabled } from "@/lib/business-hub/loyalty";
 import { publicLoyaltyRewards } from "@/lib/business-hub/loyaltyPoints";
 import { accentForLegacyTheme, resolveHeroImage, storefrontThemeFor } from "@/lib/storefront/theme";
+import { getDefaultOpenPageSite, resolveOpenPagePublicConfig } from "@/lib/openpage/public-site";
+import { getInteractiveEntitlement } from "@/lib/experience/entitlement";
+import { OpenPagePublicSite } from "@/components/studio/openpage/OpenPagePublicSite";
+import type { SiteConfig } from "@/vendor/openpage/src/blocks/types";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +59,8 @@ const getDefaultStudioWebsite = requestCache(async (businessId: string) => {
     select: { id: true, status: true },
   });
 });
+
+const getDefaultOpenPageSiteCached = requestCache(getDefaultOpenPageSite);
 
 function accessOf(business: NonNullable<Awaited<ReturnType<typeof getBusiness>>>): PublicBusinessAccess {
   return {
@@ -146,6 +152,22 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   // A public/foreign preview query cannot select draft SEO or alter live indexing.
   const draftAllowed = canPreviewDraft(business, viewer);
   const preferDraft = draftAllowed && (await searchParams)?.preview === "draft";
+  const nativeSite = await getDefaultOpenPageSiteCached(business.id);
+  if (nativeSite?.status === "SUSPENDED") return { title: "Page not found", robots: { index: false, follow: false } };
+  const native = resolveOpenPagePublicConfig(nativeSite, {
+    allowDraft: draftAllowed,
+    preferDraft: draftAllowed && (preferDraft || decision === "preview"),
+  });
+  if (native && (!native.isPreview ? (await getInteractiveEntitlement(business.id)).entitled : true)) {
+    const siteName = typeof native.config.name === "string" ? native.config.name : business.name;
+    return {
+      title: `${siteName} | ${business.name}`,
+      description: business.description || `${siteName} — ${business.location || business.category}.`,
+      alternates: { canonical: `/b/${business.slug}` },
+      robots: native.isPreview ? { index: false, follow: false } : undefined,
+    };
+  }
+  if (nativeSite?.status === "PUBLISHED") return { title: "Page not found", robots: { index: false, follow: false } };
   // Interactive Business websites own their metadata (§33). Keep the same classic fallback
   // as the renderer when experience loading fails; metadata must not blank an otherwise usable page.
   let experience = null;
@@ -206,6 +228,22 @@ export default async function PublicBusinessPage({ params, searchParams }: Props
   // Owners (and only owners) can ask to see their unpublished draft next to the live site.
   const previewParam = (await searchParams)?.preview;
   const preferDraft = draftAllowed && previewParam === "draft";
+  const nativeSite = await getDefaultOpenPageSiteCached(business.id);
+  if (nativeSite?.status === "SUSPENDED") notFound();
+  const native = resolveOpenPagePublicConfig(nativeSite, {
+    allowDraft: draftAllowed,
+    preferDraft: draftAllowed && (preferDraft || decision === "preview"),
+  });
+  if (native) {
+    if (!native.isPreview && !(await getInteractiveEntitlement(business.id)).entitled) notFound();
+    return (
+      <OpenPagePublicSite
+        config={native.config as unknown as SiteConfig}
+        pagePath="/"
+      />
+    );
+  }
+  if (nativeSite?.status === "PUBLISHED") notFound();
   let experience = null;
   try {
     experience = await loadStorefront(slug, { allowDraft: draftAllowed, preferDraft });
