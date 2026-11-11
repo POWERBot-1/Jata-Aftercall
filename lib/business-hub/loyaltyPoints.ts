@@ -437,28 +437,41 @@ export async function getOrCreateAccount(businessId: string, cardId: string): Pr
   const card = await prisma.loyaltyCard.findFirst({ where: { id: cardId, businessId } }).catch(() => null);
   if (!card) return null;
   const programme = await getOrCreateProgramme(businessId);
-  // Upsert is atomic at the database level: concurrent calls for the same cardId
-  // serialize on the unique index, so exactly one create wins and every caller
-  // receives the same account. This replaces the previous find-then-create
-  // pattern which could race when two awards for the same card arrive together.
-  return await prisma.loyaltyPointsAccount.upsert({
-    where: { cardId },
-    create: {
-      businessId,
-      programmeId: programme.id,
-      cardId,
-      // Written explicitly rather than left to the schema default: every cached counter the
-      // balance maths touches must exist from the first row, so a wallet can never be read as
-      // "undefined points" and a compare-and-set can never be skipped.
-      availablePoints: 0,
-      lifetimeEarned: 0,
-      lifetimeRedeemed: 0,
-      lifetimeExpired: 0,
-      pointsPending: 0,
-      status: "ACTIVE",
-    },
-    update: {},
-  });
+  // Retry loop for concurrent create race: two awardPoints calls for the same
+  // cardId can both observe a missing account and both attempt create. Only one
+  // create can win the unique index; the loser reads back the winner's row.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const existing = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId } }).catch(() => null);
+    if (existing) return existing;
+    try {
+      return await prisma.loyaltyPointsAccount.create({
+        data: {
+          businessId,
+          programmeId: programme.id,
+          cardId,
+          // Written explicitly rather than left to the schema default: every cached counter the
+          // balance maths touches must exist from the first row, so a wallet can never be read as
+          // "undefined points" and a compare-and-set can never be skipped.
+          availablePoints: 0,
+          lifetimeEarned: 0,
+          lifetimeRedeemed: 0,
+          lifetimeExpired: 0,
+          pointsPending: 0,
+          status: "ACTIVE",
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        // Unique constraint violation on cardId — another caller created the account first.
+        const raced = await prisma.loyaltyPointsAccount.findUnique({ where: { cardId } }).catch(() => null);
+        if (raced) return raced;
+        // Continue retry loop
+        continue;
+      }
+      throw error;
+    }
+  }
+  return null;
 }
 
 export async function findAccount(businessId: string, cardId: string): Promise<any | null> {
