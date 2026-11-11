@@ -22,6 +22,7 @@ const PLAN_SCOPE: Record<string, string> = {
   BUSINESS_POS: "Owner-only POS · per business",
   ERP_PRO: "JATA BOS PRO · per business",
   JATA_AUTOPILOT: "Owner-only Autopilot · per business",
+  MJENGO_OS: "MJENGO OS · per business",
 };
 
 /**
@@ -40,6 +41,7 @@ const PLAN_KIND: Record<string, string> = {
   BUSINESS_POS: "Separate product · purchased in the Business POS workspace",
   ERP_PRO: "Separate product · purchased in the ERP workspace",
   JATA_AUTOPILOT: "Separate product · purchased in the Autopilot workspace",
+  MJENGO_OS: "Separate product · purchased in the MJENGO OS workspace",
 };
 
 const PLAN_DESCRIPTIONS: Record<string, string> = {
@@ -53,6 +55,7 @@ const PLAN_DESCRIPTIONS: Record<string, string> = {
   BUSINESS_POS: "An owner-only point of sale — sales, stock, credit and reports — configured around how your business actually works. Separate from your page plan.",
   ERP_PRO: "JATA BOS PRO — Business Operating System Pro: accounting, invoicing, inventory, purchasing and business operations with supported messaging tools. Broader than the separate Business POS till, which covers counter sales only.",
   JATA_AUTOPILOT: "A supervised assistant that checks your business health and drafts offer and FAQ actions for your approval. The preview is free; live actions switch on after payment is confirmed.",
+  MJENGO_OS: "MJENGO OS — Business Management: sales, inventory, procurement, customers, credit, accounting and reports — a separate workspace with its own plan and entitlement, distinct from Business POS and JATA BOS PRO.",
 };
 
 const PLAN_ROUTE: Record<string, string> = {
@@ -66,6 +69,7 @@ const PLAN_ROUTE: Record<string, string> = {
   BUSINESS_POS: "/products/business-pos",
   ERP_PRO: "/products/erp-pro",
   JATA_AUTOPILOT: "/products/jata-autopilot",
+  MJENGO_OS: "/products/mjengo-os",
 };
 
 export default async function PricingPage() {

@@ -144,6 +144,36 @@ const PRODUCTS: Record<string, ProductPage> = {
       { href: "/dashboard/erp", label: "Open the ERP workspace" },
     ],
   },
+  "mjengo-os": {
+    key: "MJENGO_OS",
+    eyebrow: "MJENGO OS",
+    title: "MJENGO OS — Business management.",
+    intro: "A dedicated business-management workspace for the daily operations behind your business — sales, inventory, procurement, customers, credit, accounting and reports — with its own plan and entitlement, separate from Business POS and JATA BOS PRO.",
+    sections: [
+      { heading: "What it includes", body: [
+        "Sales and order tracking in one place.",
+        "Stock movement, supplier management and purchase orders.",
+        "Customer records, outstanding balances and credit activity.",
+        "Double-entry accounting with immutable posted journals and financial reports.",
+      ] },
+      { heading: "Entitlement and price", body: [
+        "MJENGO OS — KES 2,000 / 30 days, billed per business (plan key MJENGO_OS). The workspace shows the amount before any payment starts, and that amount always comes from the stored plan catalogue on the server — never from the browser.",
+        "The advertised price excludes payment-provider transaction fees.",
+      ] },
+      { heading: "Independent product entitlement", body: [
+        "MJENGO OS has its own plan key, subscription checks and workspace routes. It does not silently replace or extend a Business POS or JATA BOS PRO subscription, and paying for one never switches on the other.",
+      ] },
+      { heading: "Viewing, buying and access", body: [
+        "Four separate stages: viewing this page, beginning a purchase, the server confirming the payment, and the workspace entitlement switching on. A page visit or a checkout initiation activates nothing.",
+        "Access needs an account, a business, a server-confirmed payment for plan key MJENGO_OS, and a deployment with the MJENGO OS product switched on. Until an operator enables it, the MJENGO OS screens state plainly that the product is not switched on and nothing is charged.",
+        "If the workspace is not enabled for your account, the MJENGO OS screen explains exactly what is missing instead of offering a payment.",
+      ] },
+    ],
+    actions: [
+      { href: "/login", label: "Sign in" },
+      { href: "/dashboard/mjengo", label: "Open the MJENGO OS workspace" },
+    ],
+  },
   "jata-autopilot": {
     key: "JATA_AUTOPILOT",
     eyebrow: "JATA Autopilot",
