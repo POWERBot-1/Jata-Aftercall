@@ -7,6 +7,11 @@ Every question below states what is blocked, what the code can already do, exact
 files are involved, and the specific decision needed. **No answer is proposed, implied or pre-filled.**
 Where the repository is silent, that silence is stated rather than filled.
 
+Each decision now also carries a **recommendation**, added at the owner's request and labelled as
+such throughout. A recommendation is advice for you to accept, amend or reject — it is **not** a
+decision, and nothing has been implemented on the strength of one. No security constant, financial
+formula or policy value has been changed.
+
 ---
 
 ## Decision 1 — PII visibility in the Control console
@@ -40,6 +45,27 @@ one would be inventing a data-protection decision, and the register forbids exac
 implemented surface — there is no route, no `payments.refund`-style permission key in
 `lib/control/permissions.ts`, and no audit action for it. That is not a display decision; it needs its
 own authorisation before anyone writes code.
+
+
+### Recommendation (a recommendation, not an answer)
+
+**MASKED for business-scoped grants; VISIBLE for platform-wide grants that carry `payments.read` /
+`audit.read` explicitly; HIDDEN for anyone else.** Rationale: the console's whole purpose is
+support and audit, which requires operator-visible amounts; but a per-business grant is the grant a
+compromised account is most likely to hold, so it should not expose an owner's phone number or a
+payer's email. Blast radius scales with grant breadth, so visibility should too.
+
+**Implications.** More masking means more support escalations that need a second operator (cost:
+speed) and smaller breach radius (benefit: privacy). Full VISIBLE would make ADMIN-005's
+cross-tenant requirement depend almost entirely on the scope check being perfect; full HIDDEN would
+block ADMIN-006's reconciliation, which cannot be done without amounts.
+
+**Security/financial risk.** Amounts and M-Pesa references are financial data; `customerEmail` and
+owner `phone` are personal data under Kenya's Data Protection Act. A wrong choice here is a
+regulatory exposure, not a UI preference — which is why it is your decision, not mine.
+
+**Evidence to validate the decision.** A masked-vs-visible matrix rendered in the console for one
+platform grant and one business grant, captured at six viewports, plus an audit-log entry per read.
 
 ---
 
@@ -81,6 +107,31 @@ outbox/attempt/recovery tables, which are delivery records, not a job queue. Eac
 decision on where an authoritative number would come from before anything is displayed — otherwise
 the console would have to invent it.
 
+
+### Recommendation (a recommendation, not an answer)
+
+**Report what the records already assert, and label the derivation explicitly.** Concretely:
+`MRR = Σ (PlanConfig.priceKES × 30 / PlanConfig.durationDays)` over `Subscription.status = ACTIVE`,
+displayed as "MRR (30-day normalised)" with the formula shown next to the number; `ARR = MRR × 12`
+labelled as derived; and a separate, unnormalised "cash collected in period" figure straight from
+`Payment.amount` where `status = PAID`.
+
+**Why not raw sums.** Summing `priceKES` across active subscriptions would report a KES 9,999 annual
+plan as if it were monthly — roughly a 12× overstatement of run-rate. Dividing a 365-day plan by 12
+(31.4 days) and by 30 (the actual normalisation) differ by ~4.7%, which is the difference between
+two defensible numbers; picking one silently is a policy change dressed as arithmetic.
+
+**Implications.** Normalisation makes the figure comparable and auditable but will never tie exactly
+to bank receipts; cash-collected ties to M-Pesa but jumps at renewal. Whichever you pick, the label
+must travel with the number or the console becomes an argument.
+
+**Security/financial risk.** These numbers are the ones an investor, a lender or a buyer reads. A
+mis-derived MRR is a securities-grade misstatement, not a display bug — hence owner approval.
+
+**Evidence to validate the decision.** A fixture with one monthly and one annual active
+subscription, showing the formula, the computed value, and the same period's cash-collected figure
+side by side, reconciled by hand in the review.
+
 ---
 
 ## Decision 3 — control-plane access activation (the biggest single unblock)
@@ -112,6 +163,36 @@ subset — `tests/unit/control-plane-security.test.ts` pins that the database gr
 **Question 3c.** If no, should ADMIN-010/ADMIN-015 be formally recorded as permanently unachievable
 rather than "blocked"? They cannot pass without the console being operable.
 
+
+### Recommendation (a recommendation, not an answer)
+
+**Yes to 3a, narrowly: a compile-time test seam, not an environment variable.** Add
+`CONTROL_ROLE_ACCESS_ENABLED` as a function of an explicit build flag that defaults to `false` and
+can only be flipped in a build compiled for the disposable harness, and require the flip to be
+accompanied by an assertion that `DATABASE_URL` matches the disposable pattern. **No to an
+env-var override at runtime** — a runtime switch on a security constant is a production footgun, and
+the directive forbids one.
+
+**Why not simply leave it `false`.** It is `false as const`, so no positive console journey can be
+executed anywhere: ADMIN-010 and ADMIN-015 cannot pass without a code change, and a reviewer cannot
+distinguish "denied by policy" from "cannot be exercised". That is a permanent blind spot in the
+release evidence.
+
+**Implications of flipping it.** Roughly 3 findings become testable (ADMIN-010, ADMIN-015, and the
+positive half of ADMIN-005). Costs: a security-sensitive edit to `lib/control/role-policy.ts`, a new
+CI-only build path to maintain, and the standing risk that someone compiles the wrong variant.
+
+**Security/financial risk.** This constant is the only thing standing between an authenticated
+customer and the control plane. Any wrong value grants platform-wide operator capability. The
+existing tests make that a *narrowing-only* system: `tests/unit/control-plane-security.test.ts` pins
+that DB grants may only ever narrow the shipped policy, never widen it. Keeping that invariant is a
+precondition, not a detail.
+
+**Evidence to validate the decision.** For each granted cell: an authenticated browser run showing
+the granted action succeeding, a second run showing the same account refused a non-granted
+capability, and an audit row per mutation — all on the disposable database, with the production
+constant verified unchanged.
+
 ---
 
 ## Decision 4 — commission policy (blocks two full requirements)
@@ -139,6 +220,30 @@ The evaluator needs, as data, every one of the following. **Not one is in the re
 **Question 4.** State values for the table above, or confirm that agent commission is **out of scope
 for this release** — in which case ADMIN-006/ADMIN-013 should be re-scoped rather than left "blocked",
 because they cannot pass without the numbers.
+
+
+### Recommendation (a recommendation, not an answer)
+
+**Scope agent commission OUT of this release, and leave the evaluator unshipped.** The evaluator is
+complete and tested and explicitly ships no rate; leaving it dormant is safer than shipping any
+invented number.
+
+**If you would rather ship it,** the minimum viable policy that satisfies the code's own contract is:
+`PERCENTAGE`, `basisPoints` you specify, basis `NET`, events `NEW_SALE` + `RENEWAL`, effective window
+as a dated version, renewal retention window stated explicitly (the code comments call this out as
+requiring approval), rounding `DOWN`, and reversal of the accrual on `REFUNDED`. **The rate is yours
+to give; I will not propose one.**
+
+**Implications.** Shipping commission needs a ledger, reversal handling, payout reporting and
+finance sign-off — considerably more than the evaluator. Deferring keeps ADMIN-006/ADMIN-013 open and
+must be re-scoped in the register rather than left "blocked" indefinitely.
+
+**Security/financial risk.** Commission is money owed to a third party. A wrong rate or a wrong
+attribution window is a payment error, and a retroactive fix is a reconciliation exercise.
+
+**Evidence to validate the decision.** A dated policy version applied to fixtures covering
+new-sale, renewal, upgrade, refund-reversal and out-of-window attribution, with the expected amount
+computed independently of the code under test.
 
 ---
 
