@@ -34,3 +34,15 @@ Do not import upstream API routes or deploy configuration into JATA without a se
 - The public page renderer does not yet render native OpenPage JSON.
 - Publication, rollback, media-library references, and the existing KES 999 / 30-day entitlement have not yet been connected to the native OpenPage document.
 - No migration has been applied to production. No live site has been switched to this format.
+
+## Runtime integration audit (11 November 2026)
+
+The upstream editor cannot yet be mounted in the Next.js application without completing dependency and routing integration:
+
+- The JATA root manifest is React 18.3.1 / Next.js 16.4.2 and does not declare `react-router-dom`, `zustand`, `@dnd-kit/core`, `@dnd-kit/sortable`, or `@dnd-kit/utilities`.
+- OpenPage imports React Router in its app shell, editor layout, and toolbar; it uses Zustand stores, and its drag-and-drop UI requires dnd-kit. `immer` is already present transitively, but must be declared directly if retained as an upstream dependency.
+- The imported source tree intentionally has no upstream package manifest, Vite entry point, or independent deployment shell. The Next.js app cannot simply import `App` or `EditorLayout` as-is.
+- The upstream stores persist project/configuration state to browser local storage. The editor must be adapted to hydrate and save against the authenticated `/api/studio/openpage/document` endpoint, not silently retain local-only persistence.
+- The root lockfile is `package-lock.json`; changing only `package.json` would make clean CI installs fail. Dependency versions and lockfile updates must be committed together.
+
+Consequently, the native editor route remains a hard integration blocker. No dependency manifest or lockfile was changed speculatively, and no incomplete editor route was exposed.
