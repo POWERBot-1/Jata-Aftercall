@@ -171,6 +171,10 @@ Retrieving pixels accepts nothing. `MOTION-012`, `-015`, `-017` and `-018` deman
 inspected* six-viewport evidence and before/after recordings; materialising six images is the
 precondition for that review, not the review. Those rows stay non-PASS.
 
+**Resolved — see §8b:** this observation was measured at native device scale and is **NOT a defect**
+(the gutter is a real, symmetric 12 px). Kept here as written rather than rewritten, because the
+sequence — a thumbnail raised a question, a measurement answered it — is the evidence.
+
 **Observed while inspecting (recorded, not fixed):** in the 320×568 capture the `Share` action sits
 directly against the right edge with no visible gutter, unlike WhatsApp/Call/Directions. The
 published thumbnail is 320 px wide at low quality, so this must be confirmed at native resolution
@@ -369,7 +373,8 @@ the branch under review, so it is left for the owner to authorise (see `OWNER-DE
 
 1. **Read the six captured viewports** produced by the next `motion-evidence` run
    (`node scripts/motion/retrieve-visual-evidence.mjs <capture-check-run-id>`) and confirm or reject
-   the `Share`-button edge observation at native resolution.
+   the `Share`-button edge observation at native resolution — **now answered without it: see §8b. The
+   measurement, not the pixels, decided the question (12 px gutter, 0 px symmetry, no CSS change).**
 2. **Answer owner decision 1–4** (PII/financial display, metric set, commission policy, console-config
    authority). Four answers unblock 10 of the 24 rows; engineering cannot proceed past them.
 3. **Then** run the authenticated console journey with control access temporarily enabled in a
@@ -377,3 +382,58 @@ the branch under review, so it is left for the owner to authorise (see `OWNER-DE
 4. **Only then** consider any status change — and only with the evidence in hand.
 
 No merge, no deployment, no production change was performed.
+
+---
+
+## 10. Measurement cycle — commits, exit codes and what changed
+
+Head: **`db76269`** on `arena/3ecfbb83-jata-aftercall` (pushed; PR #109 head
+`arena/website-studio-openpage-cutover` = `db76269`). Eight commits in this cycle, each isolated:
+
+| Commit | What it does |
+|---|---|
+| `752e334` | Publishes `ACTIONBAR GUTTER` numbers into the PR evidence comment; lists the actionbar step in the evidence sections; regenerates the manifest |
+| `45eac44` | `OWNER-DECISIONS.md` (four answerable questions) + records the full-resolution egress block |
+| `905e85d` | `classic-sticky-gutter.check.mjs`: real Chrome, `deviceScaleFactor 2`, six widths, CSS-pixel gutters; 5 unit tests |
+| `fdf241a` | Makes a silent bar-step failure visible (`::error::` + failure-comment sections + signature files) |
+| `840b37d` | Drops the unsatisfiable `MOTION_ISOLATED` requirement from the isolation gate |
+| `0ee3f1e` | Fails closed on a malformed `BASE_URL` (exit 2, not a crash at exit 1); gate tests |
+| `85ecf96` | Corrects the padding assertion to the measured truth (inner container carries the gutter) |
+| `db76269` | Records §8b: the Share-edge answer and the two self-inflicted measurement faults |
+
+### What the runs proved
+
+- **`85ecf96` → the whole `Journey against a real database` job PASSES**, including
+  `Family browser` and `Local raster pixels`, which the faulty assertion had previously aborted.
+- **`db76269` CI: 18 passed / 1 failed / 2 skipped.** The single failure is `programme-completeness`,
+  which fails *by design* while 24 findings are open. That is the gate doing its job, not a regression.
+- `CLASSIC STICKY` at 320/360/390/430 px: `gutterLeft=12px gutterRight=12px symmetry=0px
+  minHeight=46.08px pageOverflowX=0px dpr=2`.
+- `ACTIONBAR GUTTER` at 320/360/375/390/430 px: `innermost=14.4px symmetry=0px pageOverflowX=0px`.
+
+### Honest statement of what this cycle did *not* achieve
+
+- **Directive item 1 (six full-resolution captures inspected at native resolution): BLOCKED**, and
+  still blocked for the same external reason (§8a). The Share question was settled by measurement
+  instead — a better instrument than a thumbnail, but not a substitute for what was asked.
+- No finding was reclassified: readiness is unchanged at `NOT READY (24)`, exit 1.
+- No CSS, pricing, policy, schema, migration or provider configuration was touched.
+
+### Local gate results for `db76269`
+
+| Gate | Result |
+|---|---|
+| `npx vitest run tests/unit/classic-sticky-actionbar-gutter.test.ts` | **9/9 pass** |
+| `npx vitest run tests/unit/actionbar-edge-gutter.test.ts` | **4/4 pass** |
+| `npx tsc --noEmit` (errors attributable to changed files) | **0** |
+| `npm run lint` | **0 errors**, 8 warnings |
+| `node scripts/ci/verify-evidence-manifest.mjs` | **PASS**, 69 artifacts |
+| `node scripts/ci/check-workflow-expressions.mjs` | **PASS**, 12 files |
+| `node scripts/admin/check-programme-readiness.mjs` | **NOT READY (24)**, exit 1 — truthful |
+
+### Workspace integrity note
+
+The local checkout reverted twice during this cycle (once to `c266d23`, once to `main 0f22ec7` with
+`node_modules` empty). Both times the remote branch was verified first
+(`git rev-parse origin/arena/3ecfbb83-jata-aftercall`), then recovered with `git reset --hard <remote>`
+plus `npm ci`. **No work was lost and no force-push was used.**
