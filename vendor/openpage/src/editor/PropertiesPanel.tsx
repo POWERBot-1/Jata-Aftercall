@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { ChevronDown, ChevronRight, Code } from 'lucide-react'
 import type { BlockConfig, BlockType } from '@openpage/blocks/types'
 import { useConfigStore } from '@openpage/store/configStore'
+import { OpenPageMediaField } from '@/components/studio/openpage/OpenPageMediaField'
 
 interface FieldDef {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select' | 'array-strings' | 'array-items'
+  type: 'text' | 'textarea' | 'select' | 'array-strings' | 'array-items' | 'media'
   options?: string[]
 }
 
@@ -17,7 +18,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
         title: 'Content',
         fields: [
           { key: 'logo', label: 'Logo Text', type: 'text' },
-          { key: 'logoImage', label: 'Logo Image URL', type: 'text' },
+          { key: 'logoImage', label: 'Logo Image URL', type: 'media' },
           { key: 'ctaText', label: 'CTA Button', type: 'text' },
           { key: 'links', label: 'Nav Links', type: 'array-strings' },
         ],
@@ -42,7 +43,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
           { key: 'primaryCtaUrl', label: 'Primary CTA URL', type: 'text' },
           { key: 'secondaryCta', label: 'Secondary CTA', type: 'text' },
           { key: 'secondaryCtaUrl', label: 'Secondary CTA URL', type: 'text' },
-          { key: 'heroImage', label: 'Hero Image URL', type: 'text' },
+          { key: 'heroImage', label: 'Hero Image URL', type: 'media' },
         ],
       },
       {
@@ -247,7 +248,7 @@ const blockFields: Partial<Record<BlockType, { sections: { title: string; fields
       {
         title: 'Content',
         fields: [
-          { key: 'src', label: 'Image URL', type: 'text' },
+          { key: 'src', label: 'Image URL', type: 'media' },
           { key: 'alt', label: 'Alt Text', type: 'text' },
           { key: 'title', label: 'Title', type: 'text' },
           { key: 'subtitle', label: 'Subtitle', type: 'text' },
@@ -366,6 +367,16 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
         </div>
       )
 
+    case 'media':
+      return (
+        <OpenPageMediaField
+          label={field.label}
+          value={String(value || '')}
+          onChange={(url) => onChange(url)}
+          kind={field.key === 'logoImage' ? 'LOGO' : field.key === 'heroImage' ? 'HERO' : 'IMAGE'}
+        />
+      )
+
     case 'textarea':
       return (
         <div className="mb-2.5">
@@ -467,7 +478,19 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
                   Remove
                 </button>
               </div>
-              {Object.entries(item).map(([key, val]) => (
+              {Object.entries(item).map(([key, val]) => key === 'src' ? (
+                <OpenPageMediaField
+                  key={key}
+                  label="Image"
+                  value={String(val || '')}
+                  kind="IMAGE"
+                  onChange={(url) => {
+                    const updated = [...items]
+                    updated[i] = { ...updated[i], [key]: url }
+                    onChange(updated)
+                  }}
+                />
+              ) : (
                 <div key={key} className="mb-1">
                   <label className="block text-[10px] text-text-3 mb-0.5">{key}</label>
                   <input
