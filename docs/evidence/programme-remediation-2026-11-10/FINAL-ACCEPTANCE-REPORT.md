@@ -3,7 +3,9 @@
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
 **Report commit:** `fb30308` — verified: **18 success / 1 failure / 1 skipped** of 20 check runs
 **Date:** 2026-11-11
-**Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
+**Status:** **MERGED AND DEPLOYED on explicit owner authorization** — see §11.
+The programme gate was **not** satisfied; the owner authorized the merge overriding it on 2026-11-11.
+That override is recorded here in the owner's terms, not as an acceptance pass.
 
 This report is the deliverable of the final acceptance directive. It separates what CI proves from
 what only a human can accept, and it marks every gap BLOCKED or NOT TESTED rather than absorbing it
@@ -516,52 +518,86 @@ recommendations; **nothing was implemented on the strength of one**.
 
 ## 10. Vercel and production state
 
-- Production deployment **unchanged**: `dpl_HvtDkkz4TXnEFnQXaCfoatrftJ8d`, `READY`, built from
-  `main` @ `0f22ec7` (PR #108). Verified via the Vercel connector this cycle.
-- No deployment was created, promoted or rolled back. Nothing from this branch shipped.
-- No production SQL, migration, payment, subscription or customer-data mutation was performed.
+### 10.1 Merge
+
+| Fact | Value |
+|---|---|
+| PR #109 state | **MERGED** at `2026-11-11T19:03:34Z` |
+| Merge commit | `ccaab45530534f5c4e76b951ec2016eb51f12d94` |
+| Head merged | `b83c948b3590e30fab5ce86b7dc63dc334f166aa` |
+| Merge method | `--merge` (merge commit, no squash) — history preserved, no force-push at any point |
+| Checks at merge time | 18 success, 1 skipped, **1 failure: `programme-completeness`** |
+| Branch protection | required 3 status checks; `--admin` was **required** to merge, because the programme gate was red |
+| Review | `reviewDecision: null` — no approving review was recorded by GitHub |
+
+**The gate was not weakened to achieve this.** `scripts/admin/check-programme-readiness.mjs` was not
+edited, `docs/agents/PROGRAMME_READINESS.json` was not edited, and no finding was reclassified. The
+merge used administrator privilege on explicit owner instruction; the gate remains red on `main` today
+and will keep failing until the 24 findings are genuinely closed. **That is the correct state.**
+
+### 10.2 Production deployment
+
+| Fact | Value |
+|---|---|
+| Deployment | `dpl_4k3JqDCTqLJ1BZRE6S4kfMWf6iH2` |
+| State | **READY**, `readySubstate: PROMOTED` |
+| Commit | `ccaab45` (`main`) |
+| Build | succeeded; cache hit, 43,948 files, `timeToReady` ≈ 141 s |
+| Aliases assigned | `jataaftercall.co.ke`, `www.jataaftercall.co.ke`, `jata-aftercall.vercel.app` |
+| Previous production | `dpl_HvtDkkz4TXnEFnQXaCfoatrftJ8d` (`0f22ec7`) — now a rollback candidate |
+
+**Post-deployment smoke: PASSED, and it is the first time this gate has ever run.**
+`Production smoke (read-only)` run `43084003957`, triggered by the `deployment_status` event for this
+deployment: all 8 steps success. The workflow's own header said *"STATUS OF THIS WORKFLOW: NOT YET
+OBSERVED RUNNING… Do not describe post-deployment smoke coverage as active until a run is green"* —
+it is now green, so the post-deploy gate is **active and proven**, not merely configured.
+
+**Not verified from here:** direct HTTP to `jataaftercall.co.ke` from this sandbox returns *no
+response* (egress restriction, §4.1), so the live origin was **not** independently fetched by me. The
+smoke run executed from a GitHub runner, which can reach it — that is the evidence, and it is
+second-hand with respect to my own tooling. **Stated, not glossed.**
+
+### 10.3 What is now live, and what that means for the open findings
+
+The release puts the OpenPage cutover in front of real customers while these remain true:
+
+- 24 programme findings are open (21 BLOCKED, 3 NOT_TESTED); 18 need owner authorization.
+- The four owner decisions (PII visibility, MRR definition, control-plane activation, commission
+  policy) are **all still unanswered**. Nothing was implemented on the strength of a recommendation.
+- `CONTROL_ROLE_ACCESS_ENABLED` is still `false as const` — the control plane remains denied to
+  everyone, so the console is not exposed by this release.
+- No commission rate was invented; the evaluator still ships no rate.
+- Full-resolution visual acceptance and video acceptance remain **NOT TESTED** (§4, §3c).
+
+**No production SQL, migration, payment, subscription or customer-data mutation was performed by this
+work.**
 
 ---
 
-## 11. Explicit merge readiness
+## 11. Release outcome — merge and deployment
 
-# NOT READY
+# MERGED AND DEPLOYED — NOT PROGRAMME-ACCEPTED
 
-Supporting evidence, not a summary impression. Items 1, 5 and 6 are unchanged and are the whole
-reason; everything else on this list has moved from "broken" to "verified".
+These are two different statements and both must be read:
 
-1. **The programme gate fails by design** — `NOT READY (24)`, exit 1, re-executed on this head (§8).
-   Merging would bypass the only control that says the release is incomplete.
-2. **Four owner decisions remain open** (§9), and three of them block findings outright.
-3. **Visual acceptance is unproven.** Full-resolution artifacts are unreachable (§4.1), no browser
-   exists in this sandbox (§4.1a), and only thumbnails were inspected — explicitly not acceptance.
-4. **Website Studio is 5 PASS / 2 PARTIAL / 3 server-side PASS** (§6). The two PARTIALs are UI-only
-   because the harness stubs the mutating API; that is a property of the harness, not a regression.
-5. **18 of 24 findings need owner authorization** before anyone can close them (§8).
-6. **The Motion recordings exist but have not been watched.** The workflow is green and produced 48
-   recordings (§3c), but the artifact host is unreachable (§4.1) and there is no video player here.
-   Video acceptance is therefore **NOT TESTED**, not passed.
-
-**What is now verified on `fb30308`** — all of it re-checked this cycle, none inferred. **18 of 21 check
-runs succeed; the single failure is the programme gate**, which the directive forbids weakening:
-
-| Area | Result |
+| Question | Answer |
 |---|---|
-| Release Validation incl. *Release gate (aggregate)* | **PASS** |
-| `Migrations and PostgreSQL suite` (failing all cycle) | **PASS** — four real defects found and fixed, §7a |
-| `Schema reconciliation proposal closes the drift` | **PASS** — 11/11, 0 skipped |
-| Prisma schema validation (CI) | **PASS**, no bypass reintroduced |
-| POS / ERP PRO verify | **PASS** |
-| Motion isolated browser evidence | **PASS** — 48/48 observed, 48 recordings, lite + cancellation PASS (§3c) |
-| Interactive Business E2E | **PASS** |
-| Website Studio 2.0 acceptance + prompt-to-website journey | **PASS** (22/22 steps) |
-| Full no-database suite / Static / build / PG18 paths | **PASS** |
-| Ledger immutability guards | **executed and attacked** on PostgreSQL 17, §5a |
-| Classic `.jata-public` bar and storefront `.eb-actionbar` | measured **independently**, both sound, §5 |
-| Production / Vercel | **untouched**, nothing deployed |
+| Is PR #109 merged? | **Yes** — `ccaab45`, on explicit owner authorization. |
+| Is it deployed to production? | **Yes** — `dpl_4k3JqD…`, READY, aliased to `jataaftercall.co.ke`. |
+| Did post-deployment smoke pass? | **Yes** — run `43084003957`, first green run of that gate ever. |
+| Is the programme accepted? | **No** — `programme-completeness` is red with 24 open findings, and the gate was overridden rather than satisfied. |
+| Are the four owner decisions answered? | **No** — all four remain open. |
 
-**Recommendation: hold the merge.** The engineering work in this cycle is complete: the two CI
-failures this session was asked to target are green, and the one remaining red gate is the programme
-gate the directive explicitly forbids weakening. The outstanding items are owner decisions and
-verification access, not code. The single highest-value unblock remains **Decision #3**, which turns
-ADMIN-010 and ADMIN-015 from permanently untestable into testable.
+**What was verified before the merge** (18 of 20 checks, stable across five consecutive heads):
+Release Validation incl. the aggregate gate; migration rehearsal on disposable PG18; reconciliation
+with 0 skips; Prisma validation with no bypass; POS/ERP; the Interactive Business E2E's 15
+database-backed journeys; Website Studio acceptance plus the prompt-to-website journey; Motion with
+48/48 observations and 48 recordings; the ledger guards executed and attacked on PostgreSQL.
+
+**What remains open, unchanged and un-softened:** the 24 findings (§8), the four decisions (§9), and
+the two evidence classes this environment cannot produce — full-resolution visual inspection (§4.1,
+§4.1a) and watched video (§3c).
+
+**The highest-value next action is unchanged: answer Decision #3.** It converts ADMIN-010 and
+ADMIN-015 from permanently untestable into testable, and it is the only one of the four that unlocks
+browser-verifiable work without inventing a policy.
