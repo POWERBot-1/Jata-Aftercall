@@ -53,6 +53,7 @@ export default async function WebsiteStudioPage({ params }: Props) {
 
       {workspace.entitlement.entitled ? (
         <OpenPageEditor
+          key={studioWebsite.websiteId}
           websiteId={studioWebsite.websiteId}
           websiteName={`${workspace.business.name} Website`}
         />
