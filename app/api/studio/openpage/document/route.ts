@@ -52,7 +52,10 @@ export async function GET(request: Request) {
   if (!websiteId) return NextResponse.json({ error: "Choose a website first." }, { status: 400 });
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "read");
-    const document = await prisma.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId } });
+    const document = await prisma.openPageSiteDocument.findUnique({
+      where: { websiteId: access.websiteId },
+      include: { revisions: { orderBy: { draftVersion: "desc" }, take: 20, select: { draftVersion: true, source: true, createdById: true, createdAt: true } } },
+    });
     return NextResponse.json({
       website: { id: access.websiteId, businessId: access.businessId, slug: access.slug, name: access.name },
       document: document ? {
@@ -61,6 +64,7 @@ export async function GET(request: Request) {
         publishedVersion: document.publishedVersion,
         publishedAt: document.publishedAt,
         updatedAt: document.updatedAt,
+        revisions: document.revisions,
       } : null,
     });
   } catch (error) {
@@ -74,41 +78,45 @@ export async function PUT(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });
   let body: Record<string, unknown>;
-  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid request." }, { status: 400 }); }
-  const websiteId = typeof body.websiteId === "string" ? body.websiteId.trim() : "";
-  const expectedDraftVersion = Number(body.expectedDraftVersion);
-  if (!websiteId || !Number.isSafeInteger(expectedDraftVersion) || expectedDraftVersion < 0) {
-    return NextResponse.json({ error: "Choose a website and the draft version you edited." }, { status: 400 });
-  }
-  const validated = validateSiteConfig(body.config);
-  if (!validated.ok) return NextResponse.json({ error: validated.error, code: "openpage_schema_invalid" }, { status: 422 });
-  let serialized: string;
-  try { serialized = JSON.stringify(validated.value); } catch {
-    return NextResponse.json({ error: "The OpenPage document is not valid JSON." }, { status: 400 });
-  }
-  if (serialized.length > 1_500_000) return NextResponse.json({ error: "The OpenPage document exceeds the 1.5 MB limit." }, { status: 413 });
-  if (/data:image\//i.test(serialized)) return NextResponse.json({ error: "Store images in the JATA media library and reference their URLs; inline image data is not accepted." }, { status: 422 });
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "edit");
-    const current = await prisma.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId } });
-    if (!current) {
-      if (expectedDraftVersion !== 0) return NextResponse.json({ error: "The OpenPage draft does not exist. Reload before saving.", code: "openpage_draft_version_conflict", currentDraftVersion: 0 }, { status: 409 });
-      const created = await prisma.openPageSiteDocument.create({ data: { websiteId: access.websiteId, draftJson: serialized, draftVersion: 1 } });
-      return NextResponse.json({ saved: true, websiteId, draftVersion: created.draftVersion, config: validated.value });
-    }
-    if (current.draftVersion !== expectedDraftVersion) {
-      return NextResponse.json({ error: "This OpenPage draft changed in another window. Reload the latest draft.", code: "openpage_draft_version_conflict", currentDraftVersion: current.draftVersion }, { status: 409 });
-    }
-    const nextVersion = current.draftVersion + 1;
-    const changed = await prisma.openPageSiteDocument.updateMany({
-      where: { websiteId: access.websiteId, draftVersion: expectedDraftVersion },
-      data: { draftJson: serialized, draftVersion: nextVersion },
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId } });
+      if (!current) {
+        if (expectedDraftVersion !== 0) return { conflict: true as const, currentDraftVersion: 0 };
+        const created = await tx.openPageSiteDocument.create({
+          data: {
+            websiteId: access.websiteId,
+            draftJson: serialized,
+            draftVersion: 1,
+            revisions: { create: { draftVersion: 1, snapshotJson: serialized, source: "EDIT", createdById: session.userId } },
+          },
+        });
+        return { conflict: false as const, draftVersion: created.draftVersion };
+      }
+      if (current.draftVersion !== expectedDraftVersion) return { conflict: true as const, currentDraftVersion: current.draftVersion };
+      const nextVersion = current.draftVersion + 1;
+      const changed = await tx.openPageSiteDocument.updateMany({
+        where: { websiteId: access.websiteId, draftVersion: expectedDraftVersion },
+        data: { draftJson: serialized, draftVersion: nextVersion },
+      });
+      if (changed.count !== 1) {
+        const latest = await tx.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId }, select: { draftVersion: true } });
+        return { conflict: true as const, currentDraftVersion: latest?.draftVersion ?? null };
+      }
+      await tx.openPageSiteRevision.create({
+        data: { websiteId: access.websiteId, draftVersion: nextVersion, snapshotJson: serialized, source: "EDIT", createdById: session.userId },
+      });
+      return { conflict: false as const, draftVersion: nextVersion };
     });
-    if (changed.count !== 1) {
-      const latest = await prisma.openPageSiteDocument.findUnique({ where: { websiteId: access.websiteId }, select: { draftVersion: true } });
-      return NextResponse.json({ error: "This OpenPage draft changed in another window. Reload the latest draft.", code: "openpage_draft_version_conflict", currentDraftVersion: latest?.draftVersion ?? null }, { status: 409 });
+    if (result.conflict) {
+      return NextResponse.json({
+        error: "This OpenPage draft changed in another window. Reload the latest draft.",
+        code: "openpage_draft_version_conflict",
+        currentDraftVersion: result.currentDraftVersion,
+      }, { status: 409 });
     }
-    return NextResponse.json({ saved: true, websiteId, draftVersion: nextVersion, config: validated.value });
+    return NextResponse.json({ saved: true, websiteId, draftVersion: result.draftVersion, config: validated.value });
   } catch (error) {
     const status = statusOf(error);
     return NextResponse.json({ error: status === 404 ? "Studio website not found." : status === 403 ? "You do not have permission to edit this website." : "We could not save this OpenPage document." }, { status });
