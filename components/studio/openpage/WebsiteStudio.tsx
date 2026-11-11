@@ -12,7 +12,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   ArrowLeft, Check, Eye, Globe, Loader2, Monitor, RefreshCw, Send, Smartphone,
   Sparkles, Tablet, Undo2, Redo2, Save, UploadCloud, Wand2,
@@ -341,9 +340,6 @@ export function WebsiteStudio(props: WebsiteStudioProps) {
           <a className="jata-btn jata-btn-secondary" href={props.publicUrl} target="_blank" rel="noopener noreferrer">
             <Eye size={14} /> View site
           </a>
-          <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${props.business.id}`}>
-            Classic editor
-          </Link>
         </div>
       </header>
 
