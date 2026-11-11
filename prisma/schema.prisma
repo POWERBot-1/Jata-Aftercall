@@ -4771,6 +4771,7 @@ model OpenPageSiteDocument {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   revisions   OpenPageSiteRevision[]
+  publications OpenPageSitePublication[]
 
   @@index([websiteId, updatedAt])
 }
@@ -4854,4 +4855,20 @@ model StudioWebsiteMember {
   @@unique([websiteId, userId])
   @@index([userId, status])
   @@index([websiteId, status])
+}
+
+ 
+model OpenPageSitePublication {
+  id            String   @id @default(cuid())
+  websiteId     String
+  document      OpenPageSiteDocument @relation(fields: [websiteId], references: [websiteId], onDelete: Cascade)
+  version       Int
+  draftVersion  Int
+  snapshotJson  String   @db.Text
+  note          String?
+  publishedById String
+  publishedAt   DateTime @default(now())
+
+  @@unique([websiteId, version])
+  @@index([websiteId, publishedAt])
 }
