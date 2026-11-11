@@ -67,10 +67,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, sitePath } = await params;
   const siteSlug = sitePath.join("/");
   const native = await loadNativeOpenPagePath(slug, sitePath);
-  if (native) return {
-    title: `${native.config.name || native.businessName} | ${native.businessName}`,
-    alternates: { canonical: `/b/${slug}/${siteSlug}` },
-  };
+  if (native) {
+    const siteName = typeof native.config.name === "string" ? native.config.name : native.businessName;
+    return {
+      title: `${siteName} | ${native.businessName}`,
+      alternates: { canonical: `/b/${slug}/${siteSlug}` },
+    };
+  }
   const site = await loadPublicSite(slug, siteSlug);
   if (!site) return { title: "Website not found | JATA AFTERCALL", robots: { index: false, follow: false } };
   return seoMetadataFor({
