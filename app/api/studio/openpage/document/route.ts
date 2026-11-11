@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     const access = await assertStudioWebsiteAccess(websiteId, session, "read");
     const document = await prisma.openPageSiteDocument.findUnique({
       where: { websiteId: access.websiteId },
-      include: { revisions: { orderBy: { draftVersion: "desc" }, take: 20, select: { draftVersion: true, source: true, createdById: true, createdAt: true } } },
+      include: { revisions: { orderBy: { draftVersion: "desc" }, take: 20, select: { draftVersion: true, snapshotJson: true, source: true, createdById: true, createdAt: true } } },
     });
     return NextResponse.json({
       website: { id: access.websiteId, businessId: access.businessId, slug: access.slug, name: access.name },
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
         publishedVersion: document.publishedVersion,
         publishedAt: document.publishedAt,
         updatedAt: document.updatedAt,
-        revisions: document.revisions,
+        revisions: document.revisions.map((revision) => ({ ...revision, config: JSON.parse(revision.snapshotJson) })),
       } : null,
     });
   } catch (error) {
