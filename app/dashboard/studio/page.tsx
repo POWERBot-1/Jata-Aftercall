@@ -15,7 +15,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { WorkspaceEmpty, WorkspaceHero, WorkspacePanel } from "@/components/workspace/WorkspaceUI";
 import { WorkspaceDoor } from "@/components/workspace/WorkspaceDoor";
 import { WORKSPACE_HERO_PHOTO, WORKSPACE_PHOTOS, categoryLabel, photoForCategory } from "@/lib/workspaceImagery";
-import { ArrowRight, ExternalLink, Globe, Image as ImageIcon, Palette, ShoppingBag, Wand2 } from "lucide-react";
+import { ArrowRight, ExternalLink, Globe, Image as ImageIcon, ShoppingBag, Wand2 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Website Studio" };
 export const dynamic = "force-dynamic";
@@ -73,7 +73,7 @@ export default async function StudioIndexPage() {
             Build the site your <em>customers</em> actually use.
           </>
         }
-        subtitle="Sections, catalogue, theme, photos and preview — all in one editor. Your public page keeps working while you edit; customers only see a change once you publish it."
+        subtitle="Create, refine and publish your website in the OpenPage-powered Website Studio. Your public page stays unchanged until you publish."
         photo={WORKSPACE_HERO_PHOTO}
         actions={
           <>
@@ -93,7 +93,7 @@ export default async function StudioIndexPage() {
       {businesses.length === 0 ? (
         <WorkspaceEmpty
           title="No business yet"
-          text="Create your business first, then build its interactive website: sections, catalogue, theme and preview."
+          text="Create your business first, then build its website in the OpenPage-powered Website Studio."
           photo={WORKSPACE_PHOTOS.professional}
           actions={
             <Link href="/onboarding" className="jata-btn jata-btn-primary">
@@ -146,14 +146,8 @@ export default async function StudioIndexPage() {
                       <Link className="jata-btn jata-btn-primary" href={`/dashboard/businesses/${business.id}/studio`}>
                         <Wand2 size={15} aria-hidden="true" /> Open AI Website Studio <ArrowRight size={15} aria-hidden="true" />
                       </Link>
-                      <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}`}>
-                        Business home &amp; classic tools
-                      </Link>
                       <Link className="jata-btn jata-btn-secondary" href={getBusinessUrl(business.slug)} target="_blank" rel="noopener noreferrer">
                         <ExternalLink size={15} aria-hidden="true" /> {business.isPublished ? "View site" : "Preview"}
-                      </Link>
-                      <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}/theme`}>
-                        <Palette size={15} aria-hidden="true" /> Theme
                       </Link>
                       <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}/photos`}>
                         <ImageIcon size={15} aria-hidden="true" /> Photos
@@ -170,7 +164,7 @@ export default async function StudioIndexPage() {
 
           <WorkspacePanel title="How publishing works" meta="Draft → preview → live">
             <ol className="grid gap-2 sm:grid-cols-3">
-              <Step n={1} title="Edit" text="Change sections, theme, catalogue and photos. Everything is saved to your draft." />
+              <Step n={1} title="Create & refine" text="Describe your business, compare generated layouts and refine the selected design in Website Studio." />
               <Step n={2} title="Preview" text="See the real page at phone or desktop width before anyone else does." />
               <Step n={3} title="Publish" text="Publishing replaces the live version. Until then, customers keep the current site." />
             </ol>
