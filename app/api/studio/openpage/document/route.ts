@@ -101,7 +101,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "The OpenPage document is not valid JSON." }, { status: 400 });
   }
   if (serialized.length > 1_500_000) return NextResponse.json({ error: "The OpenPage document exceeds the 1.5 MB limit." }, { status: 413 });
-  if (/data:image\\//i.test(serialized)) return NextResponse.json({ error: "Store images in the JATA media library and reference their URLs; inline image data is not accepted." }, { status: 422 });
+  if (/data:image\//i.test(serialized)) return NextResponse.json({ error: "Store images in the JATA media library and reference their URLs; inline image data is not accepted." }, { status: 422 });
 
   try {
     const access = await assertStudioWebsiteAccess(websiteId, session, "edit");
