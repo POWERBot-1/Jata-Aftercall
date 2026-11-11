@@ -161,7 +161,10 @@ jobs:
           # `next start` is production, so the page 404'd and readiness could never succeed. The
           # production build is still what the authenticated acceptance step above exercises.
           # The CLI is invoked directly: `npx` re-resolves and can exit asynchronously.
-          node node_modules/next/dist/bin/next dev -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
+          # --webpack is required: Next 16 enables Turbopack by default and refuses to boot with a
+          # custom webpack config unless the bundler is chosen explicitly (next.config.ts has one for
+          # the node: import shim). The production build in the step above is unaffected.
+          node node_modules/next/dist/bin/next dev --webpack -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
           ready=0

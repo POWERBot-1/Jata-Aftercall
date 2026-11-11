@@ -57,6 +57,9 @@ describe("prompt-to-website journey reuses the verified build", () => {
     // so `next start` can never reach it. The production build is exercised by the authenticated
     // acceptance step instead.
     expect(job).toContain("node_modules/next/dist/bin/next dev");
+    // Next 16 defaults to Turbopack and refuses to boot with a custom webpack config unless the
+    // bundler is named explicitly; next.config.ts has one.
+    expect(job).toContain("--webpack");
     expect(job).not.toContain("node_modules/next/dist/bin/next start");
     expect(job).not.toContain("npx next start");
     expect(job).not.toContain("npx next build");
