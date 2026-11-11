@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** `8044c33` — verified: 17 success / 2 failure / 2 skipped of 21 check runs
+**Report commit:** `c841cde` — verified: **18 success / 1 failure / 2 skipped** of 21 check runs
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -102,15 +102,15 @@ fix into a cutover review and risks touching migration baselines. It belongs in 
 
 ### 3a-bis. Current head — the complete workflow picture
 
-Measured, not summarised: `gh api .../commits/8044c33/check-runs` returns 21 check runs —
-the identical result as `d8eddb8`, `a6271f3`, `dd56cd0` and `c13634d` before it, so the state is stable across five consecutive heads, not a lucky run.
+Measured, not summarised: `gh api .../commits/c841cde/check-runs` returns 21 check runs —
+improved from 17 success on each of the five preceding heads (`d8eddb8`, `a6271f3`, `dd56cd0`, `c13634d`) once Motion obtained an encoder, so the delta is one known infrastructure dependency, not a flaky suite.
 
 | Conclusion | Count | Which |
 |---|---|---|
 | **success** | 17 | Release Validation (incl. *Release gate (aggregate)*), *Migrations and PostgreSQL suite*, *Migrations + schema on PostgreSQL 18*, *Schema reconciliation proposal closes the drift*, *Exact candidate applies on disposable PostgreSQL 18*, *Production build path on PostgreSQL 18*, *Failure paths actually fail*, *Migration target guard*, *Static*, *Prisma, tenant tests, typecheck and production build*, *Schema, types, unit suite, build*, *full-suite*, *Journey against a real database*, *Real-Chrome six-viewport capture*, *D2 build/audit/controls*, *Vercel Preview Comments*, *instruction-integrity* |
-| **failure** | 1 | `programme-completeness` — by design while 24 findings are open (§8) |
+| **failure** | 1 | `programme-completeness` — by design while 24 findings are open (§8). It is now the **only** failure. |
 | **skipped** | 2 | `Read-only smoke` ×2 (production smoke, read-only, non-blocking) |
-| **failure (infrastructure)** | 1 | Motion `capture` — `ffmpeg` unavailable on the runner; recordings cannot exist (§3c). The pixel/behaviour evidence in that same run is green. |
+| ~~infrastructure~~ | 0 | Motion `capture` **passed** on this head (§3c) — the encoder step succeeded and all 48 recordings exist. |
 
 Per-workflow, with what each result actually proves:
 
@@ -121,7 +121,7 @@ Per-workflow, with what each result actually proves:
 | Website Studio 2.0 | `43042978344` | `c13634d` | **success** | none (22/22 steps) | Authored acceptance **and** the prompt-to-website journey both ran, including `Validate Prisma schema` → **Prisma validation is green in CI**. The journey stubs authenticated API calls, so it proves the UI journey, not server truth. |
 | POS / ERP — PRO verify | `43042978338` | `c13634d` | **success** | none | POS/ERP authorization, tenant isolation, migration expectations and the ledger guard suite on PostgreSQL. |
 | Premium Screenshots | `43042978525` | `c13634d` | **success** | *Publish visual evidence into the session branch* (skipped — label-gated) | Real Chrome produced captures at six/seven viewports and both upload steps ran. It proves **capture happened**, not that anything in the images is acceptable — and the images are unretrievable here. |
-| Motion isolated browser evidence | `43042978401` / re-run `43049628273` | `c13634d` / `4cbbdb4` | **stalled**, then **failure** | *Ensure video encoder* (**failed**: ffmpeg unavailable), *Capture classic and AI preview evidence* (**failed**: needs recordings) | On the re-run: 480/480 generated-family rows and 42/42 route rows observed, lite-mode and cancellation PASS, **6/6 viewport thumbnails published** — but **0/48 motion observations** and **0 recordings**, because no encoder exists on the runner (`spawnSync ffmpeg ENOENT`). Pixel evidence obtained; recording evidence NOT OBTAINED (§3c). |
+| Motion isolated browser evidence | `43064730313` | `c841cde` | **success** (22/22 steps) | none | 48/48 motion observations OBSERVED with **48 recordings**, 480/480 generated-family rows, 42/42 route rows (lite and AI rows pass), repeated preference transitions PASS, real reduced-motion cancellation PASS (4 running → 0). Two earlier attempts on this head stalled then failed for a missing encoder; §3c shows all three. Proves storefront motion scope behaviour at five targets — **not** that the recordings look right (unretrievable, §4.1). |
 | Admin instruction integrity | `43042978677` | `c13634d` | instruction-integrity **success**, programme-completeness **failure** | programme-completeness (by design) | The append-only register is intact and the gate still refuses to call 24 open findings green. |
 
 ### 3c. Why the Motion workflow produced no result, and the fix
@@ -147,10 +147,30 @@ three capture steps never started — no pass, no failure, no evidence.
 | Real reduced-motion cancellation | **PASS** — 4 animations started, 4 running → **0 running**, 1 disconnect, 4 cancel events |
 | Thumbnails published | **6 of 6** viewports |
 
-So the pixel and behavioural evidence *did* arrive; only the **video recordings** are missing, and they
-are missing for an infrastructural reason (no encoder on the runner), not a product reason. The job is
-still a **failure**, and `MOTION-*` findings are still open, because `row.result` requires a non-empty
-recording per row. **Recordings: NOT OBTAINED, BLOCKED on ffmpeg availability.**
+So on `4cbbdb4` the pixel and behavioural evidence *did* arrive; only the **video recordings** were
+missing, and they were missing for an infrastructural reason (no encoder on the runner), not a product
+reason.
+
+**It then passed.** On head `c841cde`, run `43064730313` obtained an encoder and every step is
+`success`:
+
+| Signal | `4cbbdb4` | `c841cde` |
+|---|---|---|
+| Encoder step | **failed** (BLOCKED) | **success** |
+| Motion observations | 0 observed / 48 failed | **48 observed / 0 failed** |
+| Recordings | **0** | **48** (`recordingErrors: []`) |
+| Capture errors | none | none |
+| Generated families | 480/480 | **480/480**, 0 failures |
+| Route behaviour | 42 rows, 0 errors | 42 rows, 0 errors; `aiRowsPass: true` |
+| Viewport thumbnails | 6/6 | 6/6 (decoded, 100×178 … 180×101) |
+| Artifacts | 2.4 MB / 21 MB / 17.9 MB | **2.4 MB / 21 MB / 29 MB** |
+
+The 29 MB `motion-partial-c841cde…` artifact is the one that now contains the recordings. **It remains
+unretrievable from this sandbox** (§4.1), so the recordings are asserted by the harness's own
+`recordings: 48` count and the successful upload step — **I have not watched them, and will not claim
+to have.** What this proves: the storefront serves the right motion mode for each of five scopes, lite
+mode follows the preference, and real cancellation works. What it does not prove: that any recording
+looks correct to a human.
 
 ### 3b. Outstanding workflow, historical note
 
@@ -474,11 +494,12 @@ reason; everything else on this list has moved from "broken" to "verified".
 4. **Website Studio is 5 PASS / 2 PARTIAL / 3 server-side PASS** (§6). The two PARTIALs are UI-only
    because the harness stubs the mutating API; that is a property of the harness, not a regression.
 5. **18 of 24 findings need owner authorization** before anyone can close them (§8).
-6. **The Motion workflow still has no result on this head** (§3c). Its 37-minute stall is fixed, but
-   a stall fixed is not evidence obtained.
+6. **The Motion recordings exist but have not been watched.** The workflow is green and produced 48
+   recordings (§3c), but the artifact host is unreachable (§4.1) and there is no video player here.
+   Video acceptance is therefore **NOT TESTED**, not passed.
 
-**What is now verified on `8044c33`** — all of it re-checked this cycle, none inferred (17 of 21 check
-runs success, the two failures are the programme gate and the encoder block):
+**What is now verified on `c841cde`** — all of it re-checked this cycle, none inferred. **18 of 21 check
+runs succeed; the single failure is the programme gate**, which the directive forbids weakening:
 
 | Area | Result |
 |---|---|
@@ -487,6 +508,7 @@ runs success, the two failures are the programme gate and the encoder block):
 | `Schema reconciliation proposal closes the drift` | **PASS** — 11/11, 0 skipped |
 | Prisma schema validation (CI) | **PASS**, no bypass reintroduced |
 | POS / ERP PRO verify | **PASS** |
+| Motion isolated browser evidence | **PASS** — 48/48 observed, 48 recordings, lite + cancellation PASS (§3c) |
 | Interactive Business E2E | **PASS** |
 | Website Studio 2.0 acceptance + prompt-to-website journey | **PASS** (22/22 steps) |
 | Full no-database suite / Static / build / PG18 paths | **PASS** |
