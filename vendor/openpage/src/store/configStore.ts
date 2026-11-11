@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { produce } from 'immer'
 import type { BlockConfig, SiteConfig, ThemeConfig, PageConfig } from '@/blocks/types'
 
@@ -151,9 +150,7 @@ function mutateActivePageBlocks(
   return { ...config, pages: newPages, blocks: activeBlocks }
 }
 
-export const useConfigStore = create<ConfigState>()(
-  persist(
-    (set, get) => ({
+export const useConfigStore = create<ConfigState>()((set, get) => ({
       config: defaultConfig,
       activePageId: 'page-home',
       undoStack: [],
@@ -321,24 +318,4 @@ export const useConfigStore = create<ConfigState>()(
 
       canUndo: () => get().undoStack.length > 0,
       canRedo: () => get().redoStack.length > 0,
-    }),
-    {
-      name: 'openpage-config',
-      version: 2,
-      partialize: (state) => ({ config: state.config, activePageId: state.activePageId }),
-      migrate: (persisted, version) => {
-        const data = persisted as Record<string, unknown>
-        if (version === 0 || version === 1 || version === undefined) {
-          // v0/v1 -> v2: wrap blocks[] into pages[]
-          const config = data.config as SiteConfig | undefined
-          if (config && !config.pages) {
-            config.pages = [{ id: 'page-home', name: 'Home', path: '/', blocks: config.blocks || [] }]
-          }
-          data.activePageId = 'page-home'
-          return data
-        }
-        return data
-      },
-    }
-  )
-)
+    })
