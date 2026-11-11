@@ -19,6 +19,7 @@ import { useConfigStore } from '@openpage/store/configStore'
 import { useProjectsStore } from '@openpage/store/projectsStore'
 import type { PageConfig } from '@openpage/blocks/types'
 import { exportToHTML, downloadHTML } from '@openpage/lib/export-html'
+import { useOpenPagePersistence } from '@/components/studio/openpage/OpenPagePersistenceContext'
 
 const viewports: { value: Viewport; icon: typeof Monitor; label: string }[] = [
   { value: 'desktop', icon: Monitor, label: 'Desktop' },
@@ -173,9 +174,49 @@ export function CanvasToolbar() {
   const config = useConfigStore((s) => s.config)
   const [showAddPage, setShowAddPage] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const { websiteId, draftVersion, publishedVersion, websiteStatus, isDirty, isSaving, setPublishedVersion, setWebsiteStatus } = useOpenPagePersistence()
+  const isPublished = websiteStatus === 'PUBLISHED'
 
   const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : null
   const projectName = activeProject?.name || configName
+
+  async function handlePublish() {
+    if (!isPublished && (isDirty || isSaving || draftVersion < 1)) {
+      toast.error('Wait for the latest draft to save before publishing.')
+      return
+    }
+    setPublishing(true)
+    try {
+      const response = await fetch('/api/studio/openpage/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          websiteId,
+          expectedDraftVersion: draftVersion,
+          expectedPublishedVersion: publishedVersion,
+          action: isPublished ? 'unpublish' : 'publish',
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : 'The website publication could not be changed.')
+        return
+      }
+      if (data.published) {
+        setPublishedVersion(data.version)
+        setWebsiteStatus('PUBLISHED')
+        toast.success('Website published')
+      } else {
+        setWebsiteStatus('UNPUBLISHED')
+        toast.success('Website unpublished')
+      }
+    } catch {
+      toast.error('Network error. Publication state was not confirmed.')
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   async function handleExport() {
     setExporting(true)
@@ -341,6 +382,15 @@ export function CanvasToolbar() {
 
         <div className="w-px h-5 bg-border-default mx-1" />
 
+        <button
+          onClick={() => void handlePublish()}
+          disabled={publishing || (!isPublished && (isDirty || isSaving || draftVersion < 1))}
+          className="h-7 px-3 rounded-lg border border-green/40 text-green text-[11.5px] font-semibold hover:bg-green-glow transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          title={isPublished ? `Published version ${publishedVersion}. Click to unpublish.` : 'Publish the latest saved draft'}
+        >
+          {publishing ? <Loader2 size={12} className="animate-spin" /> : null}
+          <span>{publishing ? 'Working…' : isPublished ? 'Unpublish' : 'Publish'}</span>
+        </button>
         <button
           onClick={handleExport}
           disabled={exporting}
