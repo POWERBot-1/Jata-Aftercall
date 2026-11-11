@@ -10,6 +10,7 @@
 @source "../app/**/*.{js,ts,jsx,tsx,mdx}";
 @source "../components/**/*.{js,ts,jsx,tsx,mdx}";
 @source "../lib/**/*.{js,ts,jsx,tsx,mdx}";
+@source "../vendor/openpage/src/**/*.{js,ts,jsx,tsx,mdx}";
 
 /*
  * Design tokens. The project's only theme customisation was `fontFamily.sans` in
