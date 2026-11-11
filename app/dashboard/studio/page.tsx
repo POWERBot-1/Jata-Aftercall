@@ -57,8 +57,6 @@ export default async function StudioIndexPage() {
       publishedVersion: number;
     } | null;
   };
-  type EntitlementRow = { businessId: string; status: string };
-
   const [experiences, entitlements, nativeWebsites] = await Promise.all([
     prisma.businessExperience
       .findMany({
@@ -91,9 +89,6 @@ export default async function StudioIndexPage() {
     return business.isPublished;
   }).length;
 
-
-  const entitlementByBusiness = new Map(entitlements.map((row) => [row.businessId, row.status]));
-  const liveCount = businesses.filter((business) => business.isPublished).length;
 
   return (
     <div className="ws-stack">
