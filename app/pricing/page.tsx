@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
-import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { FALLBACK_PLANS, getMjengoOsPlan, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
+import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 
 export const metadata: Metadata = { title: "Pricing and subscriptions — JATA AFTERCALL", description: "Transparent JATA AFTERCALL plan prices, payment, renewal, cancellation and refund information." };
 export const dynamic = "force-dynamic";
@@ -90,6 +91,10 @@ export default async function PricingPage() {
   const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
     frontDeskFamilyCard(key, stored, voiceReadiness.canSell),
   );
+  const mjengoPlan = await getMjengoOsPlan().catch(() => null);
+  const mjengoRefusal = mjengoCheckoutRefusal(mjengoPlan);
+  const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.key === "MJENGO_OS" && Number(mjengoPlan.priceKES) > 0 && Number(mjengoPlan.durationDays) > 0);
+  const mjengoTerms = mjengoPlanValid && mjengoPlan ? `${formatNumber(Number(mjengoPlan.priceKES))} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable";
 
   return (
     <MarketingLayout
@@ -171,6 +176,23 @@ export default async function PricingPage() {
               </Link>
             </article>
           ))}
+        </div>
+      </MarketingSection>
+
+      <MarketingSection title="MJENGO OS — Business management" id="mjengo-plan" tone="cream">
+        <div className="mk-grid">
+          <article className="mk-card" data-product="MJENGO_OS">
+            <h3>MJENGO OS</h3>
+            <p className="mk-card__price">{mjengoTerms === "Pricing currently unavailable" ? mjengoTerms : `KES ${mjengoTerms}`}</p>
+            <p>Sales and orders, inventory and materials, procurement and suppliers, customers and credit, accounting, workforce and operational reports in a separate business workspace.</p>
+            <p className="mk-card__kind">Separate product · per business · verified MJENGO OS entitlement required</p>
+            <p><strong>{mjengoRefusal ? "Not currently available for purchase" : "Plan configured — checkout remains subject to server-side business and payment verification"}</strong></p>
+            {mjengoRefusal ? <p className="mk-prose">{mjengoRefusal}</p> : null}
+            <Link href="/products/mjengo-os">Explore MJENGO OS →</Link>
+            <div className="mk-btn-row">
+              <Link href="/dashboard/mjengo" className="mk-btn">Get MJENGO OS</Link>
+            </div>
+          </article>
         </div>
       </MarketingSection>
 
