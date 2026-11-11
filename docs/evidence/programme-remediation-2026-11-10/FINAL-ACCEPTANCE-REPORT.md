@@ -1,13 +1,35 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** this commit; the acceptance evidence it cites is from head `c13634d`
+**Report commit:** `dd56cd0` (this commit's CI results are in §3a-bis)
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
 This report is the deliverable of the final acceptance directive. It separates what CI proves from
 what only a human can accept, and it marks every gap BLOCKED or NOT TESTED rather than absorbing it
 into a green summary.
+
+---
+
+## 0. Changed files in this final cycle (with justification)
+
+Nine commits on top of the last accepted head `d8ad3c2`. **No CSS, pricing, policy, schema, migration
+file, payment, subscription or customer data changed.** Two CI-harness defects and one evidence
+document were the entire scope.
+
+| Commit | File(s) | Why |
+|---|---|---|
+| `71cbea4` | `tests/unit/mjengo-ledger-sql-postgres.test.ts` — the placeholder `skipIf` test is replaced with one that **throws** if the engine is absent | The `Schema reconciliation` job required 0 skips; a test asserting "pglite is not installed" skipped once it *was* installed. 11/11 now run, 0 skipped. |
+| `71cbea4` | `scripts/erp/migration-verify.sh` — assert and deliberately remove the ledger guards and view before the drop | `DROP TABLE` cannot satisfy a `BEFORE DELETE` guard; reordering the 48 tables could never have worked (§7a #1). |
+| `767199b` | same script — recovery re-applies the two ledger migrations; explicit `SET statement_timeout = 0`; migration logs captured | Recovery restored tables but left the financial safeguards **off** (§7a #2), and the scratch failure reported only a filename. |
+| `f4409d5` | same script — `::error title=ERP_*` annotations with log tails | Step logs are unreachable from this sandbox, so `FAIL …` with no reason cost several cycles (§4.1). |
+| `c13634d` | same script — drop the three trigger **functions**; `--disable-triggers` on the data-only restore; assert the recovery precondition | A plain `CREATE FUNCTION` aborted the replay (§7a #3), and the line guard queried a parent table that had not been loaded yet (§7a #4). |
+| `4cbbdb4` | `.github/workflows/motion-evidence.yml` — bounded installer (240 s per call, 8-min step, explicit BLOCKED annotation), 15-min caps on capture steps | The step ran a 37-minute `apt-get update` and consumed the job, so the Motion workflow produced **no result at all** (§3c). |
+| `ee2318c`, `dd56cd0`, this commit | `docs/evidence/programme-remediation-2026-11-10/FINAL-ACCEPTANCE-REPORT.md` | The report described heads and states that are no longer true; it now records what each run proves and what it does not. |
+| this commit | `docs/release/EVIDENCE-MANIFEST.sha256` (regenerated) | Generated artifact; regenerated and verified, never hand-edited. |
+
+**Not changed, deliberately:** `CONTROL_ROLE_ACCESS_ENABLED` (still `false as const`), every migration
+`.sql` file, `prisma/schema.prisma`, any financial or rate constant, and the programme gate.
 
 ---
 
@@ -80,14 +102,14 @@ fix into a cutover review and risks touching migration baselines. It belongs in 
 
 ### 3a-bis. Current head — the complete workflow picture
 
-Measured, not summarised: `gh api .../commits/c13634d/check-runs` returns 21 check runs.
+Measured, not summarised: `gh api .../commits/dd56cd0/check-runs` returns 21 check runs.
 
 | Conclusion | Count | Which |
 |---|---|---|
 | **success** | 17 | Release Validation (incl. *Release gate (aggregate)*), *Migrations and PostgreSQL suite*, *Migrations + schema on PostgreSQL 18*, *Schema reconciliation proposal closes the drift*, *Exact candidate applies on disposable PostgreSQL 18*, *Production build path on PostgreSQL 18*, *Failure paths actually fail*, *Migration target guard*, *Static*, *Prisma, tenant tests, typecheck and production build*, *Schema, types, unit suite, build*, *full-suite*, *Journey against a real database*, *Real-Chrome six-viewport capture*, *D2 build/audit/controls*, *Vercel Preview Comments*, *instruction-integrity* |
 | **failure** | 1 | `programme-completeness` — by design while 24 findings are open (§8) |
 | **skipped** | 2 | `Read-only smoke` ×2 (production smoke, read-only, non-blocking) |
-| **not usable** | 1 | Motion `capture` — stalled 37 min on an apt call, **fixed** in `4cbbdb4` (§3c) |
+| **failure (infrastructure)** | 1 | Motion `capture` — `ffmpeg` unavailable on the runner; recordings cannot exist (§3c). The pixel/behaviour evidence in that same run is green. |
 
 Per-workflow, with what each result actually proves:
 
@@ -270,7 +292,7 @@ not period-close semantics).
 
 ## 6. Website Studio functional acceptance — status per requirement
 
-**The journey now runs and passes in CI on this head.** Run `43042978344` (`c13634d`), job
+**The journey now runs and passes in CI on this head.** Run `43052491074` (`dd56cd0`), job
 *Prisma, tenant tests, typecheck and production build*, 22/22 steps, including
 *Authenticated Website Studio browser acceptance* and *Prompt-to-website browser journey*. Artifacts:
 `website-studio-2-0-acceptance…` (29,709 B) and `prompt-to-website-journey…` (2,618,746 B) — both
@@ -306,14 +328,14 @@ this sandbox inspected.**
 
 ## 7. POS / ERP verification
 
-**PASS on `c13634d`**, from four independent workflows rather than one aggregate green tick:
+**PASS on `dd56cd0`**, from four independent workflows rather than one aggregate green tick:
 
 | Evidence | Head | Result |
 |---|---|---|
-| `POS / ERP - PRO verify` run `43042978338` | `c13634d` | **success** — schema, types, unit suite, production build, migrations and the PostgreSQL suites |
-| *Migrations and PostgreSQL suite* check | `c13634d` | **success** (was failing all cycle; see §7a) |
-| *Migrations + schema on PostgreSQL 18* / *Exact candidate applies on disposable PG18* | `c13634d` | **success** |
-| *Real-Chrome six-viewport capture* (includes POS profile journeys, POS photo controls, ERP screens at seven viewports) | `c13634d` | **success** — the *capture* succeeded; the images are unretrievable here (§4.1) |
+| `POS / ERP - PRO verify` run `43052491153` | `dd56cd0` | **success** — schema, types, unit suite, production build, migrations and the PostgreSQL suites |
+| *Migrations and PostgreSQL suite* check | `dd56cd0` | **success** (was failing all cycle; see §7a) |
+| *Migrations + schema on PostgreSQL 18* / *Exact candidate applies on disposable PG18* | `dd56cd0` | **success** |
+| *Real-Chrome six-viewport capture* (includes POS profile journeys, POS photo controls, ERP screens at seven viewports) | `dd56cd0` | **success** — the *capture* succeeded; the images are unretrievable here (§4.1) |
 | Ledger guard behaviour | local, PostgreSQL 17 | independently attacked and confirmed (§5a) |
 
 ### 7a. What was actually wrong with the rollback rehearsal (four real defects, in order)
@@ -454,7 +476,8 @@ reason; everything else on this list has moved from "broken" to "verified".
 6. **The Motion workflow still has no result on this head** (§3c). Its 37-minute stall is fixed, but
    a stall fixed is not evidence obtained.
 
-**What is now verified on `c13634d`** — all of it re-checked this cycle, none inferred:
+**What is now verified on `dd56cd0`** — all of it re-checked this cycle, none inferred (17 of 21 check
+runs success, the two failures are the programme gate and the encoder block):
 
 | Area | Result |
 |---|---|
