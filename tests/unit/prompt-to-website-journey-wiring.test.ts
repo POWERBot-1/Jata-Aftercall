@@ -83,3 +83,24 @@ describe("prompt-to-website journey reuses the verified build", () => {
     expect(Object.keys(parsed.jobs)).toEqual(["website-studio-2-0"]);
   });
 });
+
+// Two independent reasons this step could never go green, both now pinned:
+// 1. the fixture page 404s when NODE_ENV is production, so `next start` cannot work;
+// 2. the JOB sets NODE_ENV=test, which Next's dev server refuses to boot with.
+describe("journey server environment is compatible with the fixture route", () => {
+  it("sets NODE_ENV=development for the step, overriding the job's test value", () => {
+    const { load } = require("js-yaml") as typeof import("js-yaml");
+    const parsed = load(workflow) as {
+      jobs: Record<string, { env?: Record<string, string>; steps: { name?: string; env?: Record<string, string> }[] }>;
+    };
+    const parent = parsed.jobs["website-studio-2-0"];
+    // The job-level value is what Next would otherwise inherit.
+    expect(parent.env?.NODE_ENV).toBe("test");
+    const step = parent.steps.find((s) => s.name?.includes("Prompt-to-website browser journey"));
+    expect(step?.env?.NODE_ENV).toBe("development");
+  });
+
+  it("surfaces the server log as an annotation, the only channel reachable from review", () => {
+    expect(job).toContain("::error title=JOURNEY_SERVER_LOG::");
+  });
+});

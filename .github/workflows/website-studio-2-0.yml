@@ -143,6 +143,11 @@ jobs:
         env:
           STUDIO_BASE_URL: http://127.0.0.1:3100
           STUDIO_EVIDENCE_DIR: .cache/verification/studio-openpage
+          # The job-level NODE_ENV is "test", which Next's dev server does not accept
+          # (it expects development or production and refuses to boot otherwise). The
+          # fixture page only special-cases "production", so "development" is both
+          # permitted and sufficient for the route to render.
+          NODE_ENV: development
         run: |
           set -o pipefail
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
@@ -171,6 +176,9 @@ jobs:
             # because artifact and job-log downloads are blocked from some review environments.
             echo "--- server log ---"
             tail -40 /tmp/step-journey-server.log || true
+            # Also emit as an annotation: job logs and artifacts are unreachable from some
+            # review environments, and annotations are the only channel that survives.
+            echo "::error title=JOURNEY_SERVER_LOG::$(tail -c 1200 /tmp/step-journey-server.log | tr '\n' ' ' | sed 's/%/%25/g' | sed 's/\r/%0D/g')"
             echo "--- port listeners ---"
             (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null || true) | head -20
             echo "--- direct probe ---"
