@@ -830,6 +830,8 @@ try {
     [`/api/studio/health?businessId=${second.id}`, "GET"],
     [`/api/studio/openpage/document?websiteId=${second.studioWebsiteId}`, "GET"],
     ["/api/studio/openpage/document", "PUT", { websiteId: second.studioWebsiteId, expectedDraftVersion: second.openPageDraftVersion, config: JSON.parse((await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: second.studioWebsiteId } })).draftJson) }],
+    ["/api/studio/openpage/publish", "POST", { websiteId: second.studioWebsiteId, expectedDraftVersion: second.openPageDraftVersion, expectedPublishedVersion: 0 }],
+    ["/api/studio/openpage/rollback", "POST", { websiteId: second.studioWebsiteId, targetVersion: 1, expectedDraftVersion: second.openPageDraftVersion, expectedPublishedVersion: 0 }],
     [`/api/bookings?businessId=${salon.id}`, "GET"],
     [`/api/storefront/enquiry?businessId=${professional.id}`, "GET"],
     [`/api/storefront/enquiry?businessId=${technical.id}`, "GET"],
