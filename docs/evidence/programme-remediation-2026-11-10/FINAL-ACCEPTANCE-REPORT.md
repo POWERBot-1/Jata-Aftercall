@@ -98,7 +98,7 @@ Per-workflow, with what each result actually proves:
 | Website Studio 2.0 | `43042978344` | `c13634d` | **success** | none (22/22 steps) | Authored acceptance **and** the prompt-to-website journey both ran, including `Validate Prisma schema` → **Prisma validation is green in CI**. The journey stubs authenticated API calls, so it proves the UI journey, not server truth. |
 | POS / ERP — PRO verify | `43042978338` | `c13634d` | **success** | none | POS/ERP authorization, tenant isolation, migration expectations and the ledger guard suite on PostgreSQL. |
 | Premium Screenshots | `43042978525` | `c13634d` | **success** | *Publish visual evidence into the session branch* (skipped — label-gated) | Real Chrome produced captures at six/seven viewports and both upload steps ran. It proves **capture happened**, not that anything in the images is acceptable — and the images are unretrievable here. |
-| Motion isolated browser evidence | `43042978401` | `c13634d` | **stalled** | — | **Nothing.** It never reached a capture step (§3c). |
+| Motion isolated browser evidence | `43042978401` / re-run `43049628273` | `c13634d` / `4cbbdb4` | **stalled**, then **failure** | *Ensure video encoder* (**failed**: ffmpeg unavailable), *Capture classic and AI preview evidence* (**failed**: needs recordings) | On the re-run: 480/480 generated-family rows and 42/42 route rows observed, lite-mode and cancellation PASS, **6/6 viewport thumbnails published** — but **0/48 motion observations** and **0 recordings**, because no encoder exists on the runner (`spawnSync ffmpeg ENOENT`). Pixel evidence obtained; recording evidence NOT OBTAINED (§3c). |
 | Admin instruction integrity | `43042978677` | `c13634d` | instruction-integrity **success**, programme-completeness **failure** | programme-completeness (by design) | The append-only register is intact and the gate still refuses to call 24 open findings green. |
 
 ### 3c. Why the Motion workflow produced no result, and the fix
@@ -110,8 +110,24 @@ three capture steps never started — no pass, no failure, no evidence.
 
 `4cbbdb4` bounds it: 240 s per network call, an 8-minute step cap, an explicit
 `::error title=MOTION_ENCODER_BLOCKED` instead of silence, and 15-minute caps on each capture step.
-**This was a harness defect, not a product result: the Motion evidence on this head remains NOT
-OBTAINED even after the fix, until a run completes.**
+
+**That fix worked, and exposed the real reason the runner cannot record.** Run `43049628273`
+(`4cbbdb4`) completed in ~20 minutes instead of hanging, and failed honestly:
+
+| Signal | Value |
+|---|---|
+| `ffmpeg` install | **failed within the deadline** → `::error title=MOTION_ENCODER_BLOCKED::ffmpeg is unavailable and could not be installed within the deadline. No recording evidence is claimed for this head.` |
+| Motion observations | **0 observed / 48 failed**, `recordingErrors: ["Error: spawnSync ffmpeg ENOENT"]` |
+| Route behaviour | 42 rows, **0 errors**; 30 normal-motion rows pass, 12 lite rows pass, **`aiRowsPass: true`** |
+| Generated families | **480 rows expected / 480 observed / 0 failures**, 0 provisioning errors |
+| Repeated preference transitions | **PASS** (motion→lite→motion×, `renderMode` and `data-motion-reason` flip correctly each time) |
+| Real reduced-motion cancellation | **PASS** — 4 animations started, 4 running → **0 running**, 1 disconnect, 4 cancel events |
+| Thumbnails published | **6 of 6** viewports |
+
+So the pixel and behavioural evidence *did* arrive; only the **video recordings** are missing, and they
+are missing for an infrastructural reason (no encoder on the runner), not a product reason. The job is
+still a **failure**, and `MOTION-*` findings are still open, because `row.result` requires a non-empty
+recording per row. **Recordings: NOT OBTAINED, BLOCKED on ffmpeg availability.**
 
 ### 3b. Outstanding workflow, historical note
 
@@ -183,11 +199,21 @@ dimensions prove they are not native resolution**, so they are recorded as *part
 | 768×1024 | 140×187 | two-column transition, hero left, media right |
 | 1366×768 | 180×101 | desktop two-column, hero left, plates right |
 
-**Observations that survive at this scale:** no blank or white-screen render; no visible horizontal
-overflow; the bottom action bar is present with four controls at every width; layout intent is
-discernible at desktop and tablet. **Not observable at this scale, therefore NOT TESTED:** text
-clipping, exact spacing and alignment, touch-target dimensions, OpenPage editor visual quality, and
-any pixel-level comparison. **Visual acceptance is NOT claimed.**
+**How they were obtained, and why they are thumbnails by construction.** The images arrive as base64 in
+check-run annotations (`MOTION_VISUAL_<w>x<h>_1_OF_1`, 2–3 KB each), which I decoded and inspected.
+They are not the artifact files: `scripts/motion/disposable-browser-evidence.mjs` deliberately shrinks
+each capture through CDP `Emulation.setDeviceMetricsOverride` until it fits GitHub's 10-annotation cap
+per step, and the repository's own comment says so ("an image that cannot be published WHOLE is shrunk
+(THUMBNAIL_TIERS) until it fits"). **The channel is thumbnail-only, which is exactly why it cannot be
+used for visual acceptance.**
+
+**Observations that survive at this scale:** the hero renders with a real photograph and headline at
+every width; no blank or white-screen render; no visible horizontal overflow; the bottom action bar is
+present with four controls at every width including 320; at 430×932 and 390×844 the trust/contact rows
+and a long section stack cleanly; at 1366×768 the desktop two-column intent is clear. **Not observable
+at this scale, therefore NOT TESTED:** text clipping, exact spacing and alignment, touch-target
+dimensions, OpenPage editor visual quality, and any pixel-level comparison. **Visual acceptance is NOT
+claimed.**
 
 ---
 
