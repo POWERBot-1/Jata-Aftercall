@@ -59,6 +59,7 @@ export default async function HomePage() {
   // without visiting /products first (customer-interface completion directive).
   const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS)
     .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE");
+  const mjengoPlan = storedPlans.find((plan) => plan.key === "MJENGO_OS") ?? null;
 
   // The four AI Front Desk 2.0 tiers, at the approved tier prices, with availability from
   // the same price-matched catalogue row and Voice provider gate /products uses. The grid
@@ -258,8 +259,8 @@ export default async function HomePage() {
               <div className="mk-grid">
                 <article className="mk-card" data-product="MJENGO_OS">
                   <h3>MJENGO OS</h3>
-                  <p className="mk-card__price">KES 2,000 / 30 days</p>
-                  <p>Explore the product, its workspace modules and current availability.</p>
+                  <p className="mk-card__price">{mjengoPlan ? `KES ${formatNumber(mjengoPlan.priceKES)} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable"}</p>
+                  <p>Explore projects and jobs, materials, procurement, sales, customers, workforce, accounting and reports.</p>
                   <Link href="/products/mjengo-os">View MJENGO OS details →</Link>
                 </article>
               </div>
