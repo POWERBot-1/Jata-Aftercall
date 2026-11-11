@@ -53,9 +53,15 @@ describe("prompt-to-website journey reuses the verified build", () => {
   it("starts the already-built app instead of building again", () => {
     // The CLI is invoked directly: `npx next start` re-resolves and can exit asynchronously,
     // which left no server and produced a bare, undiagnosable readiness failure.
-    expect(job).toContain("node_modules/next/dist/bin/next start");
+    // A DEV server is required: the fixture page returns notFound() when NODE_ENV is production,
+    // so `next start` can never reach it. The production build is exercised by the authenticated
+    // acceptance step instead.
+    expect(job).toContain("node_modules/next/dist/bin/next dev");
+    expect(job).not.toContain("node_modules/next/dist/bin/next start");
     expect(job).not.toContain("npx next start");
     expect(job).not.toContain("npx next build");
+    const fixture = readFileSync("app/dev/website-studio-preview/page.tsx", "utf8");
+    expect(fixture).toContain('if (process.env.NODE_ENV === "production") notFound();');
     expect(job).not.toContain("npm run build");
   });
 

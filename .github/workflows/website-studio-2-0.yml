@@ -151,13 +151,17 @@ jobs:
             exit 1
           fi
           # Serve the build that was just produced and verified. No rebuild, no second schema.
-          # Run the Next CLI directly: `npx` re-resolves and can exit asynchronously, which left no
-          # server and produced a bare readiness failure with no diagnostic.
-          node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
+          # A DEV server, because app/dev/website-studio-preview/page.tsx returns notFound() when
+          # NODE_ENV === "production" (by design: the fixture must never be reachable in production).
+          # `next start` is production, so the page 404'd and readiness could never succeed. The
+          # production build is still what the authenticated acceptance step above exercises.
+          # The CLI is invoked directly: `npx` re-resolves and can exit asynchronously.
+          node node_modules/next/dist/bin/next dev -H 127.0.0.1 -p 3100 > /tmp/step-journey-server.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
           ready=0
-          for i in $(seq 1 60); do
+          # First dev-server compile of the route is slow; allow up to three minutes.
+          for i in $(seq 1 90); do
             if curl -fsS -o /dev/null "$STUDIO_BASE_URL/dev/website-studio-preview" 2>/dev/null; then ready=1; break; fi
             sleep 2
           done
