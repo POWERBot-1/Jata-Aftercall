@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** the commit that adds this file (see `git log -1`)
+**Report commit:** `b292d4c`, amended below by `734b76c` (merge with `main`) and the follow-up below
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -54,15 +54,42 @@ later commits re-run the same suites — see §3a for the outstanding one).
 | failure | 1 | `programme-completeness` — **fails by design** while 24 findings are open. Weakening it to obtain green CI is explicitly forbidden. |
 | skipped | 2 | `Read-only smoke` ×2 (documented as read-only and non-blocking) |
 
-### 3a. Outstanding workflow, stated plainly
+### 3a. A pre-existing failure on `main`, inherited by this branch
+
+`main` advanced to `0c53bee` (PR #80 merged) after this branch was cut, which made PR #109
+`CONFLICTING`. Resolved in `734b76c`: a dry-run merge showed exactly one conflicted file,
+`docs/release/EVIDENCE-MANIFEST.sha256` — a generated hash list. Hand-merging hashes is how a
+manifest silently stops matching, so the base side was taken and the manifest regenerated from the
+merged tree (69/69 PASS). **PR #109 is `MERGEABLE` again.**
+
+After the merge, **one** job fails: `Migrations + schema on PostgreSQL 18`, step *Unit, integration
+and security suites against PostgreSQL 18*.
+
+**This is not caused by PR #109.** The same job fails on `main` at `0c53bee` in the **identical
+step** (run `43009145558`). It appeared on `main` with the pglite/Prisma remediation commits
+(`27cdb8e`, `08658d9`, `630ccbd`) merged after this branch was cut; `6fa2a94` on this branch passed
+that job before the merge. Local reproduction of the failing test gives
+`TypeError: Cannot read properties of undefined (reading 'datamodel')` from `Prisma.dmmf` in
+`tests/unit/autopilot-phase1-hardening.test.ts:493` — the documented consequence of an ungenerated
+Prisma Client, not a schema or migration defect. Migration steps in the same job **pass**:
+`PASS: ledger and schema expectations match`, `No difference detected`, `Database schema is up to date!`.
+
+**Deliberately not fixed here.** Repairing a `main` regression inside PR #109 would mix an unrelated
+fix into a cutover review and risks touching migration baselines. It belongs in its own PR off
+`main`.
+
+### 3b. Outstanding workflow, stated plainly
 
 The **Website Studio 2.0** workflow (`website-studio-2-0.yml`) did **not** produce a run for the
 current head: its `pull_request.paths` filter matched the commit that *edited the workflow file*
 (`271255e`), and no run has yet appeared for `8e0f4a3`. `workflow_dispatch` is refused by this
 session's token (`403 Resource not accessible by integration`), so the run cannot be forced from
-here. This commit touches `tests/unit/prompt-to-website-*.test.ts` and documentation and is
-expected to trigger it; **the result is unverified at the time of writing and is not claimed as a
-pass.** The last completed run of that workflow (`271255e`) failed in the deleted standalone job only.
+here, and the path filter has since been widened to include the journey's own wiring test
+(`6fb49c6`) — but no run had appeared for the current head by the time of this report.
+
+**Therefore: the Website Studio 2.0 workflow result for this head is NOT TESTED, not a pass.** The
+last completed run of that workflow (`271255e`) failed only in the standalone journey job that has
+since been deleted; its other steps passed.
 
 ---
 
@@ -250,6 +277,11 @@ Supporting evidence, not a summary impression:
 4. **Website Studio items 1–6 are unverified** — the journey step is wired but its run is
    outstanding (§3a), and it stubs the authenticated API.
 5. **18 of 24 findings need owner authorization** before anyone can close them.
+6. **One job fails, and it fails on `main` too** — `Migrations + schema on PostgreSQL 18` /
+   *Unit, integration and security suites*, reproduced from an ungenerated Prisma Client
+   (`Prisma.dmmf` undefined). Inherited, not introduced, but a red gate is a red gate until it is
+   fixed on its own branch.
+7. **Website Studio 2.0 has no result for this head** (§3b) — NOT TESTED.
 
 What *is* verified: Release Validation (including the aggregate gate) passes; Prisma validation is
 fixed without bypass; the schema, migrations, tenant-isolation, publication, POS and ERP suites pass;
