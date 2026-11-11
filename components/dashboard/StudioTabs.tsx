@@ -8,7 +8,6 @@ import {
   Coins,
   Eye,
   Gift,
-  Home,
   Image as ImageIcon,
   Megaphone,
   Package,
@@ -30,7 +29,6 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
   const base = `/dashboard/businesses/${businessId}`;
   const pathname = usePathname() || "";
   const tabs = [
-    { href: base, label: "Home", icon: Home, exact: true },
     { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
     { href: `${base}/items`, label: "Products & services", icon: Package },
     { href: `${base}/photos`, label: "Gallery", icon: ImageIcon },
