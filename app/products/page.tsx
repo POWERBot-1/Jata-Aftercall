@@ -15,6 +15,7 @@ import {
 } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
+import { MJENGO_PLAN_PRICE_KES, MJENGO_PLAN_DURATION_DAYS } from "@/lib/mjengo/entitlement";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
 export const dynamic = "force-dynamic";
@@ -121,6 +122,7 @@ export default async function ProductsPage() {
   // checkout links or grant entitlements.
   const mjengoPlan = await getMjengoOsPlan().catch(() => null);
   const mjengoRefusal = mjengoCheckoutRefusal(mjengoPlan);
+  const mjengoPlanValid = Boolean(mjengoPlan && Number(mjengoPlan.priceKES) === MJENGO_PLAN_PRICE_KES && Number(mjengoPlan.durationDays) === MJENGO_PLAN_DURATION_DAYS);
 
   const frontDeskTiers = FRONT_DESK_TIER_KEYS.map((key) => {
     const approved = FRONT_DESK_TIER_PRICING[key];
@@ -185,8 +187,8 @@ export default async function ProductsPage() {
         <div className="mk-grid">
           <article className="mk-card" data-product="MJENGO_OS">
             <h3>MJENGO OS</h3>
-            <p className="mk-card__price">KES 2,000 / 30 days</p>
-            <p>A dedicated business-management workspace for sales and orders, inventory, procurement, customers and credit, accounting, and operational reports.</p>
+            <p className="mk-card__price">{mjengoPlanValid && mjengoPlan ? `KES ${formatNumber(Number(mjengoPlan.priceKES))} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable"}</p>
+            <p>A dedicated workspace for sales and orders, inventory and stock movements, procurement and suppliers, customers and credit, accounting, workforce and operational reports.</p>
             <p><strong>{mjengoRefusal ? "Not currently available for purchase" : "Plan configured — access requires a verified MJENGO OS entitlement"}</strong></p>
             {mjengoRefusal ? <p className="mk-prose">{mjengoRefusal}</p> : null}
             <Link href="/products/mjengo-os">Explore MJENGO OS →</Link>

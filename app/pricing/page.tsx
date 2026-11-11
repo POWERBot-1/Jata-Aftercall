@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
-import { getMjengoOsPlan, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { FALLBACK_PLANS, getMjengoOsPlan, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
@@ -9,6 +9,7 @@ import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 import { MJENGO_PLAN_PRICE_KES, MJENGO_PLAN_DURATION_DAYS } from "@/lib/mjengo/entitlement";
+import { getSession } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Pricing and subscriptions — JATA AFTERCALL", description: "Transparent JATA AFTERCALL plan prices, payment, renewal, cancellation and refund information." };
 export const dynamic = "force-dynamic";
@@ -89,9 +90,14 @@ export default async function PricingPage() {
   // availability — even when a stored PlanConfig row is missing or Voice is gated.
   // Presentation only; nothing here changes checkout, entitlement or Paystack guards.
   const voiceReadiness = getVoiceReadiness();
+  const session = await getSession();
   const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
     frontDeskFamilyCard(key, stored, voiceReadiness.canSell),
   );
+  const mjengoPlan = await getMjengoOsPlan().catch(() => null);
+  const mjengoRefusal = mjengoCheckoutRefusal(mjengoPlan);
+  const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.key === "MJENGO_OS" && Number(mjengoPlan.priceKES) === MJENGO_PLAN_PRICE_KES && Number(mjengoPlan.durationDays) === MJENGO_PLAN_DURATION_DAYS);
+  const mjengoTerms = mjengoPlanValid && mjengoPlan ? `${formatNumber(Number(mjengoPlan.priceKES))} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable";
 
   return (
     <MarketingLayout
@@ -177,28 +183,19 @@ export default async function PricingPage() {
       </MarketingSection>
 
       <MarketingSection title="MJENGO OS — business management" id="mjengo-os" tone="cream">
-        <div className="mk-prose">
-          {mjengoPlan ? (
-            <>
-              <p><strong>MJENGO OS — KES {formatNumber(mjengoPlan.priceKES)} / {mjengoPlan.durationDays} days</strong></p>
-              <p>MJENGO OS is a separate business-management workspace with its own plan key, subscription checks and workspace routes. It covers sales, inventory, procurement, customers, credit, accounting and reports — with its own entitlement, independent from Business POS and JATA BOS PRO.</p>
-              <p>Purchasing MJENGO OS does not activate Business POS or JATA BOS PRO, and vice versa. Each product is paid for and activated in its own workspace after the server verifies the payment.</p>
-              <p><strong>{refusal ? "Not currently available for purchase" : "Plan configured; workspace access requires a verified MJENGO OS entitlement."}</strong></p>
-              {refusal ? (
-                <p>{refusal} The product information is visible, but checkout remains fail-closed until the production readiness gate is enabled.</p>
-              ) : (
-                <Link href="/products/mjengo-os" className="mk-btn">
-                  View MJENGO OS details →
-                </Link>
-              )}
-            </>
-          ) : (
-            <>
-              <p><strong>MJENGO OS — KES {formatNumber(MJENGO_PLAN_PRICE_KES)} / {MJENGO_PLAN_DURATION_DAYS} days</strong></p>
-              <p>MJENGO OS is a separate business-management workspace with its own plan key, subscription checks and workspace routes. It covers sales, inventory, procurement, customers, credit, accounting and reports — with its own entitlement, independent from Business POS and JATA BOS PRO.</p>
-              <p>The stored plan row is unavailable in this environment. Checkout remains fail-closed until the production readiness gate is enabled.</p>
-            </>
-          )}
+        <div className="mk-grid">
+          <article className="mk-card" data-product="MJENGO_OS">
+            <h3>MJENGO OS</h3>
+            <p className="mk-card__price">{mjengoTerms === "Pricing currently unavailable" ? mjengoTerms : `KES ${mjengoTerms}`}</p>
+            <p>MJENGO OS is a separate business-management workspace with its own plan key, subscription checks and workspace routes. It covers sales, inventory, procurement, customers, credit, accounting and reports — with its own entitlement, independent from Business POS and JATA BOS PRO.</p>
+            <p className="mk-card__kind">Separate product · per business · verified MJENGO OS entitlement required</p>
+            <p><strong>{mjengoRefusal ? "Not currently available for purchase" : "Plan configured — checkout remains subject to server-side business and payment verification"}</strong></p>
+            {mjengoRefusal ? <p className="mk-prose">{mjengoRefusal}</p> : null}
+            <Link href="/products/mjengo-os">Explore MJENGO OS →</Link>
+            <div className="mk-btn-row">
+              <Link href={session ? "/dashboard/subscription" : "/login"} className="mk-btn">Get MJENGO OS</Link>
+            </div>
+          </article>
         </div>
       </MarketingSection>
 

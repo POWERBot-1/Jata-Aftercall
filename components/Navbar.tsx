@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
  */
 const SECTIONS = [
   { href: "/products", label: "Products" },
+  { href: "/products/mjengo-os", label: "MJENGO OS" },
   { href: "#product", label: "Product" },
   { href: "#benefits", label: "Benefits" },
   { href: "#demo", label: "Demos" },
