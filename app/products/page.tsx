@@ -185,8 +185,8 @@ export default async function ProductsPage() {
         <div className="mk-grid">
           <article className="mk-card" data-product="MJENGO_OS">
             <h3>MJENGO OS</h3>
-            <p className="mk-card__price">KES 2,000 / 30 days</p>
-            <p>A dedicated business-management workspace for sales and orders, inventory, procurement, customers and credit, accounting, and operational reports.</p>
+            <p className="mk-card__price">{mjengoPlan ? `KES ${formatNumber(Number(mjengoPlan.priceKES))} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable"}</p>
+            <p>A dedicated workspace for sales and orders, inventory and stock movements, procurement and suppliers, customers and credit, accounting, workforce and operational reports.</p>
             <p><strong>{mjengoRefusal ? "Not currently available for purchase" : "Plan configured — access requires a verified MJENGO OS entitlement"}</strong></p>
             {mjengoRefusal ? <p className="mk-prose">{mjengoRefusal}</p> : null}
             <Link href="/products/mjengo-os">Explore MJENGO OS →</Link>
