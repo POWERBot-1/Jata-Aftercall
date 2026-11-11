@@ -86,8 +86,15 @@ export async function POST(request: Request) {
           data: { status: "UNPUBLISHED" },
         });
         if (site.count !== 1) return false;
-        const stillPublished = await tx.studioWebsite.count({ where: { businessId: business.id, status: "PUBLISHED" } });
-        if (stillPublished === 0) await tx.business.updateMany({ where: { id: business.id, status: business.status }, data: { isPublished: false } });
+        const [stillPublished, legacyExperience] = await Promise.all([
+          tx.studioWebsite.count({ where: { businessId: business.id, status: "PUBLISHED" } }),
+          tx.businessExperience.findUnique({ where: { businessId: business.id }, select: { status: true } }),
+        ]);
+        // Native OpenPage unpublish must not hide a still-published legacy Experience page.
+        // The legacy renderer remains the compatibility fallback until the owner also unpublishes it.
+        if (stillPublished === 0 && legacyExperience?.status !== "PUBLISHED") {
+          await tx.business.updateMany({ where: { id: business.id, status: business.status }, data: { isPublished: false } });
+        }
         return true;
       });
       if (!changed) return NextResponse.json({ error: "Publication state changed. Reload and try again.", code: "openpage_publish_conflict" }, { status: 409 });
