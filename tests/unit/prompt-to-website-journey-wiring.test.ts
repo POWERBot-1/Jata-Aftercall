@@ -61,6 +61,20 @@ describe("prompt-to-website journey declares schema-resolution placeholders", ()
   it("uses a placeholder, not a database, so nothing can connect", () => {
     // Any real-looking URL here would quietly imply server-side proof this job does not claim.
     expect(job).not.toContain("localhost:5432/jata_e2e");
-    expect(job).toContain("never connects");
+    expect(job).toContain("no migration command is invoked");
+  });
+
+  // The first version put DATABASE_URL in the JOB env. `scripts/build.sh` treats a non-empty
+  // DATABASE_URL as production and runs scripts/migrate.sh, so the build tried to migrate a database
+  // that does not exist. The variables must stay scoped to the steps that only parse the schema.
+  it("keeps DATABASE_URL out of the job env so build.sh cannot run a migration gate", () => {
+    const { load } = require("js-yaml") as typeof import("js-yaml");
+    const parsed = load(workflow) as { jobs: Record<string, { env?: Record<string, string>; steps: { name?: string; env?: Record<string, string> }[] }> };
+    const parsedJob = parsed.jobs["prompt-to-website-journey"];
+    expect(parsedJob.env?.DATABASE_URL).toBeUndefined();
+    // ...and the build step must not carry one either.
+    const buildStep = parsedJob.steps.find((step) => step.name?.includes("Production build"));
+    expect(buildStep).toBeDefined();
+    expect(buildStep?.env?.DATABASE_URL).toBeUndefined();
   });
 });

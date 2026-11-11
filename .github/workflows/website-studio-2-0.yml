@@ -150,12 +150,11 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       AUTH_SECRET: website-studio-journey-disposable-secret
-      # prisma/schema.prisma references env("DATABASE_URL") and env("DIRECT_URL"), and an
-      # unresolvable variable is a hard P1012 even for `prisma validate`. These are schema-resolution
-      # placeholders for the build: this job never connects and never touches a database. A real
-      # DATABASE_URL here would imply server-side proof this job deliberately does not claim.
-      DATABASE_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
-      DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
+      # NOTE deliberately: no DATABASE_URL / DIRECT_URL at job level.
+      # `scripts/build.sh` treats a non-empty DATABASE_URL as "production" and runs
+      # `scripts/migrate.sh` against it. A placeholder here therefore tries to MIGRATE a database that
+      # does not exist, which is how the first version of this job failed. The two schema-resolution
+      # variables are supplied per-step, only where Prisma needs them to parse the schema.
       STUDIO_BASE_URL: http://127.0.0.1:3100
       STUDIO_EVIDENCE_DIR: .cache/verification/studio-openpage
     steps:
@@ -167,6 +166,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Validate Prisma schema and generate the client
+        env:
+          # Schema resolution only: Prisma raises P1012 when these are unset. Nothing connects — the
+          # host is a loopback placeholder and no migration command is invoked in this job.
+          DATABASE_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
+          DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
         run: |
           set -o pipefail
           # Transport faults against the engine mirror are retried; a real schema
@@ -174,9 +178,17 @@ jobs:
           node scripts/ci/retry-prisma-engine.mjs -- npx prisma validate 2>&1 | tee /tmp/step-journey-validate.log
           node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate.log
       - name: Production build of the journey route
+        env:
+          # Generate-only placeholders. build.sh skips the migration gate when DATABASE_URL is empty
+          # and takes the "offline/preview" path, which is what we want: no database exists here.
+          # Prisma still needs the variables to resolve the datasource, so they are set to loopback.
+          DIRECT_URL: postgresql://journey_placeholder:journey_placeholder@127.0.0.1:5432/journey_placeholder?schema=public
         run: |
           set -o pipefail
-          npm run build 2>&1 | tee /tmp/step-journey-build.log
+          # The build is generated from the committed schema; the client was produced in the previous
+          # step, so no network fetch is expected here.
+          node scripts/ci/retry-prisma-engine.mjs -- npx prisma generate 2>&1 | tee /tmp/step-journey-generate2.log
+          NEXT_TELEMETRY_DISABLED=1 npx next build 2>&1 | tee /tmp/step-journey-build.log
       - name: Drive the prompt-to-website journey in a real browser
         run: |
           set -o pipefail
