@@ -80,35 +80,8 @@ describe.skipIf(!enabled)("procurement against real PostgreSQL", () => {
 
   afterAll(async () => {
     if (!client) return;
-    try {
-      const businesses = [ids.businessA, ids.businessB].filter(Boolean);
-      await client.erpGoodsReceiptLine.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpGoodsReceipt.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpPurchaseOrderLine.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpPurchaseOrder.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpSupplierBill.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpApprovalEvent.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpApprovalRequest.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpNotificationRead.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpNotification.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpJournalLine.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpJournal.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpIdempotencyRecord.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpPeriod.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpAccount.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpAuditEvent.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.erpSequence.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.posInventoryMovement.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.posInventoryItem.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.posProduct.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.posSupplier.deleteMany({ where: { businessId: { in: businesses } } });
-      await client.business.deleteMany({ where: { id: { in: businesses } } });
-      await client.user.deleteMany({ where: { id: { in: [ids.ownerA, ids.ownerB, ids.staffA, ids.managerA].filter(Boolean) } } });
-    } finally {
-      await client.$disconnect?.();
-    }
+    await client.$disconnect?.();
   }, 120_000);
-
   async function raiseOrder(overrides: Record<string, unknown> = {}) {
     return createPurchaseOrder(client, {
       businessId: ids.businessA,

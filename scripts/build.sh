@@ -23,17 +23,13 @@ else
 fi
 
 # Step 2: Prisma generate
-# When DATABASE_URL is configured, generate failure is a production build gate.
-# Do not continue into a stub client in that case.
-echo "[build] Running prisma generate..."
-if [ -n "${DATABASE_URL:-}" ]; then
-  echo "[build] DATABASE_URL detected — prisma generate failure fails the build"
-  npx prisma generate
-else
-  if ! npx prisma generate; then
-    echo "[build] prisma generate failed (offline) — continuing with fallback"
-  fi
-fi
+# Never continue with a stale, stub, or partially generated client. The wrapper supplies
+# loopback-only datasource placeholders when DATABASE_URL is absent and performs no DB I/O.
+echo "[build] Generating Prisma Client (fail-closed)..."
+bash scripts/lib/prisma-generate.sh
+
+# Verify the generated client can be loaded before Next.js compiles server bundles.
+node scripts/test/check-prisma-client.cjs
 
 # Step 3: Next.js build
 # `--webpack` is deliberate for the Next 16 stage: Turbopack (the 16 default) does not emit

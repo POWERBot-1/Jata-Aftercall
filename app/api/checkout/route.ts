@@ -10,6 +10,8 @@ import { INTERACTIVE_PLAN_KEY, assertInteractivePlanPricing } from "@/lib/experi
 import { POS_PLAN_KEY, assertPosPlanPricing } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey, assertAutopilotPlanPricing } from "@/lib/autopilot/entitlement";
 import { CHECKOUT_PENDING_WINDOW_MS, checkoutStatusUrl } from "@/lib/checkoutPolicy";
+import { MJENGO_PLAN_KEY } from "@/lib/mjengo/entitlement";
+import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 import { isFrontDeskTierKey, assertFrontDeskTierPricing, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 
@@ -148,6 +150,14 @@ export async function POST(req: Request) {
       if (!assertAutopilotPlanPricing(plan).ok) {
         return fail(500, "PLAN_PRICING_INVALID", "JATA Autopilot pricing configuration is invalid.");
       }
+    }
+    // MJENGO OS (KES 2,000 / 30 days) is only collectable when it can actually be activated.
+    // The refusal runs BEFORE initializeTransaction, so a disabled product or a mispriced plan
+    // never takes the customer's money.
+    if (plan.key === MJENGO_PLAN_KEY) {
+      await assertBusinessRole(businessId, session, "manage_billing");
+      const refusal = mjengoCheckoutRefusal(plan);
+      if (refusal) return fail(409, "MJENGO_CHECKOUT_REFUSED", refusal);
     }
     if (!user?.email) {
       return fail(400, "EMAIL_REQUIRED", "Your account needs a valid email before checkout.");

@@ -2,6 +2,8 @@ name: Full no-database test suite
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [arena/bc5b7fd6-jata-aftercall]
   workflow_dispatch:
 permissions:
   contents: read

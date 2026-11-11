@@ -287,7 +287,9 @@ export async function postJournalTx(tx: any, input: PostJournalInput): Promise<P
   }
 
   const journalNumber = await nextDocumentNumber(tx, businessId, "journal", input.reversalOfId ? "RJV" : "JV");
-  const journal = await tx.erpJournal.create({
+  // Lifecycle: DRAFT → POSTED atomically. Lines are inserted while DRAFT, then sealed.
+  // This allows DB triggers to block mutation of POSTED lines while permitting the single sealing update.
+  const draft = await tx.erpJournal.create({
     data: {
       businessId,
       branchId: input.branchId ?? null,
@@ -296,10 +298,8 @@ export async function postJournalTx(tx: any, input: PostJournalInput): Promise<P
       description: input.description.trim(),
       sourceType: input.sourceType ?? "MANUAL",
       sourceId: input.sourceId ?? null,
-      status: "POSTED",
+      status: "DRAFT",
       currencyCode: input.currencyCode ?? "KES",
-      postedAt: new Date(),
-      postedById: input.actorId ?? null,
       reversalOfId: input.reversalOfId ?? null,
       reversalReason: input.reversalReason ?? null,
       createdById: input.actorId ?? null,
@@ -310,7 +310,7 @@ export async function postJournalTx(tx: any, input: PostJournalInput): Promise<P
     await tx.erpJournalLine.create({
       data: {
         businessId,
-        journalId: journal.id,
+        journalId: draft.id,
         accountCode: line.accountCode,
         accountId: line.accountId,
         branchId: line.branchId ?? input.branchId ?? null,
@@ -320,6 +320,15 @@ export async function postJournalTx(tx: any, input: PostJournalInput): Promise<P
       },
     });
   }
+
+  const journal = await tx.erpJournal.update({
+    where: { id: draft.id },
+    data: {
+      status: "POSTED",
+      postedAt: new Date(),
+      postedById: input.actorId ?? null,
+    },
+  });
 
   const posted: PostedJournal = {
     id: journal.id,
