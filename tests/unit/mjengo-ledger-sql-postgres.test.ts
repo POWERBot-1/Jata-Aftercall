@@ -223,9 +223,24 @@ describe.skipIf(!available)("mjengo: ledger immutability on real PostgreSQL (was
   });
 });
 
-describe.skipIf(available)("mjengo: ledger immutability on real PostgreSQL (wasm)", () => {
-  it("is skipped: @electric-sql/pglite is not installed in this environment", () => {
-    // Recorded as NOT TESTED in the report; never reported as PASS.
-    expect(available).toBe(false);
+// The counterfactual branch above is skipped when pglite IS installed, and that is correct: there is
+// nothing to report when the real suite ran. It used to be a placeholder *test* asserting
+// `available === false`, which skipped once pglite became installable and made the release gate fail
+// with "a skipped test is not a passed test". A skip that documents a covered case is fine; a skip
+// that pretends to be a test is not.
+//
+// What must never regress is the converse: if pglite is missing, the real ledger suite is skipped and
+// the run must say so loudly rather than quietly passing. That is asserted below and always runs.
+describe("mjengo ledger suite availability is reported, never silently skipped", () => {
+  it("states which branch ran, so an absent engine cannot pass unnoticed", () => {
+    if (available) {
+      expect(available).toBe(true);
+    } else {
+      // No engine: fail rather than skip. The ledger immutability guarantees are financial
+      // safeguards, and a suite that cannot run them must block, not pass by omission.
+      throw new Error(
+        "@electric-sql/pglite is not installed, so the ledger immutability suite did not run. Install devDependencies before relying on this result.",
+      );
+    }
   });
 });

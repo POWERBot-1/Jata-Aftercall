@@ -272,6 +272,34 @@ SQL
   [ "$live" = "1" ] && [ "$live" = "$restored" ] && pass "restored ERP row counts match the live database" || fail "restored counts differ (live=$live restored=$restored)"
 
   # Drop in the documented order: children before parents, RESTRICT so a wrong order fails loudly.
+  #
+  # TWO schema objects make a plain DROP TABLE impossible, and neither is a dependency-ordering bug:
+  #
+  #   1. `20261127000001_ledger_immutability` installs a BEFORE DELETE row trigger
+  #      (`ErpJournal_delete_guard`) that raises restrict_violation for any POSTED/REVERSED journal.
+  #      Ordering cannot satisfy it: dropping the children first is precisely what leaves a journal
+  #      "still has lines" at the moment of the drop.
+  #   2. `ErpJournalIntegrity` is a VIEW over ErpJournal/ErpJournalLine, not a table, so it is absent
+  #      from the drop list and keeps the base table pinned even without the trigger.
+  #
+  # Both are financial safeguards that the rehearsal must remove deliberately, in the open. Removing a
+  # trigger does not bypass any CHECK/UNIQUE/FOREIGN KEY constraint: every remaining constraint is
+  # still enforced by the drops below, which is what keeps a wrong dependency order failing loudly.
+  # Prove the safeguards are actually present before removing them; otherwise this rehearsal could
+  # pass while asserting nothing about the ledger protections.
+  local guards
+  guards=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_trigger where tgname in ('ErpJournal_delete_guard','ErpJournal_immutable') and not tgisinternal")
+  [ "$guards" = "2" ] && pass "ledger immutability and delete guards present before rollback" || fail "expected 2 ledger guards, found $guards"
+  [ -n "$("$PSQL" "$DB_URL" -tAc "select 1 from pg_views where viewname = 'ErpJournalIntegrity'")" ] && pass "ErpJournalIntegrity integrity view present before rollback" || fail "ErpJournalIntegrity view missing before rollback"
+
+  if ! "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q \
+      -c 'DROP VIEW IF EXISTS "ErpJournalIntegrity";' \
+      -c 'DROP TRIGGER IF EXISTS "ErpJournal_delete_guard" ON "ErpJournal";' \
+      -c 'DROP TRIGGER IF EXISTS "ErpJournal_immutable" ON "ErpJournal";'; then
+    fail "could not remove the ledger guards and integrity view"
+    return
+  fi
+
   local tables=( ErpRequisitionLine ErpRequisition ErpGoodsReceiptLine ErpGoodsReceipt ErpPurchaseOrderLine ErpPurchaseOrder ErpApprovalEvent ErpApprovalRequest ErpNotificationRead ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
   local dropped=0 t
   for t in "${tables[@]}"; do
@@ -302,6 +330,11 @@ SQL
   fi
   [ "$(erp_table_count)" = "$ERP_TABLE_TOTAL" ] && pass "$ERP_TABLE_TOTAL ERP tables present after recovery" || fail "ERP table count after recovery is $(erp_table_count)"
   [ "$(scalar 'select count(*) from "Business" where id = '\''b_upgrade'\''')" = "1" ] && pass "existing business intact after recovery" || fail "existing business lost after recovery"
+  # The recovery path must restore the financial safeguards, not just the tables.
+  local guards_after
+  guards_after=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_trigger where tgname in ('ErpJournal_delete_guard','ErpJournal_immutable') and not tgisinternal")
+  [ "$guards_after" = "2" ] && pass "ledger guards restored after recovery" || fail "ledger guards missing after recovery ($guards_after of 2)"
+  [ -n "$("$PSQL" "$DB_URL" -tAc "select 1 from pg_views where viewname = 'ErpJournalIntegrity'")" ] && pass "ErpJournalIntegrity view restored after recovery" || fail "ErpJournalIntegrity view missing after recovery"
 
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true
   rm -f "$dump"
