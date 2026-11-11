@@ -30,7 +30,24 @@ if (!CHROME || !existsSync(CHROME)) {
   process.exit(2);
 }
 
-const BASE = (process.env.BASE_URL || "http://localhost:4100").replace(/\/$/, "");
+// A malformed BASE_URL must BLOCK (exit 2), never crash: an uncaught throw exits 1, which this
+// harness reserves for "a real check failed" and would read as a false Share-edge defect.
+// (Observed: an inherited BASE_URL of "/" from the test runner produced `new URL("")` -> exit 1.)
+function resolveBase() {
+  const raw = (process.env.BASE_URL || "http://localhost:4100").trim();
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" || !parsed.hostname) return null;
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return null;
+  }
+}
+const BASE = resolveBase();
+if (BASE === null) {
+  console.error("BLOCKED / NOT RUN: BASE_URL is not a usable http origin. No classic-bar evidence claimed.");
+  process.exit(2);
+}
 
 // An isolation gate in the spirit of scripts/motion/disposable-browser-evidence.mjs, so this check can
 // only ever measure the disposable harness — never a real deployment.

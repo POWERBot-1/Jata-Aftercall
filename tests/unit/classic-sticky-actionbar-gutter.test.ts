@@ -57,11 +57,17 @@ describe("classic sticky check refuses non-disposable targets", () => {
   const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
   const SCRIPT = "scripts/browser/classic-sticky-gutter.check.mjs";
   // Any existing executable satisfies the CHROME_PATH presence test; the gate runs before launch.
-  const run = (env: Record<string, string | undefined>) =>
+  // Start from a deterministic base: inherit the runner's env so NODE_ENV and PATH behave as usual,
+  // but clear every variable the gate inspects, so "not set" really means not set.
+  const base: NodeJS.ProcessEnv = { ...process.env };
+  // BASE_URL is cleared too: the test runner inherits a vite-injected BASE_URL of "/", which the
+  // script correctly rejects, and that rejection would mask the isolation gate under test.
+  for (const key of ["CI", "DATABASE_URL", "AUTH_SECRET", "MOTION_ISOLATED", "BASE_URL"]) delete base[key];
+  const run = (env: Record<string, string>) =>
     spawnSync(process.execPath, [SCRIPT], {
       encoding: "utf8",
       timeout: 30000,
-      env: { PATH: process.env.PATH, CHROME_PATH: process.execPath, ...env },
+      env: { ...base, CHROME_PATH: process.execPath, ...env },
     });
 
   it("blocks when CI is not set", () => {
@@ -78,5 +84,20 @@ describe("classic sticky check refuses non-disposable targets", () => {
   it("blocks when AUTH_SECRET is not the test secret", () => {
     const r = run({ CI: "1", DATABASE_URL: "postgresql://jata:jata@localhost:5432/jata_e2e?schema=public", AUTH_SECRET: "a-real-secret" });
     expect(r.status).toBe(2);
+  });
+});
+
+// A crash and a BLOCKED verdict must not be confused: an uncaught throw exits 1, which this harness
+// reserves for a genuine failed check. A malformed BASE_URL therefore has to exit 2.
+describe("classic sticky check fails closed on a malformed target", () => {
+  const { spawnSync } = require("node:child_process") as typeof import("node:child_process");
+  it("exits 2, not 1, when BASE_URL is not a usable origin", () => {
+    const r = spawnSync(process.execPath, ["scripts/browser/classic-sticky-gutter.check.mjs"], {
+      encoding: "utf8",
+      timeout: 30000,
+      env: { ...process.env, CHROME_PATH: process.execPath, BASE_URL: "/" } as NodeJS.ProcessEnv,
+    });
+    expect(r.status).toBe(2);
+    expect(`${r.stdout}${r.stderr}`).toContain("BASE_URL is not a usable http origin");
   });
 });
