@@ -6,7 +6,6 @@ import {
   BarChart3,
   CalendarCheck,
   Coins,
-  Eye,
   Gift,
   Image as ImageIcon,
   Megaphone,
@@ -14,7 +13,6 @@ import {
   QrCode,
   Receipt,
   Sparkles,
-  UploadCloud,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/ui";
@@ -42,8 +40,6 @@ export function StudioTabs({ businessId, capabilities }: { businessId: string; c
     { href: `${base}/loyalty`, label: "Loyalty", icon: Gift, exact: true },
     { href: `${base}/loyalty/points`, label: "Points", icon: Coins },
     { href: `${base}/qr`, label: "QR code", icon: QrCode },
-    { href: `${base}/preview`, label: "Preview", icon: Eye },
-    { href: `${base}#publish`, label: "Publish", icon: UploadCloud },
   ];
 
   return (
