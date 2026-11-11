@@ -3,6 +3,7 @@ import Link from "next/link";
 import { formatKES } from "@/lib/format";
 import { getMjengoOsPlan } from "@/lib/pricing";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
+import { MJENGO_PLAN_PRICE_KES, MJENGO_PLAN_DURATION_DAYS } from "@/lib/mjengo/entitlement";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
 
 export const metadata: Metadata = {
@@ -75,7 +76,7 @@ const problems = [
 export default async function MjengoOsProductPage() {
   const plan = await getMjengoOsPlan().catch(() => null);
   const refusal = mjengoCheckoutRefusal(plan);
-  const validPlan = Boolean(plan && plan.key === "MJENGO_OS" && Number(plan.priceKES) > 0 && Number(plan.durationDays) > 0);
+  const validPlan = Boolean(plan && plan.key === "MJENGO_OS" && Number(plan.priceKES) === MJENGO_PLAN_PRICE_KES && Number(plan.durationDays) === MJENGO_PLAN_DURATION_DAYS);
   const terms = validPlan && plan
     ? `${formatKES(Number(plan.priceKES))} / ${plan.durationDays} days`
     : "Pricing currently unavailable";
