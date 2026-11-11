@@ -1,0 +1,21 @@
+CREATE TABLE "OpenPageSiteDocument" (
+  "id" TEXT NOT NULL,
+  "websiteId" TEXT NOT NULL,
+  "draftJson" TEXT NOT NULL,
+  "draftVersion" INTEGER NOT NULL DEFAULT 1,
+  "publishedJson" TEXT,
+  "publishedVersion" INTEGER NOT NULL DEFAULT 0,
+  "publishedAt" TIMESTAMP(3),
+  "publishedById" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "OpenPageSiteDocument_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "OpenPageSiteDocument_websiteId_key" ON "OpenPageSiteDocument"("websiteId");
+CREATE INDEX "OpenPageSiteDocument_websiteId_updatedAt_idx" ON "OpenPageSiteDocument"("websiteId", "updatedAt");
+
+ALTER TABLE "OpenPageSiteDocument"
+ADD CONSTRAINT "OpenPageSiteDocument_websiteId_fkey"
+FOREIGN KEY ("websiteId") REFERENCES "StudioWebsite"("id")
+ON DELETE CASCADE ON UPDATE CASCADE;
