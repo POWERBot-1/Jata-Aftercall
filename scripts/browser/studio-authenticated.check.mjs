@@ -316,6 +316,20 @@ async function publishUI(page, fixture, expectedStatus) {
     `status=${response.status}, draftVersion=${current.draftVersion}, body=${detail}`);
   return response.body;
 }
+async function publishNativeOpenPageUI(page, fixture, action = "publish") {
+  const current = await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: fixture.studioWebsiteId } });
+  const response = await api(page, "/api/studio/openpage/publish", "POST", {
+    websiteId: fixture.studioWebsiteId,
+    expectedDraftVersion: current.draftVersion,
+    expectedPublishedVersion: current.publishedVersion,
+    action,
+  });
+  const detail = JSON.stringify(response.body ?? null).slice(0, 700);
+  check(`${fixture.category}: native OpenPage ${action} endpoint`, response.status === 200,
+    `status=${response.status}, draftVersion=${current.draftVersion}, publishedVersion=${current.publishedVersion}, body=${detail}`);
+  return response.body;
+}
+
 async function preview(page, fixture, marker) {
   const stored = await snapshot(fixture.id);
   const storedDraft = JSON.parse(stored.draftJson);
@@ -837,6 +851,38 @@ try {
   check("representative business types have distinct rendered information architectures (not palette/family labels)",
     archGroups.size === signatures.length,
     `distinct=${archGroups.size}/${signatures.length}; groups=${JSON.stringify([...archGroups.values()])}`);
+
+  // Exercise the actual native OpenPage publication lifecycle after legacy Experience compatibility
+  // has been verified. Unpublishing OpenPage must restore the still-published legacy fallback.
+  const legacyMarker = `QA first ${first.category} ${runId}`;
+  const nativeBefore = await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: first.studioWebsiteId } });
+  const nativePublished = await publishNativeOpenPageUI(first.ownerPage, first, "publish");
+  const nativeSnapshot = await prisma.openPageSitePublication.findUnique({
+    where: { websiteId_version: { websiteId: first.studioWebsiteId, version: nativePublished.version } },
+  });
+  const nativeAfterPublish = await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: first.studioWebsiteId } });
+  const nativeSiteAfterPublish = await prisma.studioWebsite.findUniqueOrThrow({ where: { id: first.studioWebsiteId } });
+  check("native OpenPage publication is an immutable exact-draft snapshot",
+    nativePublished.published === true && nativeAfterPublish.publishedJson === nativeBefore.draftJson &&
+      nativeAfterPublish.publishedVersion === 1 && nativeSnapshot?.snapshotJson === nativeBefore.draftJson &&
+      nativeSiteAfterPublish.status === "PUBLISHED");
+  await visitor.goto(`${origin}/b/${first.slug}`, { waitUntil: "networkidle0" });
+  const nativePublicState = await visitor.evaluate((marker) => ({
+    native: document.querySelector('[data-openpage-public="true"]') !== null,
+    marker: document.body.textContent.includes(marker),
+    legacy: document.querySelector(".eb-scope") !== null,
+  }), `QA OpenPage ${first.category} ${runId}`);
+  check("public business route renders the published native OpenPage document",
+    nativePublicState.native && nativePublicState.marker && !nativePublicState.legacy, JSON.stringify(nativePublicState));
+
+  const nativeUnpublished = await publishNativeOpenPageUI(first.ownerPage, first, "unpublish");
+  const legacyFallbackBusiness = await prisma.business.findUniqueOrThrow({ where: { id: first.id }, select: { isPublished: true } });
+  const legacyFallbackExperience = await prisma.businessExperience.findUniqueOrThrow({ where: { businessId: first.id }, select: { status: true } });
+  const nativeSiteAfterUnpublish = await prisma.studioWebsite.findUniqueOrThrow({ where: { id: first.studioWebsiteId } });
+  check("native OpenPage unpublish preserves the published legacy fallback",
+    nativeUnpublished.published === false && nativeSiteAfterUnpublish.status === "UNPUBLISHED" &&
+      legacyFallbackExperience.status === "PUBLISHED" && legacyFallbackBusiness.isPublished === true);
+  await publicState(visitor, first, legacyMarker, true);
 
   // Expiry must refuse publication without destroying drafts/history. No production lifecycle job is invoked.
   await prisma.subscription.update({ where: { businessId: first.id }, data: { status: "EXPIRED", expiresAt: new Date(Date.now() - 86400000 * 5), graceUntil: new Date(Date.now() - 86400000) } });
