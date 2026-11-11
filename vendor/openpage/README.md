@@ -1,0 +1,20 @@
+# OpenPage source pin
+
+- Upstream: https://github.com/buildingopen/openpage
+- Upstream commit: 9818eb43a88e01b23cb55752e19902d8285a853b
+- License: MIT (see ./LICENSE)
+- Imported source: ./src
+
+This directory is a source-preservation import, not yet a production-integrated editor.
+
+## Mandatory integration work before activation
+
+1. Replace the upstream `projectsStore` browser-local persistence with JATA server-side persistence scoped to the authenticated business tenant.
+2. Replace the upstream standalone React Router shell with a JATA Next.js route adapter; do not mount the upstream dashboard as a separate product.
+3. Replace upstream deploy-key publishing with JATA's authenticated publication/versioning pipeline. Never expose or accept a customer-supplied deployment credential as the authority for publishing.
+4. Adapt AI generation, media selection, and project settings to JATA services and authorization.
+5. Preserve the upstream JSON schema and block rendering; version and validate persisted documents.
+6. Keep existing JATA business, customer, payment, subscription, media, and published-site records intact. The Website Studio entitlement remains KES 999 / 30 days.
+7. Run tenant isolation, persistence, rendering, publish/rollback, accessibility, and browser acceptance tests before enabling the new editor in production.
+
+Do not import upstream API routes or deploy configuration into JATA without a separate security review. This source pin intentionally excludes upstream `api/`, root Vite configuration, and upstream package manifests.
