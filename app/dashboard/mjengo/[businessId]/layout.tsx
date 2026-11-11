@@ -14,6 +14,8 @@ import { requireMjengoAccess } from "@/lib/mjengo/access";
 import { MJENGO_MODULES, mjengoPath } from "@/lib/mjengo/navigation";
 import { mjengoSafeText } from "@/lib/mjengo/sanitize";
 import { formatKES } from "@/lib/format";
+import { getMjengoOsPlan } from "@/lib/pricing";
+import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 import prisma from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -33,18 +35,25 @@ export default async function MjengoLayout({
   const gate = await requireMjengoAccess(businessId, session);
 
   if (!gate.ok) {
-    // No child content is rendered when the gate refuses: the refusal is the whole response.
+    // A 402 is an authenticated, tenant-authorized business without a paid MJENGO entitlement.
+    // Resolve the real stored plan here: the previous link pointed back into this gated layout,
+    // making the purchase/settings screen unreachable for precisely the owners who needed it.
+    const checkoutPlan = gate.status === 402 ? await getMjengoOsPlan().catch(() => null) : null;
+    const checkoutRefusal = gate.status === 402 ? mjengoCheckoutRefusal(checkoutPlan) : null;
     return (
       <main className="mx-auto max-w-3xl p-8">
         <h1 className="text-2xl font-bold">MJENGO OS</h1>
         <p className="mt-2 text-red-600">{gate.error}</p>
-        {gate.status === 402 ? (
+        {gate.status === 402 && checkoutPlan && !checkoutRefusal ? (
           <Link
             className="mt-4 inline-block rounded-sm bg-black px-4 py-2 text-white"
-            href={mjengoPath(businessId, "/settings")}
+            href={`/checkout?businessId=${encodeURIComponent(businessId)}&planId=${encodeURIComponent(checkoutPlan.id)}`}
           >
-            Add MJENGO OS — KES 2,000/month
+            Add MJENGO OS — {formatKES(Number(checkoutPlan.priceKES))} / {checkoutPlan.durationDays} days
           </Link>
+        ) : null}
+        {gate.status === 402 && checkoutRefusal ? (
+          <p className="mt-3 text-sm text-muted-foreground">{checkoutRefusal}</p>
         ) : null}
         <p className="mt-4 text-sm text-muted-foreground">
           BUSINESS POS (KES 499) and MJENGO OS (KES 2,000) are separate products. Buying one never

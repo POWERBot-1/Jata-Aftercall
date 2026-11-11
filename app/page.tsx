@@ -13,6 +13,7 @@ import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTi
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
+import { MJENGO_PLAN_PRICE_KES, MJENGO_PLAN_DURATION_DAYS } from "@/lib/mjengo/entitlement";
 import { LandingIcon } from "@/components/landing/Icons";
 import { LANDING_STEPS, LANDING_DEMO_SLUGS, PLAN_BADGES, PLAN_ICONS, PLAN_INCLUDES, AUTOPILOT_PLAN_CARD, ERP_PRO_PLAN_CARD, POS_PLAN_CARD, buildLandingDemoCards, type LandingDemoRow } from "@/lib/landing";
 import { isVerifiedDemoRecord } from "@/lib/demoContent";
@@ -59,6 +60,8 @@ export default async function HomePage() {
   // without visiting /products first (customer-interface completion directive).
   const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS)
     .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE");
+  const mjengoPlan = storedPlans.find((plan) => plan.key === "MJENGO_OS") ?? null;
+  const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.priceKES === MJENGO_PLAN_PRICE_KES && mjengoPlan.durationDays === MJENGO_PLAN_DURATION_DAYS);
 
   // The four AI Front Desk 2.0 tiers, at the approved tier prices, with availability from
   // the same price-matched catalogue row and Voice provider gate /products uses. The grid
@@ -246,6 +249,24 @@ export default async function HomePage() {
                   See the complete product catalogue <span aria-hidden="true">→</span>
                 </Link>
               </p>
+            </div>
+
+            <div className="lp-front-desk" id="mjengo-os">
+              <p className="lp-kicker lp-kicker--light">Business management</p>
+              <h3 className="lp-h2 lp-h2--light">MJENGO OS</h3>
+              <p className="lp-lede lp-lede--light">
+                A dedicated workspace for business operations — sales, stock, procurement, customers,
+                accounting and reports. Separate from Business POS and JATA BOS PRO.
+              </p>
+              <div className="mk-grid">
+                <article className="mk-card" data-product="MJENGO_OS">
+                  <h3>MJENGO OS</h3>
+                  <p className="mk-card__price">{mjengoPlanValid && mjengoPlan ? `KES ${formatNumber(mjengoPlan.priceKES)} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable"}</p>
+                  <p>Explore projects and jobs, materials, procurement, sales, customers, workforce, accounting and reports.</p>
+                  <Link href="/products/mjengo-os">View MJENGO OS details →</Link>
+                  <Link href="/pricing#mjengo-plan">View plans →</Link>
+                </article>
+              </div>
             </div>
 
             <p className="lp-pricing__note">

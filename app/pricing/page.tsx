@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
-import { FALLBACK_PLANS, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { FALLBACK_PLANS, getMjengoOsPlan, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { AI_FRONT_DESK_VOICE_KEY, FRONT_DESK_TIER_KEYS } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { displayTierPricing, frontDeskFamilyCard } from "@/lib/productCatalogue";
 import { formatNumber } from "@/lib/format";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
+import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
+import { MJENGO_PLAN_PRICE_KES, MJENGO_PLAN_DURATION_DAYS } from "@/lib/mjengo/entitlement";
+import { getSession } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Pricing and subscriptions — JATA AFTERCALL", description: "Transparent JATA AFTERCALL plan prices, payment, renewal, cancellation and refund information." };
 export const dynamic = "force-dynamic";
@@ -22,6 +25,7 @@ const PLAN_SCOPE: Record<string, string> = {
   BUSINESS_POS: "Owner-only POS · per business",
   ERP_PRO: "JATA BOS PRO · per business",
   JATA_AUTOPILOT: "Owner-only Autopilot · per business",
+  MJENGO_OS: "MJENGO OS · per business",
 };
 
 /**
@@ -40,6 +44,7 @@ const PLAN_KIND: Record<string, string> = {
   BUSINESS_POS: "Separate product · purchased in the Business POS workspace",
   ERP_PRO: "Separate product · purchased in the ERP workspace",
   JATA_AUTOPILOT: "Separate product · purchased in the Autopilot workspace",
+  MJENGO_OS: "Separate product · purchased in the MJENGO OS workspace",
 };
 
 const PLAN_DESCRIPTIONS: Record<string, string> = {
@@ -53,6 +58,7 @@ const PLAN_DESCRIPTIONS: Record<string, string> = {
   BUSINESS_POS: "An owner-only point of sale — sales, stock, credit and reports — configured around how your business actually works. Separate from your page plan.",
   ERP_PRO: "JATA BOS PRO — Business Operating System Pro: accounting, invoicing, inventory, purchasing and business operations with supported messaging tools. Broader than the separate Business POS till, which covers counter sales only.",
   JATA_AUTOPILOT: "A supervised assistant that checks your business health and drafts offer and FAQ actions for your approval. The preview is free; live actions switch on after payment is confirmed.",
+  MJENGO_OS: "MJENGO OS — Business Management: sales, inventory, procurement, customers, credit, accounting and reports — a separate workspace with its own plan and entitlement, distinct from Business POS and JATA BOS PRO.",
 };
 
 const PLAN_ROUTE: Record<string, string> = {
@@ -66,6 +72,7 @@ const PLAN_ROUTE: Record<string, string> = {
   BUSINESS_POS: "/products/business-pos",
   ERP_PRO: "/products/erp-pro",
   JATA_AUTOPILOT: "/products/jata-autopilot",
+  MJENGO_OS: "/products/mjengo-os",
 };
 
 export default async function PricingPage() {
@@ -83,9 +90,14 @@ export default async function PricingPage() {
   // availability — even when a stored PlanConfig row is missing or Voice is gated.
   // Presentation only; nothing here changes checkout, entitlement or Paystack guards.
   const voiceReadiness = getVoiceReadiness();
+  const session = await getSession();
   const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
     frontDeskFamilyCard(key, stored, voiceReadiness.canSell),
   );
+  const mjengoPlan = await getMjengoOsPlan().catch(() => null);
+  const mjengoRefusal = mjengoCheckoutRefusal(mjengoPlan);
+  const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.key === "MJENGO_OS" && Number(mjengoPlan.priceKES) === MJENGO_PLAN_PRICE_KES && Number(mjengoPlan.durationDays) === MJENGO_PLAN_DURATION_DAYS);
+  const mjengoTerms = mjengoPlanValid && mjengoPlan ? `${formatNumber(Number(mjengoPlan.priceKES))} / ${mjengoPlan.durationDays} days` : "Pricing currently unavailable";
 
   return (
     <MarketingLayout
@@ -167,6 +179,23 @@ export default async function PricingPage() {
               </Link>
             </article>
           ))}
+        </div>
+      </MarketingSection>
+
+      <MarketingSection title="MJENGO OS — business management" id="mjengo-plan" tone="cream">
+        <div className="mk-grid">
+          <article className="mk-card" data-product="MJENGO_OS">
+            <h3>MJENGO OS</h3>
+            <p className="mk-card__price">{mjengoTerms === "Pricing currently unavailable" ? mjengoTerms : `KES ${mjengoTerms}`}</p>
+            <p>MJENGO OS is a separate business-management workspace with its own plan key, subscription checks and workspace routes. It covers sales, inventory, procurement, customers, credit, accounting and reports — with its own entitlement, independent from Business POS and JATA BOS PRO.</p>
+            <p className="mk-card__kind">Separate product · per business · verified MJENGO OS entitlement required</p>
+            <p><strong>{mjengoRefusal ? "Not currently available for purchase" : "Plan configured — checkout remains subject to server-side business and payment verification"}</strong></p>
+            {mjengoRefusal ? <p className="mk-prose">{mjengoRefusal}</p> : null}
+            <Link href="/products/mjengo-os">Explore MJENGO OS →</Link>
+            <div className="mk-btn-row">
+              <Link href={session ? "/dashboard/subscription" : "/login"} className="mk-btn">Get MJENGO OS</Link>
+            </div>
+          </article>
         </div>
       </MarketingSection>
 
