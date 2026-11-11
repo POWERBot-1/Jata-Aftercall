@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
-import { homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
+import { getMjengoOsPlan, homepagePlanCards, planDisplayName, type HomepagePlanCard } from "@/lib/pricing";
 import { formatNumber } from "@/lib/format";
 import { FRONT_DESK_TIER_PRICING, FRONT_DESK_TIER_KEYS, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
@@ -14,7 +14,6 @@ import {
   VOICE_SELLING_CONDITIONS,
 } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
-import { getMjengoOsPlan } from "@/lib/pricing";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
