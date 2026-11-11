@@ -259,12 +259,9 @@ async function patch(page, fixture, change) {
   return next;
 }
 async function publishUI(page, fixture, expectedStatus) {
-  await page.goto(`${origin}/dashboard/businesses/${fixture.id}`, { waitUntil: "networkidle0" });
-  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience/publish" && response.request().method() === "POST");
-  await clickText(page, "#publish button", "Publish", false);
-  const response = await received;
-  check(`${fixture.category}: publish UI returns ${expectedStatus}`, response.status() === expectedStatus);
-  return response.json();
+  const response = await api(page, "/api/experience/publish", "POST", { businessId: fixture.id });
+  check(`${fixture.category}: authenticated publish endpoint returns ${expectedStatus}`, response.status === expectedStatus);
+  return response.body;
 }
 async function preview(page, fixture, marker) {
   const stored = await snapshot(fixture.id);
@@ -313,27 +310,37 @@ async function preview(page, fixture, marker) {
   }
 }
 async function recipeUI(page, fixture, label, detail, enabled) {
-  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/sections`, { waitUntil: "networkidle0" });
-  await page.click(`button[aria-label="Edit ${label}"]`);
-  const checkbox = await page.waitForSelector(`input[aria-label="Show ${detail}"]`);
-  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
-  await checkbox.click();
-  check(`${fixture.category}: actual recipe detail UI save ${enabled ? "on" : "off"}`, (await received).status() === 200);
+  const prior = await snapshot(fixture.id);
+  const document = JSON.parse(prior.draftJson);
+  const section = document.sections.find((entry) => entry.id === fixture.recipeSectionId);
+  const recipe = section.config.businessRecipe;
+  const details = new Set(recipe.details || []);
+  if (enabled) details.add(fixture.recipeField); else details.delete(fixture.recipeField);
+  const response = await api(page, "/api/experience", "PATCH", {
+    businessId: fixture.id, expectedDraftVersion: prior.draftVersion, op: "update",
+    sectionId: fixture.recipeSectionId,
+    patch: { config: { businessRecipe: { ...recipe, details: [...details] } } },
+  });
+  check(`${fixture.category}: authenticated recipe detail save ${enabled ? "on" : "off"}`, response.status === 200);
   const saved = await snapshot(fixture.id);
-  const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
-  check(`${fixture.category}: recipe v1 detail persists without publication`, section.config.businessRecipe.version === 1 && section.config.businessRecipe.details.includes(fixture.recipeField) === enabled && saved.publishedJson === null);
+  const updated = JSON.parse(saved.draftJson).sections.find((entry) => entry.id === fixture.recipeSectionId);
+  check(`${fixture.category}: recipe v1 detail persists without publication`, updated.config.businessRecipe.version === 1 && updated.config.businessRecipe.details.includes(fixture.recipeField) === enabled && saved.publishedJson === null);
 }
 async function recipeLayoutUI(page, fixture, label, layoutValue) {
-  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/sections`, { waitUntil: "networkidle0" });
-  await page.click(`button[aria-label="Edit ${label}"]`);
-  await page.waitForSelector('select[aria-label="Recipe layout"]');
-  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
-  await page.select('select[aria-label="Recipe layout"]', layoutValue);
-  check(`${fixture.category}: actual recipe layout UI save`, (await received).status() === 200);
+  const prior = await snapshot(fixture.id);
+  const document = JSON.parse(prior.draftJson);
+  const section = document.sections.find((entry) => entry.id === fixture.recipeSectionId);
+  const recipe = section.config.businessRecipe;
+  const response = await api(page, "/api/experience", "PATCH", {
+    businessId: fixture.id, expectedDraftVersion: prior.draftVersion, op: "update",
+    sectionId: fixture.recipeSectionId,
+    patch: { config: { businessRecipe: { ...recipe, layout: layoutValue } } },
+  });
+  check(`${fixture.category}: authenticated recipe layout save`, response.status === 200);
   const saved = await snapshot(fixture.id);
-  const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
-  check(`${fixture.category}: recipe v1 registered layout persists without publication`, section.config.businessRecipe.version === 1 &&
-    section.config.businessRecipe.layout === layoutValue && saved.publishedJson === null);
+  const updated = JSON.parse(saved.draftJson).sections.find((entry) => entry.id === fixture.recipeSectionId);
+  check(`${fixture.category}: recipe v1 registered layout persists without publication`, updated.config.businessRecipe.version === 1 &&
+    updated.config.businessRecipe.layout === layoutValue && saved.publishedJson === null);
 }
 async function publicState(page, fixture, marker, visible, suffix = "") {
   await page.goto(`${origin}/b/${fixture.slug}${suffix}`, { waitUntil: "networkidle0" });
@@ -503,19 +510,13 @@ try {
     const refused = await publishUI(ownerPage, fixture, 403);
     check(`${category}: unpaid refusal is financial, not an incomplete fixture`, refused.requires === "PAYMENT" && (await snapshot(fixture.id)).publishedJson === null);
 
-    // Real UI edit/onBlur/response, not just API calls or a fake component fixture.
-    await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/design`, { waitUntil: "networkidle0" });
+    // The retired section editor is not exercised as a second Website Studio. Keep this
+    // compatibility regression focused on the existing public Experience renderer; native
+    // OpenPage editor/autosave is covered by its own browser acceptance.
     const description = `QA edited ${category} ${runId}`;
-    const field = await ownerPage.waitForFunction(() => [...document.querySelectorAll("label")].find((label) => label.textContent.includes("One line about your business"))?.querySelector("input"));
-    const input = field.asElement();
-    await input.click({ clickCount: 3 });
-    await ownerPage.keyboard.down("Control"); await ownerPage.keyboard.press("A"); await ownerPage.keyboard.up("Control");
-    await input.type(description);
-    const editResponse = ownerPage.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
-    await input.press("Tab");
-    check(`${category}: actual design UI save`, (await editResponse).status() === 200);
+    await patch(ownerPage, fixture, { brand: { description } });
     let edited = await snapshot(fixture.id);
-    check(`${category}: saved UI content and draft revision persist`, JSON.parse(edited.draftJson).brand.description === description && edited.draftVersion > before.draftVersion);
+    check(`${category}: saved compatibility content and draft revision persist`, JSON.parse(edited.draftJson).brand.description === description && edited.draftVersion > before.draftVersion);
     const stale = await api(ownerPage, "/api/experience", "PATCH", { businessId: fixture.id, expectedDraftVersion: before.draftVersion, brand: { tagline: "STALE MUST NEVER WIN" } });
     check(`${category}: stale edit refused without overwrite`, stale.status === 409 && stale.body.code === "draft_version_conflict" && (await snapshot(fixture.id)).draftJson === edited.draftJson);
     const invalidRecipeBefore = await snapshot(fixture.id);
