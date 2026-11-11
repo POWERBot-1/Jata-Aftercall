@@ -188,7 +188,19 @@ jobs:
             curl -sS -o /dev/null -w "http=%{http_code} exit=%{exitcode}\n" "$STUDIO_BASE_URL/dev/website-studio-preview" 2>&1 | tail -3 || true
             exit 1
           fi
+          set +e
           node scripts/browser/website-studio-openpage.check.mjs 2>&1 | tee /tmp/step-journey-browser.log
+          journey_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$journey_status" -ne 0 ]; then
+            # The check throws on its first failed assertion and prints only to stdout, which is
+            # unreachable from some review environments. Annotate the tail so a failure is
+            # diagnosable from the checks list, and fail with the script's own exit code.
+            echo "::error title=JOURNEY_CHECK_FAILED::$(tail -c 1200 /tmp/step-journey-browser.log | tr '\n' ' ' | sed 's/%/%25/g')"
+            echo "--- browser log ---"
+            tail -60 /tmp/step-journey-browser.log || true
+            exit "$journey_status"
+          fi
 
       - name: Upload prompt-to-website journey evidence (including the log)
         if: always()

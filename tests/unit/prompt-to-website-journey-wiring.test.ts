@@ -107,3 +107,14 @@ describe("journey server environment is compatible with the fixture route", () =
     expect(job).toContain("::error title=JOURNEY_SERVER_LOG::");
   });
 });
+
+// The check script throws on its first failed assertion and prints only to stdout. With job logs and
+// artifacts both unreachable from this review environment, a failure was undiagnosable without an
+// annotation, which cost several blind iterations.
+describe("journey failures are diagnosable from the checks list", () => {
+  it("annotates the browser log tail and preserves the script's exit code", () => {
+    expect(job).toContain("::error title=JOURNEY_CHECK_FAILED::");
+    expect(job).toContain('exit "$journey_status"');
+    expect(job).toContain("PIPESTATUS[0]");
+  });
+});
