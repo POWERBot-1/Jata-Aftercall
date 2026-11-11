@@ -40,6 +40,11 @@ const WIDTHS = [320, 360, 375, 390, 430];
 const DESKTOP = 1280;
 // A representative 4-action storefront: order, WhatsApp, call and directions.
 const FAMILIES = ["catalog", "marketplace"];
+// 8 px is the smallest gutter that still reads as a deliberate edge inset on a phone; below it a
+// rounded pill looks like it is falling off the screen even when nothing overflows.
+const MIN_EDGE_GUTTER = 8;
+// Sub-pixel rounding only: the left and right insets must agree to within a pixel.
+const SYMMETRY_TOLERANCE = 1;
 // Longer than any shipped label, and a German-length compound: if the bar cannot contain this it
 // cannot contain a translation either.
 const EXPANDED = "Benachrichtigungen";
@@ -117,7 +122,24 @@ const MEASURE = () => {
     .filter((a) => a.rect.top < contentTop - 0.5 || a.rect.bottom > contentBottom + 0.5)
     .map((a) => a.label);
   const outsideViewport = actions.filter((a) => a.rect.left < -0.5 || a.rect.right > innerWidth + 0.5).map((a) => a.label);
+  // Edge gutters (added with the Share-edge investigation): "inside the bar" and "inside the viewport"
+  // are not the same claim. A control can be legally inside the bar's content box and still sit hard
+  // against the screen edge, which reads as clipping even though nothing overflows.
+  const edgeGutters = actions.map((a) => ({
+    label: a.label,
+    toBarContentLeft: +(a.rect.left - contentLeft).toFixed(1),
+    toBarContentRight: +(contentRight - a.rect.right).toFixed(1),
+    toViewportLeft: +a.rect.left.toFixed(1),
+    toViewportRight: +(innerWidth - a.rect.right).toFixed(1),
+  }));
+  const first = actions[0], last = actions[actions.length - 1];
   return {
+    edgeGutters,
+    symmetry: first && last ? {
+      screen: +Math.abs(first.rect.left - (innerWidth - last.rect.right)).toFixed(1),
+      bar: +Math.abs((first.rect.left - contentLeft) - (contentRight - last.rect.right)).toFixed(1),
+    } : null,
+    innermostViewportGutter: actions.length ? +Math.min(...actions.map((a) => Math.min(a.rect.left, innerWidth - a.rect.right))).toFixed(1) : null,
     count: actions.length,
     actions,
     overlaps,
@@ -177,6 +199,21 @@ try {
     check(`${width}px: actions stay inside the bar`, m.outsideBar.length === 0 && m.outsideVertical.length === 0,
       [...m.outsideBar, ...m.outsideVertical].slice(0, 4).join(", ") || "none");
     check(`${width}px: no horizontal page overflow`, m.pageOverflowX <= 0, `pageOverflowX=${m.pageOverflowX}px`);
+
+    // The Share-edge question, measured rather than eyeballed: the outer controls must keep a real
+    // gutter to the screen edge, and the bar must sit symmetrically in the viewport. A downscaled
+    // screenshot cannot tell "tight but correct" from "clipped"; these numbers can.
+    check(`${width}px: outer controls keep a gutter to the screen edge`,
+      m.innermostViewportGutter === null ? false : m.innermostViewportGutter >= MIN_EDGE_GUTTER,
+      `innermost=${m.innermostViewportGutter}px (floor ${MIN_EDGE_GUTTER}px) | ${m.edgeGutters.map((g) => `${g.label}:L${g.toViewportLeft}/R${g.toViewportRight}`).join(", ")}`);
+    check(`${width}px: the action bar is horizontally symmetric on screen`,
+      m.symmetry !== null && m.symmetry.screen <= SYMMETRY_TOLERANCE,
+      m.symmetry ? `left/right delta=${m.symmetry.screen}px (bar delta=${m.symmetry.bar}px)` : "no actions");
+
+    // A compact machine-readable line so the numbers survive into the PR evidence comment: the
+    // workflow publishes only lines matching its summary pattern, and "PASS" alone cannot be
+    // inspected later. This is the durable answer to the Share-edge question.
+    console.log(`ACTIONBAR GUTTER ${width}px innermost=${m.innermostViewportGutter}px symmetry=${m.symmetry?.screen}px pageOverflowX=${m.pageOverflowX}px outermostRight=${m.edgeGutters.at(-1)?.toViewportRight}px`);
     check(`${width}px: every action is a 44px touch target`,
       m.actions.every((a) => a.rect.height >= 43.5), `heights=${m.actions.map((a) => a.rect.height.toFixed(0)).join(",")}`);
 

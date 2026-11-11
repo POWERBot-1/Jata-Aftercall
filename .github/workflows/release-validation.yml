@@ -91,8 +91,12 @@ jobs:
           # (validation_only@127.0.0.1). validate/generate only need the variable
           # to RESOLVE; nothing connects. If a future step in this job opens a
           # connection, it must set its own real URL — do not reuse this one.
-          bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-validate.log
-          bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
+          # Engine downloads from binaries.prisma.sh are the only known transient failure of this
+          # step, and they arrive as a network error from a perfectly valid schema. The wrapper
+          # retries transport faults only: a real schema error still fails on the first attempt,
+          # unchanged and unweakened (see scripts/ci/retry-prisma-engine.mjs).
+          node scripts/ci/retry-prisma-engine.mjs -- bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-validate.log
+          node scripts/ci/retry-prisma-engine.mjs -- bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
           # An engine download that silently fails leaves a client-less tree and
           # a typecheck full of spurious errors. Make that an explicit blocker.
           if [ ! -f node_modules/.prisma/client/index.js ]; then
@@ -108,9 +112,18 @@ jobs:
           npm run lint 2>&1 | tee /tmp/step-lint.log
 
       - name: Typecheck
+        env:
+          # A Prisma Client that failed to generate produces a tree full of phantom errors. They are
+          # all consequences of one missing artifact, so name that cause before listing symptoms.
+          PRISMA_CLIENT_PRESENT: ${{ hashFiles('node_modules/.prisma/client/index.js') != '' }}
         run: |
           set -o pipefail
           npm run typecheck 2>&1 | tee /tmp/step-typecheck.log
+          status=$?
+          if [ "$status" -ne 0 ] && [ "$PRISMA_CLIENT_PRESENT" != "true" ]; then
+            echo "::error::BLOCKED: typecheck failed with no generated Prisma Client — the errors are symptoms, not defects. Regenerate the client first (engine download)."
+          fi
+          exit "$status"
 
       - name: Dependency audit (production gate + full report)
         run: |

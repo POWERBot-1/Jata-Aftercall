@@ -43,6 +43,7 @@
     "test:browser:hydration-replay": "REPLAY_ASSERT=clean node scripts/browser/hydration-replay.check.mjs",
     "test:browser:hydration-replay:control": "REPLAY_EXPECT=reproduce node scripts/browser/hydration-replay.check.mjs",
     "test:browser:actionbar": "node scripts/browser/actionbar-layout.check.mjs",
+    "test:browser:classic-sticky": "node scripts/browser/classic-sticky-gutter.check.mjs",
     "diagnose:browser:replay-delay": "node scripts/browser/hydration-delayed-chunk.check.mjs",
     "test:browser:landing": "node scripts/browser/landing-showcase.check.mjs",
     "test:browser:autopilot-controls": "node scripts/browser/autopilot-controls.check.mjs",

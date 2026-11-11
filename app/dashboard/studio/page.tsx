@@ -143,8 +143,11 @@ export default async function StudioIndexPage() {
                   }
                   actions={
                     <>
-                      <Link className="jata-btn jata-btn-primary" href={`/dashboard/businesses/${business.id}`}>
-                        Open studio <ArrowRight size={15} aria-hidden="true" />
+                      <Link className="jata-btn jata-btn-primary" href={`/dashboard/businesses/${business.id}/studio`}>
+                        <Wand2 size={15} aria-hidden="true" /> Open AI Website Studio <ArrowRight size={15} aria-hidden="true" />
+                      </Link>
+                      <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}`}>
+                        Business home &amp; classic tools
                       </Link>
                       <Link className="jata-btn jata-btn-secondary" href={getBusinessUrl(business.slug)} target="_blank" rel="noopener noreferrer">
                         <ExternalLink size={15} aria-hidden="true" /> {business.isPublished ? "View site" : "Preview"}

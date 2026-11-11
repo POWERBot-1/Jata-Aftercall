@@ -48,19 +48,32 @@ jobs:
           PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-server.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS http://localhost:4100/health >/dev/null 2>&1 && exit 0; sleep 2; done
           cat /tmp/motion-server.log; exit 1
+      # Bounded on purpose. On 2026-11-11 this step sat in_progress for 37+ minutes on
+      # `sudo apt-get update` (an unbounded network call inside a 50-minute job): the capture steps
+      # never ran, so the run produced neither a pass nor a failure, only silence. Every network
+      # action here now has its own deadline and a named BLOCKED annotation.
       - name: Ensure video encoder is available on the disposable runner
+        timeout-minutes: 8
         run: |
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
+          if command -v ffmpeg >/dev/null 2>&1; then
+            ffmpeg -version | head -1
+            exit 0
           fi
-          ffmpeg -version
+          installed=0
+          timeout 240 sudo apt-get update -qq && timeout 240 sudo apt-get install -y -qq ffmpeg && installed=1
+          if [ "$installed" != "1" ] || ! command -v ffmpeg >/dev/null 2>&1; then
+            echo "::error title=MOTION_ENCODER_BLOCKED::ffmpeg is unavailable and could not be installed within the deadline. No recording evidence is claimed for this head."
+            exit 1
+          fi
+          ffmpeg -version | head -1
       - name: Capture real generated Studio family paths
+        timeout-minutes: 15
         if: ${{ !cancelled() }}
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
           node scripts/motion/generated-family-evidence.mjs
       - name: Capture actual storefront and preview motion events
+        timeout-minutes: 15
         if: ${{ !cancelled() }}
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
@@ -74,6 +87,7 @@ jobs:
           retention-days: 30
           if-no-files-found: error
       - name: Capture classic and AI preview evidence in Chrome
+        timeout-minutes: 15
         if: ${{ !cancelled() }}
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"

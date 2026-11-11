@@ -256,15 +256,41 @@ SQL
 
   # Restore into a scratch database that has the same schema, then compare row counts.
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" -c "CREATE DATABASE $SCRATCH_DB" || { fail "could not create scratch database"; return; }
+  # Replaying the committed migrations reproduces the schema on an empty database. Two things are
+  # made explicit here because a CI step may export them globally:
+  #   - `-v ON_ERROR_STOP=1` is passed per statement (already the default set at startup below), so a
+  #     single failing file cannot leave a half-built schema that looks restored;
+  #   - the scratch connection must not inherit a statement timeout shorter than the migration chain.
   local dir
   for dir in $(ls -1 "$MIGRATIONS_DIR" | grep -E '^[0-9]{14}_' | sort); do
-    "$PSQL" "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$dir/migration.sql" >/dev/null || { fail "scratch migration failed at $dir"; return; }
+    if ! "$PSQL" "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q \
+        -c 'SET statement_timeout = 0;' \
+        -f "$MIGRATIONS_DIR/$dir/migration.sql" >/tmp/erp-scratch-migrate.log 2>&1; then
+      fail "scratch migration failed at $dir"
+      # Print AND annotate the cause. Step logs are not always reachable to reviewers, and a bare
+      # filename is not a diagnosis.
+      echo "--- scratch migration output ($dir) ---"
+      tail -20 /tmp/erp-scratch-migrate.log || true
+      echo "::error title=ERP_SCRATCH_MIGRATION_FAILED::${dir}: $(tail -c 700 /tmp/erp-scratch-migrate.log | tr '\n' ' ' | sed 's/%/%25/g')"
+      return
+    fi
   done
+  pass "scratch database rebuilt from $(ls -1 "$MIGRATIONS_DIR" | grep -cE '^[0-9]{14}_') committed migrations"
   seed_baseline_rows "$SCRATCH_URL" || { fail "could not seed the scratch database"; return; }
-  if "$PG_RESTORE" --no-owner --no-privileges --data-only --dbname="$SCRATCH_URL" "$dump" >"${TMPDIR:-/tmp}/erp-restore.log" 2>&1; then
+  # `--disable-triggers` is required and is not a loosened assertion:
+  #   pg_restore loads tables in dump order, and the line guard's SELECT ... FROM "ErpJournal" ran
+  #   before the journal header existed -> "relation ErpJournal does not exist". Worse, replaying
+  #   child rows through the immutability guard tests the guard against an inconsistent intermediate
+  #   state rather than against the customer's data. The restore's purpose is to prove the EXPORT is
+  #   complete and reloadable; the guards are proven separately, on proper data, by the ledger suites
+  #   in tests/unit/mjengo-ledger-sql-postgres.test.ts (11 tests).
+  if "$PG_RESTORE" --no-owner --no-privileges --data-only --disable-triggers --dbname="$SCRATCH_URL" "$dump" >"${TMPDIR:-/tmp}/erp-restore.log" 2>&1; then
     pass "export restored into a scratch database"
   else
     fail "export could not be restored into a scratch database (see ${TMPDIR:-/tmp}/erp-restore.log)"
+    echo "--- pg_restore output ---"
+    tail -25 "${TMPDIR:-/tmp}/erp-restore.log" || true
+    echo "::error title=ERP_RESTORE_FAILED::$(tail -c 700 "${TMPDIR:-/tmp}/erp-restore.log" | tr '\n' ' ' | sed 's/%/%25/g')"
   fi
   local live restored
   live=$(scalar 'select count(*) from "ErpJournalLine"')
@@ -272,6 +298,41 @@ SQL
   [ "$live" = "1" ] && [ "$live" = "$restored" ] && pass "restored ERP row counts match the live database" || fail "restored counts differ (live=$live restored=$restored)"
 
   # Drop in the documented order: children before parents, RESTRICT so a wrong order fails loudly.
+  #
+  # TWO schema objects make a plain DROP TABLE impossible, and neither is a dependency-ordering bug:
+  #
+  #   1. `20261127000001_ledger_immutability` installs a BEFORE DELETE row trigger
+  #      (`ErpJournal_delete_guard`) that raises restrict_violation for any POSTED/REVERSED journal.
+  #      Ordering cannot satisfy it: dropping the children first is precisely what leaves a journal
+  #      "still has lines" at the moment of the drop.
+  #   2. `ErpJournalIntegrity` is a VIEW over ErpJournal/ErpJournalLine, not a table, so it is absent
+  #      from the drop list and keeps the base table pinned even without the trigger.
+  #
+  # Both are financial safeguards that the rehearsal must remove deliberately, in the open. Removing a
+  # trigger does not bypass any CHECK/UNIQUE/FOREIGN KEY constraint: every remaining constraint is
+  # still enforced by the drops below, which is what keeps a wrong dependency order failing loudly.
+  # Prove the safeguards are actually present before removing them; otherwise this rehearsal could
+  # pass while asserting nothing about the ledger protections.
+  local guards
+  guards=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_trigger where tgname in ('ErpJournal_delete_guard','ErpJournal_immutable','ErpJournalLine_immutable') and not tgisinternal")
+  [ "$guards" = "3" ] && pass "ledger immutability, line and delete guards present before rollback" || fail "expected 3 ledger guards, found $guards"
+  [ -n "$("$PSQL" "$DB_URL" -tAc "select 1 from pg_views where viewname = 'ErpJournalIntegrity'")" ] && pass "ErpJournalIntegrity integrity view present before rollback" || fail "ErpJournalIntegrity view missing before rollback"
+
+  # The FUNCTIONS must be dropped too, not just the triggers. 20261127000001 opens with a plain
+  # `CREATE FUNCTION` (no IF NOT EXISTS), so the recovery path re-runs that file and fails with
+  # "function ... already exists with same argument types" if the functions survived.
+  if ! "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q \
+      -c 'DROP VIEW IF EXISTS "ErpJournalIntegrity";' \
+      -c 'DROP TRIGGER IF EXISTS "ErpJournalLine_immutable" ON "ErpJournalLine";' \
+      -c 'DROP TRIGGER IF EXISTS "ErpJournal_delete_guard" ON "ErpJournal";' \
+      -c 'DROP TRIGGER IF EXISTS "ErpJournal_immutable" ON "ErpJournal";' \
+      -c 'DROP FUNCTION IF EXISTS erp_journal_line_guard();' \
+      -c 'DROP FUNCTION IF EXISTS erp_journal_guard();' \
+      -c 'DROP FUNCTION IF EXISTS erp_journal_delete_guard();'; then
+    fail "could not remove the ledger guards and integrity view"
+    return
+  fi
+
   local tables=( ErpRequisitionLine ErpRequisition ErpGoodsReceiptLine ErpGoodsReceipt ErpPurchaseOrderLine ErpPurchaseOrder ErpApprovalEvent ErpApprovalRequest ErpNotificationRead ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
   local dropped=0 t
   for t in "${tables[@]}"; do
@@ -290,10 +351,30 @@ SQL
   [ "$(scalar 'select count(*) from "PosCategoryImage" where id = '\''photo_rollback'\''')" = "1" ] && pass "POS category image survived ERP rollback" || fail "POS category image was lost during ERP rollback"
   [ "$(scalar 'select count(*) from "PosCategory" where id = '\''category_rollback'\''')" = "1" ] && pass "POS category survived ERP rollback" || fail "POS category was lost during ERP rollback"
 
-  # Recovery: re-apply the ERP migration on the rolled-back database.
+  # Recovery: re-apply the ERP migrations on the rolled-back database, then the ledger migrations that
+  # own the guards and the integrity view removed above. Without the latter the recovery would restore
+  # tables but leave the financial safeguards off, which is exactly the state that must never exist.
+  # The trigger bodies protect DRAFT journals by design: a DRAFT journal accepts new lines and may
+  # be posted (verified on PostgreSQL). A POSTED/REVERSED journal accepts nothing, so replaying the
+  # guards over one would abort the recovery. The rehearsal therefore asserts the precondition it
+  # relies on instead of assuming it: if a sealed journal is present the recovery FAILS loudly and
+  # says why, rather than silently skipping the guards.
+  local sealed
+  sealed=$("$PSQL" "$DB_URL" -tAc "select count(*) from \"ErpJournal\" where status in ('POSTED','REVERSED')")
+  [ "${sealed:-0}" = "0" ] \
+    && pass "recovery precondition: no sealed journals in the fixture (guards can be re-installed)" \
+    || fail "recovery precondition violated: $sealed sealed journals present; the guard replay would abort"
+
   local recovered=1
-  for migration in "${ERP_MIGRATIONS[@]}"; do
-    "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$MIGRATIONS_DIR/$migration/migration.sql" >/dev/null 2>&1 || recovered=0
+  for migration in "${ERP_MIGRATIONS[@]}" "20261127000001_ledger_immutability" "20261127000002_ledger_line_integrity"; do
+    if ! "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q\
+        -c 'SET statement_timeout = 0;'\
+        -f "$MIGRATIONS_DIR/$migration/migration.sql" >/tmp/erp-recovery.log 2>&1; then
+      recovered=0
+      echo "--- recovery migration failed ($migration) ---"
+      tail -20 /tmp/erp-recovery.log || true
+      echo "::error title=ERP_RECOVERY_FAILED::${migration}: $(tail -c 700 /tmp/erp-recovery.log | tr '\n' ' ' | sed 's/%/%25/g')"
+    fi
   done
   if [ "$recovered" = "1" ]; then
     pass "ERP migrations re-applied after rollback (recovery path)"
@@ -302,6 +383,14 @@ SQL
   fi
   [ "$(erp_table_count)" = "$ERP_TABLE_TOTAL" ] && pass "$ERP_TABLE_TOTAL ERP tables present after recovery" || fail "ERP table count after recovery is $(erp_table_count)"
   [ "$(scalar 'select count(*) from "Business" where id = '\''b_upgrade'\''')" = "1" ] && pass "existing business intact after recovery" || fail "existing business lost after recovery"
+  # The recovery path must restore the financial safeguards, not just the tables.
+  local guards_after
+  guards_after=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_trigger where tgname in ('ErpJournal_delete_guard','ErpJournal_immutable','ErpJournalLine_immutable') and not tgisinternal")
+  [ "$guards_after" = "3" ] && pass "ledger guards restored after recovery" || fail "ledger guards missing after recovery ($guards_after of 3)"
+  [ -n "$("$PSQL" "$DB_URL" -tAc "select 1 from pg_views where viewname = 'ErpJournalIntegrity'")" ] && pass "ErpJournalIntegrity view restored after recovery" || fail "ErpJournalIntegrity view missing after recovery"
+  local line_fk
+  line_fk=$("$PSQL" "$DB_URL" -tAc "select count(*) from pg_constraint where contype = 'f' and conrelid = '\"ErpJournalLine\"'::regclass and confrelid = '\"ErpJournal\"'::regclass")
+  [ "${line_fk:-0}" -ge 1 ] && pass "ErpJournalLine -> ErpJournal reference restored after recovery" || fail "journal line reference missing after recovery"
 
   "$PSQL" "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SCRATCH_DB" >/dev/null 2>&1 || true
   rm -f "$dump"

@@ -91,11 +91,16 @@ jobs:
           console.log('Full-security release acceptance stays OPEN while any finding remains; not provider/device/engine proof.');
           JS
 
+      # `validate` stays direct so a real schema error fails on the first attempt with Prisma's own
+      # message. Only `generate` goes through the transport-retry wrapper (the same one Release
+      # Validation uses): on run 43071116070 generate's engine download hit a transport fault, the
+      # client stayed ungenerated, and `tsc --noEmit` then aborted this step -- which skipped all 15
+      # database-backed journeys below it. P1012 and parse errors are NOT retried by that wrapper.
       - name: Generate Prisma client
         run: |
           set -o pipefail
           bash scripts/lib/prisma-cli.sh validate 2>&1 | tee /tmp/step-schema-validate.log
-          bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
+          node scripts/ci/retry-prisma-engine.mjs -- bash scripts/lib/prisma-generate.sh 2>&1 | tee /tmp/step-generate.log
 
       - name: Lint and TypeScript
         run: |
@@ -361,7 +366,14 @@ jobs:
           npm run test:browser:immersive 2>&1 | tee /tmp/step-immersive-browser.log
           npm run test:browser:layout 2>&1 | tee /tmp/step-layout-browser.log
           # DEF-1 (§M.4): quick-action-bar labels must stay inside their own controls at 320-430px.
-          npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log
+          # A silent non-zero exit here used to be invisible in the failure comment: the summary
+          # section did not list these logs. Annotate, then fail loudly.
+          npm run test:browser:actionbar 2>&1 | tee /tmp/step-actionbar-browser.log || {
+            echo "::error::test:browser:actionbar failed (see Quick-action-bar section)"; exit 1; }
+          # The CLASSIC page's sticky contact bar (the element the 320x568 capture actually showed),
+          # measured at deviceScaleFactor 2 so the Share-edge gutter is a number, not a guess.
+          npm run test:browser:classic-sticky 2>&1 | tee /tmp/step-classic-sticky-browser.log || {
+            echo "::error::test:browser:classic-sticky failed or was BLOCKED (exit 2) — see Classic sticky bar section"; exit 1; }
           npm run test:browser:families 2>&1 | tee /tmp/step-family-browser.log
           npm run test:browser:media-local 2>&1 | tee /tmp/step-media-local-browser.log
 
@@ -387,7 +399,7 @@ jobs:
             const summaries = (file) => {
               try {
                 const text = fs.readFileSync(file, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
-                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$/gm) || []).join('\n').trim() || '(no summary captured)';
+                return (text.match(/^\s*(Test Files|Tests)\s+.+$|^\d+ passed, \d+ failed, 0 skipped.*$|^HYDRATION RACE RESULT .+$|^HYDRATION SAMPLE .+$|^M418E .+$|^M418 GATE .+$|^M418 DIAG .+$|^HYDRATION SAMPLES .+$|^M418 SRV .+$|^M418 SRVOFF .+$|^M418 EXPECTED .+$|^browser-side runtime: .+$|^(microtask|timeout-0|resolved-before|late-50ms) +reproducing loads .+$|^(PASS|FAIL|BLOCKED) ?\(?.*$|^ACTIONBAR GUTTER .+$|^CLASSIC STICKY .+$/gm) || []).join('\n').trim() || '(no summary captured)';
               } catch { return '(no output captured)'; }
             };
             const sections = [
@@ -403,6 +415,8 @@ jobs:
               ['Actual Motion browser', '/tmp/step-motion-browser.log'],
               ['Immersive browser regression', '/tmp/step-immersive-browser.log'],
               ['Responsive layout regression', '/tmp/step-layout-browser.log'],
+              ['Quick-action-bar containment and edge gutters (storefront .eb-actionbar)', '/tmp/step-actionbar-browser.log'],
+              ['Classic sticky contact bar edge gutter at native device scale (Share-edge question)', '/tmp/step-classic-sticky-browser.log'],
               ['Registered family geometry/SSR/touch browser', '/tmp/step-family-browser.log'],
               ['Local raster pixels (provider/persistence BLOCKED)', '/tmp/step-media-local-browser.log'],
             ].map(([label, file]) => `### ${label}\n\n\`\`\`\n${summaries(file)}\n\`\`\``).join('\n\n');
@@ -439,7 +453,7 @@ jobs:
               '/tmp/step-full-suite.log', '/tmp/step-authenticated-browser.log', '/tmp/step-control-denial.log', '/tmp/step-hydration-browser.log',
               '/tmp/step-replay-hydration.log',  '/tmp/step-pos-journey.log', '/tmp/step-journey.log',
               '/tmp/step-motion-browser.log', '/tmp/step-immersive-browser.log', '/tmp/step-layout-browser.log',
-              '/tmp/step-actionbar-browser.log',
+              '/tmp/step-actionbar-browser.log', '/tmp/step-classic-sticky-browser.log',
               '/tmp/step-family-browser.log', '/tmp/step-media-local-browser.log', '/tmp/step-studio-smoke.log',
             ];
             const signatureLines = [];
@@ -475,6 +489,8 @@ jobs:
               ['Motion browser', '/tmp/step-motion-browser.log', 4000],
               ['Immersive browser', '/tmp/step-immersive-browser.log', 2000],
               ['Responsive browser', '/tmp/step-layout-browser.log', 1000],
+              ['Quick-action-bar / classic sticky bar', '/tmp/step-actionbar-browser.log', 2500],
+              ['Classic sticky bar (native device scale)', '/tmp/step-classic-sticky-browser.log', 2500],
               ['Family browser', '/tmp/step-family-browser.log', 2500],
               ['Local raster pixels', '/tmp/step-media-local-browser.log', 1500],
               ['Local browser server', '/tmp/step-browser-server.log', 1000],

@@ -103,7 +103,10 @@ export default async function StudioHomePage({ params }: Props) {
         photo={photoForCategory(business.category)}
         actions={
           <>
-            <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="ws-btn-amber">
+            <Link href={`/dashboard/businesses/${business.id}/studio`} className="ws-btn-amber">
+              <Wand2 size={16} aria-hidden="true" /> AI Website Studio
+            </Link>
+            <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="ws-btn-outline">
               <ExternalLink size={16} aria-hidden="true" /> {business.isPublished ? "View live site" : "Preview site"}
             </a>
             <Link href={`/dashboard/businesses/${business.id}/preview`} className="ws-btn-outline">

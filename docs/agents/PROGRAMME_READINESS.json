@@ -1172,5 +1172,22 @@
   "sourceCommit": "0dd7ad2ee402a93f29bc23d1e2606d132f3bcabb",
   "currentAssessmentSourceSha": "0dd7ad2ee402a93f29bc23d1e2606d132f3bcabb",
   "currentAssessmentStatus": "PASS"
+ },
+ "RELEASE-004": {
+  "status": "PASS",
+  "acceptance": "The historical Website Studio 2.0 release outcome is recorded as VERIFIED in append-only register section 046, with the supporting production release acceptance record identifying the candidate, merge commit, deployment and official-domain verification. This records that historical release outcome only; it does not assert that this PR is ready or authorize a new merge or deployment.",
+  "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §046 (RELEASE-004)",
+  "implementationLocation": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §046; docs/release/WEBSITE-STUDIO-2-0-PRODUCTION-RELEASE-ACCEPTANCE.md; docs/release/EVIDENCE-MANIFEST.sha256; scripts/ci/verify-evidence-manifest.mjs.",
+  "verificationMethod": "Cross-reference the append-only RELEASE-004 entry with its named acceptance artifact and the committed evidence manifest. The manifest verifier is the documented integrity check; this readiness row records the historical release evidence and does not re-run or extend production verification.",
+  "testResult": "PASS — RELEASE-004 is present in the authoritative append-only instruction register and its named production acceptance artifact is present in the repository and listed in the evidence manifest. The acceptance artifact records the historical candidate, merge commit, deployment identifier and official-domain checks. No current production state or readiness of PR #109 is inferred.",
+  "evidence": [
+   "docs/ADMIN_BUILDING_INSTRUCTIONS.md",
+   "docs/release/WEBSITE-STUDIO-2-0-PRODUCTION-RELEASE-ACCEPTANCE.md",
+   "docs/release/EVIDENCE-MANIFEST.sha256",
+   "scripts/ci/verify-evidence-manifest.mjs"
+  ],
+  "assessmentReference": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §046",
+  "currentAssessmentStatus": "PASS",
+  "scopeNote": "Historical Website Studio 2.0 release outcome only. Does not resolve the 24 open programme requirements, authorize PR #109 merge, or authorize a new production deployment."
  }
 }
