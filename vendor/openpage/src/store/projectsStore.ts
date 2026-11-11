@@ -106,4 +106,4 @@ export const useProjectsStore = create<ProjectsState>()((set) => ({
               : p
           ),
         })),
-    })
+    }))
