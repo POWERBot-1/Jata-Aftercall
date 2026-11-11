@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Monitor,
   Tablet,
@@ -159,7 +158,6 @@ function PageTab({ page, isActive, onClick, onRename, onDelete, canDelete }: {
 }
 
 export function CanvasToolbar() {
-  const navigate = useNavigate()
   const { viewport, setViewport, toggleJsonDrawer, jsonDrawerOpen, toggleHistory, togglePreview, toggleShortcutsModal, previewMode, activeProjectId } = useEditorStore()
   const { undo, redo, canUndo, canRedo } = useConfigStore()
   const undoStack = useConfigStore((s) => s.undoStack)
@@ -199,7 +197,7 @@ export function CanvasToolbar() {
       <div className="flex items-center gap-1.5 text-xs text-text-3 shrink-0">
         <span
           className="cursor-pointer hover:text-text-1 transition-colors"
-          onClick={() => navigate('/')}
+          onClick={() => window.location.assign('/dashboard')}
         >
           Projects
         </span>
