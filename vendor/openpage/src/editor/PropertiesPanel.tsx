@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, Code } from 'lucide-react'
-import type { BlockConfig, BlockType } from '@/blocks/types'
-import { useConfigStore } from '@/store/configStore'
+import type { BlockConfig, BlockType } from '@openpage/blocks/types'
+import { useConfigStore } from '@openpage/store/configStore'
 
 interface FieldDef {
   key: string

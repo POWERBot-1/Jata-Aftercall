@@ -1,5 +1,5 @@
-import type { SiteConfig, BlockConfig } from '@/blocks/types'
-import { resolveTheme } from '@/lib/theme-presets'
+import type { SiteConfig, BlockConfig } from '@openpage/blocks/types'
+import { resolveTheme } from '@openpage/lib/theme-presets'
 
 export interface ExportSiteSettings {
   siteName?: string

@@ -1,4 +1,4 @@
-import type { ThemeConfig } from '@/blocks/types'
+import type { ThemeConfig } from '@openpage/blocks/types'
 
 export const defaultTheme: ThemeConfig = {
   bg0: '#09090b',

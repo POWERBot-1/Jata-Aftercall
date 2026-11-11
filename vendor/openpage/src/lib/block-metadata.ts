@@ -1,4 +1,4 @@
-import type { BlockType } from '@/blocks/types'
+import type { BlockType } from '@openpage/blocks/types'
 
 export interface BlockMeta {
   type: BlockType

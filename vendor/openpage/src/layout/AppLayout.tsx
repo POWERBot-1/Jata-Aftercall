@@ -1,7 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { TopNav } from './TopNav'
 import { Toaster } from 'sonner'
-import { ShortcutsModal } from '@/editor/ShortcutsModal'
+import { ShortcutsModal } from '@openpage/editor/ShortcutsModal'
 
 export function AppLayout() {
   const location = useLocation()

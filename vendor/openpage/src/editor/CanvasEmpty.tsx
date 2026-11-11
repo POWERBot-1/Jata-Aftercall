@@ -1,9 +1,9 @@
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { useConfigStore } from '@/store/configStore'
-import { useEditorStore } from '@/store/editorStore'
-import { blockMetadata } from '@/lib/block-metadata'
-import type { BlockConfig } from '@/blocks/types'
+import { useConfigStore } from '@openpage/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { blockMetadata } from '@openpage/lib/block-metadata'
+import type { BlockConfig } from '@openpage/blocks/types'
 
 export function CanvasEmpty() {
   const addBlock = useConfigStore((s) => s.addBlock)

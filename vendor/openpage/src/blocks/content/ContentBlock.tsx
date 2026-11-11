@@ -1,4 +1,4 @@
-import { renderMarkdown } from '@/lib/markdown'
+import { renderMarkdown } from '@openpage/lib/markdown'
 import type { BlockConfig } from '../types'
 
 export function ContentBlock({ block }: { block: BlockConfig }) {

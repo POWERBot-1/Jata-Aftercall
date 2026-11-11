@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { useConfigStore } from '@/store/configStore'
-import { useEditorStore } from '@/store/editorStore'
+import { useConfigStore } from '@openpage/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
 import { CanvasEmpty } from './CanvasEmpty'
-import { BlockWrapper } from '@/blocks/BlockWrapper'
-import { RenderBlock } from '@/blocks/registry'
-import { resolveTheme, themeToCSS } from '@/lib/theme-presets'
-import { useGoogleFonts } from '@/lib/useGoogleFonts'
+import { BlockWrapper } from '@openpage/blocks/BlockWrapper'
+import { RenderBlock } from '@openpage/blocks/registry'
+import { resolveTheme, themeToCSS } from '@openpage/lib/theme-presets'
+import { useGoogleFonts } from '@openpage/lib/useGoogleFonts'
 
 export function Canvas() {
   const blocks = useConfigStore((s) => {

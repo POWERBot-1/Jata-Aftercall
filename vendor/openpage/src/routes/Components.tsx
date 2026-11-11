@@ -2,12 +2,12 @@ import { useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Plus, Code, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import { blockMetadata, categories } from '@/lib/block-metadata'
-import { RenderBlock } from '@/blocks/registry'
-import { useConfigStore } from '@/store/configStore'
-import { useEditorStore } from '@/store/editorStore'
-import { resolveTheme, themeToCSS } from '@/lib/theme-presets'
-import type { BlockConfig } from '@/blocks/types'
+import { blockMetadata, categories } from '@openpage/lib/block-metadata'
+import { RenderBlock } from '@openpage/blocks/registry'
+import { useConfigStore } from '@openpage/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { resolveTheme, themeToCSS } from '@openpage/lib/theme-presets'
+import type { BlockConfig } from '@openpage/blocks/types'
 
 let componentBlockIdSeq = 0
 

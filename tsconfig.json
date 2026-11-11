@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@openpage/*": [
+        "./vendor/openpage/src/*"
       ]
     },
     "baseUrl": ".",

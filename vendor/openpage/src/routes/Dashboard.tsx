@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Search, Sparkles, Trash2, FolderOpen, Copy, Pencil, Layers, Briefcase, UtensilsCrossed, Building2, BookOpen } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import { useProjectsStore, type Project } from '@/store/projectsStore'
-import { useConfigStore, defaultConfig } from '@/store/configStore'
-import { useEditorStore } from '@/store/editorStore'
-import { hexToRgb } from '@/lib/theme-presets'
-import { templateMeta, buildTemplate } from '@/lib/templates'
+import { useProjectsStore, type Project } from '@openpage/store/projectsStore'
+import { useConfigStore, defaultConfig } from '@openpage/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { hexToRgb } from '@openpage/lib/theme-presets'
+import { templateMeta, buildTemplate } from '@openpage/lib/templates'
 
 const templateIcons: Record<string, typeof Briefcase> = {
   Briefcase, UtensilsCrossed, Building2, BookOpen,

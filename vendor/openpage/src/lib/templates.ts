@@ -1,4 +1,4 @@
-import type { SiteConfig } from '@/blocks/types'
+import type { SiteConfig } from '@openpage/blocks/types'
 import { themePresets } from './theme-presets'
 
 interface Template {

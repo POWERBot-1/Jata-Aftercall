@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { MousePointer2 } from 'lucide-react'
-import { useEditorStore } from '@/store/editorStore'
-import { useConfigStore } from '@/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { useConfigStore } from '@openpage/store/configStore'
 import { PropertiesPanel } from './PropertiesPanel'
 import { DesignPanel } from './DesignPanel'
 

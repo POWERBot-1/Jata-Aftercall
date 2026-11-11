@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { produce } from 'immer'
-import type { BlockConfig, SiteConfig, ThemeConfig, PageConfig } from '@/blocks/types'
+import type { BlockConfig, SiteConfig, ThemeConfig, PageConfig } from '@openpage/blocks/types'
 
 function ensurePages(config: SiteConfig): PageConfig[] {
   if (config.pages && config.pages.length > 0) return config.pages

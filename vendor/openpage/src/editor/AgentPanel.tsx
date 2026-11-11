@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { useConfigStore } from '@/store/configStore'
-import { blockMetadata } from '@/lib/block-metadata'
-import { themePresets } from '@/lib/theme-presets'
-import type { BlockConfig } from '@/blocks/types'
+import { useConfigStore } from '@openpage/store/configStore'
+import { blockMetadata } from '@openpage/lib/block-metadata'
+import { themePresets } from '@openpage/lib/theme-presets'
+import type { BlockConfig } from '@openpage/blocks/types'
 
 interface ChatMessage {
   id: string

@@ -22,10 +22,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useConfigStore } from '@/store/configStore'
-import { useEditorStore } from '@/store/editorStore'
-import { blockMetadata } from '@/lib/block-metadata'
-import type { BlockType, BlockConfig } from '@/blocks/types'
+import { useConfigStore } from '@openpage/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { blockMetadata } from '@openpage/lib/block-metadata'
+import type { BlockType, BlockConfig } from '@openpage/blocks/types'
 
 const blockIcons: Record<BlockType, typeof Layout> = {
   navbar: Layout, hero: Type, features: Grid3X3, pricing: DollarSign,

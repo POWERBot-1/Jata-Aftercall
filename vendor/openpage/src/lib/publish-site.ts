@@ -1,6 +1,6 @@
-import type { SiteConfig } from '@/blocks/types'
-import { exportSiteToHTML } from '@/lib/export-html'
-import type { ProjectSettings } from '@/store/projectsStore'
+import type { SiteConfig } from '@openpage/blocks/types'
+import { exportSiteToHTML } from '@openpage/lib/export-html'
+import type { ProjectSettings } from '@openpage/store/projectsStore'
 
 interface DeployApiResponse {
   url?: string

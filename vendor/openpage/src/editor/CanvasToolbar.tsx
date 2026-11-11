@@ -14,11 +14,11 @@ import {
   Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useEditorStore, type Viewport } from '@/store/editorStore'
-import { useConfigStore } from '@/store/configStore'
-import { useProjectsStore } from '@/store/projectsStore'
-import type { PageConfig } from '@/blocks/types'
-import { exportToHTML, downloadHTML } from '@/lib/export-html'
+import { useEditorStore, type Viewport } from '@openpage/store/editorStore'
+import { useConfigStore } from '@openpage/store/configStore'
+import { useProjectsStore } from '@openpage/store/projectsStore'
+import type { PageConfig } from '@openpage/blocks/types'
+import { exportToHTML, downloadHTML } from '@openpage/lib/export-html'
 
 const viewports: { value: Viewport; icon: typeof Monitor; label: string }[] = [
   { value: 'desktop', icon: Monitor, label: 'Desktop' },

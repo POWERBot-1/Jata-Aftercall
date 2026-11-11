@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { X, Clock, RotateCcw } from 'lucide-react'
-import { useEditorStore } from '@/store/editorStore'
-import { useConfigStore } from '@/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { useConfigStore } from '@openpage/store/configStore'
 
 function timeAgo(ts: number): string {
   const seconds = Math.floor((Date.now() - ts) / 1000)

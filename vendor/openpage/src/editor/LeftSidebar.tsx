@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Search, Layout, Type, Grid3X3, DollarSign, Megaphone, PanelBottom, MessageSquare, BarChart3, HelpCircle, Users, Mail, Newspaper, Image, Plus, Minus, Flag, FileText, ImageIcon, Play, GalleryHorizontalEnd } from 'lucide-react'
 import { LayersPanel } from './LayersPanel'
-import { useConfigStore } from '@/store/configStore'
-import { useEditorStore } from '@/store/editorStore'
-import { blockMetadata } from '@/lib/block-metadata'
-import type { BlockType, BlockConfig } from '@/blocks/types'
+import { useConfigStore } from '@openpage/store/configStore'
+import { useEditorStore } from '@openpage/store/editorStore'
+import { blockMetadata } from '@openpage/lib/block-metadata'
+import type { BlockType, BlockConfig } from '@openpage/blocks/types'
 
 const blockIcons: Record<BlockType, typeof Layout> = {
   navbar: Layout, hero: Type, features: Grid3X3, pricing: DollarSign,

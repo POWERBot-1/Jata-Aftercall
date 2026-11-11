@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SiteConfig } from '@/blocks/types'
+import type { SiteConfig } from '@openpage/blocks/types'
 
 export interface Project {
   id: string

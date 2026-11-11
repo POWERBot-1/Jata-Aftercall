@@ -1,4 +1,4 @@
-import { EditorLayout } from '@/editor/EditorLayout'
+import { EditorLayout } from '@openpage/editor/EditorLayout'
 
 export function Editor() {
   return <EditorLayout />
