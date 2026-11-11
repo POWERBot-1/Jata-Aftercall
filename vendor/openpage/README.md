@@ -5,44 +5,40 @@
 - License: MIT (see ./LICENSE)
 - Imported source: ./src
 
-This directory is a source-preservation import, not yet a production-integrated editor.
+The upstream editor source is integrated into JATA's Website Studio route. The upstream Vite application shell and standalone dashboard are not mounted; JATA owns authentication, tenant selection, entitlement, routing, and the surrounding workspace.
 
-## Mandatory integration work before activation
+## Runtime integration now present
 
-1. Replace the upstream `projectsStore` browser-local persistence with JATA server-side persistence scoped to the authenticated business tenant.
-2. Replace the upstream standalone React Router shell with a JATA Next.js route adapter; do not mount the upstream dashboard as a separate product.
-3. Replace upstream deploy-key publishing with JATA's authenticated publication/versioning pipeline. Never expose or accept a customer-supplied deployment credential as the authority for publishing.
-4. Adapt AI generation, media selection, and project settings to JATA services and authorization.
-5. Preserve the upstream JSON schema and block rendering; version and validate persisted documents.
-6. Keep existing JATA business, customer, payment, subscription, media, and published-site records intact. The Website Studio entitlement remains KES 999 / 30 days.
-7. Run tenant isolation, persistence, rendering, publish/rollback, accessibility, and browser acceptance tests before enabling the new editor in production.
+- The native editor is mounted by `components/studio/openpage/OpenPageEditor.tsx` inside the existing authenticated Website Studio route.
+- JATA resolves the default `StudioWebsite` through `ensureDefaultStudioWebsite`; the editor receives its opaque website ID and loads only through the authenticated document API.
+- The upstream `configStore` and `projectsStore` no longer use Zustand browser-local persistence.
+- Editor autosave is debounced and writes native `SiteConfig` JSON to `/api/studio/openpage/document` with optimistic draft-version compare-and-swap.
+- Every successful draft save writes an immutable `OpenPageSiteRevision` snapshot in the same database transaction.
+- Runtime dependencies are declared in `package.json` and locked in `package-lock.json`: Zustand, Immer, React Router, and dnd-kit. The selected versions are compatible with JATA's React 18 runtime.
+- OpenPage Tailwind sources are included in the application's explicit source scan. Editor theme tokens and motion utilities are isolated in `app/openpage-editor.css`; the upstream global body/viewport rules are not imported.
+- Existing Website Studio entitlement remains authoritative at KES 999 / 30 days. The editor is not rendered unless the server-derived entitlement is active.
 
-Do not import upstream API routes or deploy configuration into JATA without a separate security review. This source pin intentionally excludes upstream `api/`, root Vite configuration, and upstream package manifests.
-
-## JATA persistence foundation added on the replacement branch
+## Native persistence boundary
 
 - `OpenPageSiteDocument` is a separate Prisma model keyed by the authorized `StudioWebsite`.
+- `OpenPageSiteRevision` stores immutable snapshots keyed by website and draft version.
 - `app/api/studio/openpage/document/route.ts` provides authenticated GET/PUT access through `assertStudioWebsiteAccess`.
-- Saves use optimistic draft-version compare-and-swap and validate OpenPage's native `SiteConfig` shape and the 19 supported block types.
+- Saves validate OpenPage's native `SiteConfig` shape and the 19 supported block types, enforce a 1.5 MB limit, reject inline image data, and use optimistic draft-version compare-and-swap.
 - Migration: `20261130000000_openpage_native_document`.
-- The new document table is deliberately separate from `StudioWebsiteContent` and `BusinessExperience`; existing Experience documents and publication snapshots are not overwritten.
+- Native documents remain separate from `StudioWebsiteContent` and `BusinessExperience`; existing Experience documents, publication snapshots, and public business pages are not overwritten.
 
-## Remaining hard blockers
+## Remaining release blockers
 
-- The upstream editor shell is still not mounted in the JATA Website Studio route.
-- Upstream Zustand persistence still needs to be replaced by a tenant-bound API adapter; the new API is not yet wired to the editor.
-- The public page renderer does not yet render native OpenPage JSON.
-- Publication, rollback, media-library references, and the existing KES 999 / 30-day entitlement have not yet been connected to the native OpenPage document.
-- No migration has been applied to production. No live site has been switched to this format.
+1. **Public rendering:** the public website renderer does not yet render native OpenPage JSON from `OpenPageSiteDocument.publishedJson`.
+2. **Publishing and rollback:** no owner-authorized native publication/rollback workflow is connected yet. The upstream deploy-key workflow is not used.
+3. **AI and media:** upstream generation, media selection, and project settings still need to be adapted to JATA's approved AI provider and media library. No provider secret may be exposed in the browser.
+4. **Revision UX:** server snapshots are recorded and revision metadata is readable, but the upstream Version History panel still displays local in-session undo history rather than loading/restoring server revisions.
+5. **Acceptance:** typecheck, lint, production build, tenant isolation, autosave, revision, export, accessibility, and authenticated browser tests remain to be run and pass before merge or deployment.
 
-## Runtime integration audit (11 November 2026)
+## Safety and compatibility
 
-The upstream editor cannot yet be mounted in the Next.js application without completing dependency and routing integration:
-
-- The JATA root manifest is React 18.3.1 / Next.js 16.4.2 and does not declare `react-router-dom`, `zustand`, `@dnd-kit/core`, `@dnd-kit/sortable`, or `@dnd-kit/utilities`.
-- OpenPage imports React Router in its app shell, editor layout, and toolbar; it uses Zustand stores, and its drag-and-drop UI requires dnd-kit. `immer` is already present transitively, but must be declared directly if retained as an upstream dependency.
-- The imported source tree intentionally has no upstream package manifest, Vite entry point, or independent deployment shell. The Next.js app cannot simply import `App` or `EditorLayout` as-is.
-- The upstream stores persist project/configuration state to browser local storage. The editor must be adapted to hydrate and save against the authenticated `/api/studio/openpage/document` endpoint, not silently retain local-only persistence.
-- The root lockfile is `package-lock.json`; changing only `package.json` would make clean CI installs fail. Dependency versions and lockfile updates must be committed together.
-
-Consequently, the native editor route remains a hard integration blocker. No dependency manifest or lockfile was changed speculatively, and no incomplete editor route was exposed.
+- Do not import upstream API routes or deployment configuration into JATA without a separate security review.
+- Do not delete or overwrite business, customer, catalogue, order, booking, payment, subscription, media, or existing published-site records.
+- Do not map OpenPage JSON into the legacy ExperienceDocument section schema.
+- Existing published pages remain on their current renderer until the native public renderer and compatibility/migration path are accepted.
+- No production migration, merge, or deployment is authorized by this partial integration state.
