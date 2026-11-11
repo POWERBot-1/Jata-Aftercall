@@ -1,7 +1,7 @@
 # PR #109 — consolidated acceptance evidence report
 
 **Branch:** `arena/3ecfbb83-jata-aftercall` (PR #109 head: `arena/website-studio-openpage-cutover`)
-**Report commit:** `dd56cd0` (this commit's CI results are in §3a-bis)
+**Report commit:** `a6271f3` — verified: 17 success / 2 failure / 2 skipped of 21 check runs
 **Date:** 2026-11-11
 **Status:** **NOT READY** — see §11. Nothing was merged, deployed or released.
 
@@ -102,7 +102,8 @@ fix into a cutover review and risks touching migration baselines. It belongs in 
 
 ### 3a-bis. Current head — the complete workflow picture
 
-Measured, not summarised: `gh api .../commits/dd56cd0/check-runs` returns 21 check runs.
+Measured, not summarised: `gh api .../commits/a6271f3/check-runs` returns 21 check runs —
+the identical result as `dd56cd0` and `c13634d` before it, so the state is stable, not a lucky run.
 
 | Conclusion | Count | Which |
 |---|---|---|
@@ -476,7 +477,7 @@ reason; everything else on this list has moved from "broken" to "verified".
 6. **The Motion workflow still has no result on this head** (§3c). Its 37-minute stall is fixed, but
    a stall fixed is not evidence obtained.
 
-**What is now verified on `dd56cd0`** — all of it re-checked this cycle, none inferred (17 of 21 check
+**What is now verified on `a6271f3`** — all of it re-checked this cycle, none inferred (17 of 21 check
 runs success, the two failures are the programme gate and the encoder block):
 
 | Area | Result |
