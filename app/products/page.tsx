@@ -14,6 +14,8 @@ import {
   VOICE_SELLING_CONDITIONS,
 } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
+import { getMjengoOsPlan } from "@/lib/pricing";
+import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 
 export const metadata: Metadata = { title: "Products — JATA AFTERCALL" };
 export const dynamic = "force-dynamic";
@@ -118,6 +120,9 @@ export default async function ProductsPage() {
   // Standard/Pro/Voice PlanConfig rows are installed. A package reads catalogue-active only
   // when its real active row matches the approved price and term; these cards never create
   // checkout links or grant entitlements.
+  const mjengoPlan = await getMjengoOsPlan().catch(() => null);
+  const mjengoRefusal = mjengoCheckoutRefusal(mjengoPlan);
+
   const frontDeskTiers = FRONT_DESK_TIER_KEYS.map((key) => {
     const approved = FRONT_DESK_TIER_PRICING[key];
     const catalogueMatch = isPriceMatchedRow(stored.find((plan) => plan.key === key), key);
@@ -175,6 +180,18 @@ export default async function ProductsPage() {
               </Link>
             </article>
           ))}
+        </div>
+      </MarketingSection>
+      <MarketingSection title="MJENGO OS — Business management" id="mjengo-os">
+        <div className="mk-grid">
+          <article className="mk-card" data-product="MJENGO_OS">
+            <h3>MJENGO OS</h3>
+            <p className="mk-card__price">KES 2,000 / 30 days</p>
+            <p>A dedicated business-management workspace for sales and orders, inventory, procurement, customers and credit, accounting, and operational reports.</p>
+            <p><strong>{mjengoRefusal ? "Not currently available for purchase" : "Plan configured — access requires a verified MJENGO OS entitlement"}</strong></p>
+            {mjengoRefusal ? <p className="mk-prose">{mjengoRefusal}</p> : null}
+            <Link href="/products/mjengo-os">Explore MJENGO OS →</Link>
+          </article>
         </div>
       </MarketingSection>
       <MarketingSection title="What you can switch on" id="catalogue">
