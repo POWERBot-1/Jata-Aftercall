@@ -244,8 +244,9 @@ describe("public /pricing shows every offer", () => {
     expect(html).toContain('class="mk-grid"');
     // Seven plan cards in the owner grid plus the four AI Front Desk 2.0 tier cards in the
     // family block (complete package family on every customer surface) — eleven stacked
-    // mk-card blocks in total, never a wide comparison table.
-    expect(html.match(/class="mk-card"/g)).toHaveLength(11);
+    // Seven owner offer cards + four AI Front Desk tier cards + the MJENGO OS plan card;
+    // all remain stacked cards, never a wide comparison table.
+    expect(html.match(/class="mk-card"/g)).toHaveLength(12);
     expect(html.match(/data-plan="/g)).toHaveLength(7);
     expect(html.match(/data-tier="/g)).toHaveLength(4);
   });
