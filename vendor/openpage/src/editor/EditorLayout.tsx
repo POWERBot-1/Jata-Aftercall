@@ -24,11 +24,15 @@ function useAutoSaveToProject() {
   const config = useConfigStore((s) => s.config)
   const activeProjectId = useEditorStore((s) => s.activeProjectId)
   const updateProjectConfig = useProjectsStore((s) => s.updateProjectConfig)
-  const { websiteId, draftVersion, setDraftVersion, ready } = useOpenPagePersistence()
+  const {
+    websiteId, draftVersion, setDraftVersion, ready,
+    setIsDirty, setIsSaving,
+  } = useOpenPagePersistence()
   const loadedConfigRef = useRef<string | null>(null)
 
   useEffect(() => {
     loadedConfigRef.current = JSON.stringify(config)
+    setIsDirty(false)
   }, [activeProjectId, websiteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -36,7 +40,9 @@ function useAutoSaveToProject() {
     const serialized = JSON.stringify(config)
     if (serialized === loadedConfigRef.current) return
 
+    setIsDirty(true)
     const timeout = window.setTimeout(async () => {
+      setIsSaving(true)
       try {
         const response = await fetch('/api/studio/openpage/document', {
           method: 'PUT',
@@ -45,7 +51,6 @@ function useAutoSaveToProject() {
         })
         const data = await response.json().catch(() => ({}))
         if (!response.ok) {
-          setIsSaving(false);
           if (response.status === 409) {
             toast.error('This website changed in another session. Reload before continuing.')
           } else {
@@ -56,10 +61,12 @@ function useAutoSaveToProject() {
         loadedConfigRef.current = serialized
         setDraftVersion(data.draftVersion)
         updateProjectConfig(activeProjectId, config)
+        setIsDirty(JSON.stringify(useConfigStore.getState().config) !== serialized)
         toast.success('Draft saved to JATA')
       } catch {
-        setIsSaving(false);
         toast.error('Network error. Your latest changes are not yet saved.')
+      } finally {
+        setIsSaving(false)
       }
     }, 700)
 
