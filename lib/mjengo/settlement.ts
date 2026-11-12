@@ -13,9 +13,7 @@
  *     is told so instead of being silently granted access.
  *
  * MJENGO OS is a *separate* product from BUSINESS_POS (KES 499) and ERP_PRO (KES 3,000). It writes
- * `ErpSubscription`/`ErpEntitlement` rows with `planKey`/`packageKey = "MJENGO_OS"`; those tables
- * have a `@unique` businessId, so they are MJENGO-dedicated columns — see
- * `assertMjengoStorageAvailable()` for how a business that already holds an ERP_PRO row is handled.
+ * `MjengoSubscription`/`MjengoEntitlement` rows with `planKey`/`packageKey = "MJENGO_OS"`; these tables are dedicated to MJENGO OS, allowing ERP PRO to coexist independently.
  *
  * Idempotency: the payment row is claimed with a compare-and-set (`status = <read state>`) inside
  * the caller's transaction, exactly like `settlePosPayment`. A replayed webhook finds the payment
@@ -75,20 +73,14 @@ export function mjengoCheckoutRefusal(plan: { key?: string | null; priceKES?: nu
 }
 
 /**
- * `ErpSubscription.businessId` and `ErpEntitlement.businessId` are `@unique`, so one business holds
- * at most one row of each and MJENGO OS cannot coexist there with ERP_PRO.
- *
- * This is a real, documented limitation rather than a silent overwrite: if the row belongs to
- * another package, settlement refuses and the payment is left PAID-but-unsettled for reconciliation,
- * which the operations runbook must resolve by hand. Dedicated Mjengo* tables remove the conflict;
- * they are not in this change because adding a table per product is a schema decision for the owner.
+ * MJENGO's dedicated tables isolate its paid-through state from ERP PRO.
  */
 export async function assertMjengoStorageAvailable(tx: any, businessId: string): Promise<void> {
-  const existing = await tx.erpEntitlement?.findUnique?.({ where: { businessId } }).catch(() => null);
+  const existing = await tx.mjengoEntitlement?.findUnique?.({ where: { businessId } }).catch(() => null);
   if (existing && existing.packageKey && existing.packageKey !== MJENGO_PLAN_KEY) {
     throw new MjengoCheckoutRefused(
       "STORAGE_CONFLICT",
-      `STORAGE_CONFLICT: this business already holds a ${existing.packageKey} package row, and MJENGO OS storage is not separate yet. The payment is recorded but MJENGO OS was not activated — reconciliation is required.`,
+      `STORAGE_CONFLICT: MJENGO OS storage is unavailable. No entitlement was overwritten.`,
       409,
     );
   }
@@ -105,7 +97,7 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
   if (!payment.businessId) throw new Error("PAYMENT_CONTEXT_INVALID");
   if (!payment.userId) throw new Error("PAYMENT_CONTEXT_INVALID");
 
-  const current: any = await tx.erpSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
+  const current: any = await tx.mjengoSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
 
   // Already settled for this exact payment: never extend the window a second time.
   if (payment.status === "PAID" && current?.paymentId === payment.id && current?.status === "ACTIVE") {
@@ -135,7 +127,7 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
       const latest = await tx.payment.findUnique({ where: { id: payment.id } });
       if (latest?.status === "PAID") {
         if (eventId) await tx.processedWebhook?.create?.({ data: { id: eventId } }).catch(() => undefined);
-        const existing = await tx.erpSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
+        const existing = await tx.mjengoSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
         return { subscription: existing, alreadySettled: true, mjengoSubscription: true };
       }
       throw new Error("PAYMENT_STATE_CHANGED");
@@ -150,7 +142,7 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
   const expiresAt = new Date(startAt.getTime() + MJENGO_PLAN_DURATION_DAYS * 86_400_000);
   const graceUntil = new Date(expiresAt.getTime() + MJENGO_GRACE_DAYS * 86_400_000);
 
-  const subscription = await tx.erpSubscription.upsert({
+  const subscription = await tx.mjengoSubscription.upsert({
     where: { businessId: payment.businessId },
     update: {
       userId: payment.userId,
@@ -178,7 +170,7 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
     },
   });
 
-  await tx.erpEntitlement.upsert({
+  await tx.mjengoEntitlement.upsert({
     where: { businessId: payment.businessId },
     update: { packageKey: MJENGO_PLAN_KEY, status: "ACTIVE", activatedAt: now, expiresAt },
     create: { businessId: payment.businessId, packageKey: MJENGO_PLAN_KEY, status: "ACTIVE", activatedAt: now, expiresAt },
