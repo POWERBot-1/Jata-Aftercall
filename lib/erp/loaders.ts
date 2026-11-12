@@ -240,7 +240,7 @@ export async function loadSettings(businessId: string) {
     safe(prisma.business.findUnique({ where: { id: businessId }, select: { name: true, slug: true, location: true } }), null),
     safe(prisma.businessMember.findMany({ where: { businessId } }), []),
     safe(prisma.erpAuditEvent.findMany({ where: { businessId }, orderBy: { createdAt: "desc" }, take: 50 }), []),
-    safe(prisma.erpSubscription.findUnique({ where: { businessId } }), null),
+    safe(prisma.erpProSubscription.findUnique({ where: { businessId } }), null),
     safe(prisma.erpInvoice.count({ where: { businessId } }), 0),
   ]);
   return { configuration, business, members, auditEvents, subscription, invoiceCount };
@@ -274,7 +274,7 @@ export async function loadErpBusinesses(userId: string, isAdmin: boolean) {
   const ids = businesses.map((business: any) => business.id);
   const [configurations, subscriptions] = await Promise.all([
     ids.length ? safe(prisma.erpConfiguration.findMany({ where: { businessId: { in: ids } } }), []) : Promise.resolve([]),
-    ids.length ? safe(prisma.erpSubscription.findMany({ where: { businessId: { in: ids } } }), []) : Promise.resolve([]),
+    ids.length ? safe(prisma.erpProSubscription.findMany({ where: { businessId: { in: ids } } }), []) : Promise.resolve([]),
   ]);
   return businesses.map((business: any) => ({
     ...business,

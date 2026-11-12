@@ -42,7 +42,7 @@ vi.mock("@/lib/db", () => ({
     business: { findMany: vi.fn(async () => state.businesses) },
     payment: { findMany: vi.fn(async () => state.payments) },
     posSubscription: { findUnique: vi.fn(async () => null) },
-    erpSubscription: { findUnique: vi.fn(async () => null) },
+    erpProSubscription: { findUnique: vi.fn(async () => null) },
     autopilotSubscription: { findUnique: vi.fn(async () => null) },
   },
 }));

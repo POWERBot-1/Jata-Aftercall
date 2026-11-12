@@ -315,16 +315,24 @@ await db.query(
   `INSERT INTO "PosSubscription" (id, "businessId", "userId", "planId", "planKey", status, "updatedAt")
    VALUES ('sub_pos', 'bizA', 'u_owner', 'p_pos', 'BUSINESS_POS', 'ACTIVE', NOW())`,
 ).catch((error) => record("separation: POS subscription row insertable", false, String(error.message).slice(0, 160)));
+const erpPro = await db.query(
+  `INSERT INTO "ErpProSubscription" (id, "businessId", "userId", "planId", "planKey", status, "updatedAt")
+   VALUES ('sub_erp_pro', 'bizA', 'u_owner', 'p_erp', 'ERP_PRO', 'ACTIVE', NOW())
+   RETURNING status`,
+);
+const mjengoSubscription = await db.query(
+  `SELECT status, "planKey" FROM "MjengoSubscription" WHERE "businessId" = 'bizA'`,
+);
 const mjengoEntitlement = await db.query(
-  `SELECT status, "packageKey" FROM "ErpEntitlement" WHERE "businessId" = 'bizA' AND "packageKey" = 'MJENGO_OS'`,
+  `SELECT status, "packageKey" FROM "MjengoEntitlement" WHERE "businessId" = 'bizA'`,
 );
 const posEntitlement = await db.query(
   `SELECT status FROM "PosEntitlement" WHERE "businessId" = 'bizA'`,
 );
 record(
-  "separation: an ACTIVE BUSINESS_POS subscription creates no MJENGO_OS entitlement",
-  mjengoEntitlement.rows.length === 0,
-  `MJENGO rows for bizA: ${mjengoEntitlement.rows.length}; POS entitlement rows: ${posEntitlement.rows.length}`,
+  "separation: ERP PRO and BUSINESS_POS do not create MJENGO OS subscription or entitlement rows",
+  mjengoSubscription.rows.length === 0 && mjengoEntitlement.rows.length === 0,
+  `ERP PRO rows: ${erpPro.rows.length}; MJENGO subscription rows: ${mjengoSubscription.rows.length}; MJENGO entitlement rows: ${mjengoEntitlement.rows.length}; POS entitlement rows: ${posEntitlement.rows.length}`,
 );
 
 // ── Summary ──────────────────────────────────────────────────────────────────────────────────

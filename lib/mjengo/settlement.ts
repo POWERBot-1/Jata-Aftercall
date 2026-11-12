@@ -13,9 +13,7 @@
  *     is told so instead of being silently granted access.
  *
  * MJENGO OS is a *separate* product from BUSINESS_POS (KES 499) and ERP_PRO (KES 3,000). It writes
- * `ErpSubscription`/`ErpEntitlement` rows with `planKey`/`packageKey = "MJENGO_OS"`; those tables
- * have a `@unique` businessId, so they are MJENGO-dedicated columns — see
- * `assertMjengoStorageAvailable()` for how a business that already holds an ERP_PRO row is handled.
+ * `MjengoSubscription`/`MjengoEntitlement` rows with `planKey`/`packageKey = "MJENGO_OS"`; these tables are dedicated to MJENGO OS, allowing ERP PRO to coexist independently.
  *
  * Idempotency: the payment row is claimed with a compare-and-set (`status = <read state>`) inside
  * the caller's transaction, exactly like `settlePosPayment`. A replayed webhook finds the payment
@@ -27,7 +25,6 @@ import {
   MJENGO_PLAN_KEY,
   MJENGO_PLAN_PRICE_KES,
   mjengoFeatureEnabled,
-  syncMjengoEntitlement,
 } from "./entitlement";
 
 export type MjengoSettlementParams = {
@@ -75,23 +72,10 @@ export function mjengoCheckoutRefusal(plan: { key?: string | null; priceKES?: nu
 }
 
 /**
- * `ErpSubscription.businessId` and `ErpEntitlement.businessId` are `@unique`, so one business holds
- * at most one row of each and MJENGO OS cannot coexist there with ERP_PRO.
- *
- * This is a real, documented limitation rather than a silent overwrite: if the row belongs to
- * another package, settlement refuses and the payment is left PAID-but-unsettled for reconciliation,
- * which the operations runbook must resolve by hand. Dedicated Mjengo* tables remove the conflict;
- * they are not in this change because adding a table per product is a schema decision for the owner.
+ * MJENGO's dedicated tables isolate its paid-through state from ERP PRO.
  */
-export async function assertMjengoStorageAvailable(tx: any, businessId: string): Promise<void> {
-  const existing = await tx.erpEntitlement?.findUnique?.({ where: { businessId } }).catch(() => null);
-  if (existing && existing.packageKey && existing.packageKey !== MJENGO_PLAN_KEY) {
-    throw new MjengoCheckoutRefused(
-      "STORAGE_CONFLICT",
-      `STORAGE_CONFLICT: this business already holds a ${existing.packageKey} package row, and MJENGO OS storage is not separate yet. The payment is recorded but MJENGO OS was not activated — reconciliation is required.`,
-      409,
-    );
-  }
+export async function assertMjengoStorageAvailable(_tx: any, _businessId: string): Promise<void> {
+  // Dedicated MJENGO storage is independent; ERP PRO is never queried or modified here.
 }
 
 export async function settleMjengoPayment(tx: any, params: MjengoSettlementParams): Promise<MjengoSettlementResult> {
@@ -105,19 +89,14 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
   if (!payment.businessId) throw new Error("PAYMENT_CONTEXT_INVALID");
   if (!payment.userId) throw new Error("PAYMENT_CONTEXT_INVALID");
 
-  const current: any = await tx.erpSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
+  const current: any = await tx.mjengoSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
 
   // Already settled for this exact payment: never extend the window a second time.
   if (payment.status === "PAID" && current?.paymentId === payment.id && current?.status === "ACTIVE") {
     if (eventId) await tx.processedWebhook?.create?.({ data: { id: eventId } }).catch(() => undefined);
     return { subscription: current, alreadySettled: true, mjengoSubscription: true };
   }
-  // Both rows are `@unique` on businessId, so BOTH must belong to MJENGO OS (or be absent) before
-  // anything is written. Checking only the subscription row would let an ERP_PRO entitlement be
-  // silently overwritten — i.e. the customer pays for MJENGO and loses BOS PRO.
-  if (current && current.planKey && current.planKey !== MJENGO_PLAN_KEY) {
-    await assertMjengoStorageAvailable(tx, payment.businessId);
-  }
+  // Write only the dedicated MJENGO tables; ERP PRO state is not read or changed.
   await assertMjengoStorageAvailable(tx, payment.businessId);
 
   const repairingLegacyPaidPayment = params.repairingLegacyPaidPayment === true && payment.status === "PAID" && !current;
@@ -135,7 +114,7 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
       const latest = await tx.payment.findUnique({ where: { id: payment.id } });
       if (latest?.status === "PAID") {
         if (eventId) await tx.processedWebhook?.create?.({ data: { id: eventId } }).catch(() => undefined);
-        const existing = await tx.erpSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
+        const existing = await tx.mjengoSubscription?.findUnique?.({ where: { businessId: payment.businessId } }).catch(() => null);
         return { subscription: existing, alreadySettled: true, mjengoSubscription: true };
       }
       throw new Error("PAYMENT_STATE_CHANGED");
@@ -150,7 +129,7 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
   const expiresAt = new Date(startAt.getTime() + MJENGO_PLAN_DURATION_DAYS * 86_400_000);
   const graceUntil = new Date(expiresAt.getTime() + MJENGO_GRACE_DAYS * 86_400_000);
 
-  const subscription = await tx.erpSubscription.upsert({
+  const subscription = await tx.mjengoSubscription.upsert({
     where: { businessId: payment.businessId },
     update: {
       userId: payment.userId,
@@ -178,14 +157,13 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
     },
   });
 
-  await tx.erpEntitlement.upsert({
+  await tx.mjengoEntitlement.upsert({
     where: { businessId: payment.businessId },
     update: { packageKey: MJENGO_PLAN_KEY, status: "ACTIVE", activatedAt: now, expiresAt },
     create: { businessId: payment.businessId, packageKey: MJENGO_PLAN_KEY, status: "ACTIVE", activatedAt: now, expiresAt },
   });
 
-  // Derivation stays the source of truth; persistence below it is a convenience for reporting.
-  await syncMjengoEntitlement(payment.businessId).catch(() => undefined);
+  // Subscription and entitlement are committed atomically in this transaction.
 
   if (eventId) {
     await tx.processedWebhook?.create?.({ data: { id: eventId } }).catch(() => undefined);

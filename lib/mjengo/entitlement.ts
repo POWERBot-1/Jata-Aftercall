@@ -185,26 +185,29 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
   };
 }
 
-// Reuse ERP subscription/entitlement tables with packageKey discriminator for now;
-// dedicated MJENGO tables can be added later without breaking this gate.
-// For now, MJENGO reads same ErpSubscription/ErpEntitlement but filtered by planKey.
+// MJENGO uses dedicated tables so ERP PRO and MJENGO OS can coexist for one business.
 export async function getMjengoEntitlement(businessId: string): Promise<MjengoEntitlementState> {
-  const [subscription, entitlement, paidPayment] = await Promise.all([
-    (prisma as any).erpSubscription?.findFirst?.({
-      where: { businessId, planKey: MJENGO_PLAN_KEY },
+  const [subscription, entitlement, plan] = await Promise.all([
+    (prisma as any).mjengoSubscription?.findUnique?.({
+      where: { businessId },
       select: { status: true, planKey: true, startAt: true, expiresAt: true, graceUntil: true },
-      orderBy: { createdAt: "desc" },
     }).catch(() => null) ?? null,
-    (prisma as any).erpEntitlement?.findFirst?.({
-      where: { businessId, packageKey: MJENGO_PLAN_KEY },
+    (prisma as any).mjengoEntitlement?.findUnique?.({
+      where: { businessId },
       select: { status: true },
     }).catch(() => null) ?? null,
-    (prisma as any).payment?.findFirst?.({
-      where: { businessId, status: "PAID", planKey: MJENGO_PLAN_KEY } as any,
-      select: { status: true, planKey: true },
-      orderBy: { createdAt: "desc" },
-    }).catch(() => null) ?? null,
+    prisma.planConfig.findUnique({ where: { key: MJENGO_PLAN_KEY }, select: { id: true } }).catch(() => null),
   ]);
+  // Payment stores planId (not planKey); resolve the canonical MJENGO plan before looking for
+  // provider-settled payment evidence. Never infer a payment from the amount alone.
+  const payment = plan
+    ? await prisma.payment.findFirst({
+        where: { businessId, status: "PAID", planId: plan.id },
+        select: { status: true },
+        orderBy: { createdAt: "desc" },
+      }).catch(() => null)
+    : null;
+  const paidPayment = payment ? { status: payment.status, planKey: MJENGO_PLAN_KEY } : null;
 
   // Check if business has any ERP configuration as proxy for "configured"
   const configured = await (prisma as any).erpConfiguration?.findUnique?.({ where: { businessId } }).then(() => true).catch(() => false) ?? false;
@@ -220,8 +223,8 @@ export async function getMjengoEntitlement(businessId: string): Promise<MjengoEn
 export async function syncMjengoEntitlement(businessId: string): Promise<MjengoEntitlementState> {
   const state = await getMjengoEntitlement(businessId);
   try {
-    await (prisma as any).erpEntitlement?.upsert?.({
-      where: { businessId_packageKey: { businessId, packageKey: MJENGO_PLAN_KEY } } as any,
+    await (prisma as any).mjengoEntitlement?.upsert?.({
+      where: { businessId },
       update: { status: state.status, expiresAt: state.expiresAt } as never,
       create: { businessId, packageKey: MJENGO_PLAN_KEY, status: state.status, expiresAt: state.expiresAt } as never,
     });

@@ -6,6 +6,7 @@ import { validatePaymentEvidence } from "@/lib/paymentVerification";
 import { failOrderPayment, settleOrderPayment } from "@/lib/experience/payments";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
+import { MJENGO_PLAN_KEY } from "@/lib/mjengo/entitlement";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -80,6 +81,17 @@ export async function POST(req: Request) {
               metadata: JSON.stringify({ reason: "REFUNDED" }),
             },
           });
+        } else if (changed.count && refundPayment.businessId && refundPlanKey === MJENGO_PLAN_KEY) {
+          const suspendedMjengo = await tx.mjengoSubscription.updateMany({
+            where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },
+            data: { status: "SUSPENDED" },
+          });
+          if (suspendedMjengo.count > 0) {
+            await tx.mjengoEntitlement.updateMany({
+              where: { businessId: refundPayment.businessId },
+              data: { status: "SUSPENDED" },
+            });
+          }
         } else if (changed.count && refundPayment.businessId && isAutopilotPlanKey(refundPlanKey)) {
           const suspendedSub = await tx.autopilotSubscription.updateMany({
             where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },
