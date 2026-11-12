@@ -49,7 +49,7 @@ describe("billing isolation", () => {
     "prisma.planConfig",
     "prisma.aIPackageEntitlement",
     "prisma.autopilotEntitlement",
-    "prisma.erpEntitlement",
+    "prisma.erpProEntitlement",
     "paystack",
     "Paystack",
     "initializePaystack",
