@@ -7,9 +7,9 @@
  * 2. When the plan read failed the page fell back to Monthly and Annual only, silently dropping
  *    two advertised products. The fallback now lists every advertised plan.
  *
- * 2026-10-29 owner order: seven cards in one grid — Monthly, Annual, AI Business Front Desk,
- * Website Studio, Business POS, JATA BOS PRO (ERP_PRO, marketing surface only), JATA Autopilot
- * (last). The POS, BOS PRO and Autopilot are still never payable plan choices (§67).
+ * Current homepage presentation: six cards in one grid — Monthly Business Page, AI Business Front Desk,
+ * Website Studio, Business POS, JATA BOS PRO (ERP_PRO, marketing surface only), JATA Autopilot.
+ * Annual Business Page remains available from the Business Page details and /pricing, not the homepage.
  */
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -63,31 +63,32 @@ describe("planDisplayName", () => {
 });
 
 describe("homepage plan cards", () => {
-  // Owner-mandated 2026-10-29 mobile-first sequence: Monthly, Annual, AI Front Desk, Website
-  // Studio, Business POS, JATA BOS PRO, JATA Autopilot. On phones the grid is one column, so
-  // this DOM order is exactly the mobile reading order.
-  const expectedOrder = ["Monthly — KES 149/month", "Annual — KES 999/year", "AI Business Front Desk — KES 499/month", "Website Studio — KES 999/month", "JATA AFTERCALL — Business POS", "JATA BOS PRO", "JATA Autopilot — KES 2,499/month"];
+  // Homepage hides the annual Business Page card; both billing options remain on its detail page.
+  const expectedOrder = ["Monthly — KES 149/month", "AI Business Front Desk — KES 499/month", "Website Studio — KES 999/month", "JATA AFTERCALL — Business POS", "JATA BOS PRO", "JATA Autopilot — KES 2,499/month"];
   const assertOrder = (html: string) => {
     const positions = expectedOrder.map((name) => html.indexOf(name));
     expect(positions.every((index) => index >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
-    // All seven cards live in the one grid, and the POS has no separate heading of its own.
+    // All six visible cards live in one grid; Annual is intentionally not on the homepage.
     const grid = html.slice(html.indexOf('class="lp-plans"'), html.indexOf('class="lp-pricing__note"'));
     for (const name of expectedOrder) expect(grid, name).toContain(name);
+    expect(grid).not.toContain('data-plan="ANNUAL"');
+    const monthly = grid.match(/<article class="lp-plan"[^>]*data-plan="MONTHLY"[^>]*>([\\s\\S]*?)<\\/article>/)?.[1] ?? "";
+    expect(monthly).toContain('href="/products/business-page"');
     expect(html).not.toContain('id="business-pos-heading"');
-    expect(html.match(/class="lp-plan"/g)).toHaveLength(7);
+    expect(html.match(/class="lp-plan"/g)).toHaveLength(6);
     expect(html).not.toContain(">Interactive Business<");
   };
 
-  it("orders database-backed cards Monthly → Annual → AI Front Desk → Website Studio → Business POS → JATA BOS PRO → JATA Autopilot in one grid", async () => {
+  it("orders the visible homepage cards Monthly → AI Front Desk → Website Studio → Business POS → JATA BOS PRO → JATA Autopilot in one grid", async () => {
     state.fail = false;
     state.rows = [
-      { key: "AI_BUSINESS_FRONT_DESK", name: expectedOrder[2], priceKES: 499, durationDays: 30 },
-      { key: "JATA_AUTOPILOT", name: expectedOrder[6], priceKES: 2499, durationDays: 30 },
+      { key: "AI_BUSINESS_FRONT_DESK", name: expectedOrder[1], priceKES: 499, durationDays: 30 },
+      { key: "JATA_AUTOPILOT", name: expectedOrder[5], priceKES: 2499, durationDays: 30 },
       { key: "INTERACTIVE_BUSINESS", name: "Interactive Business — KES 999/month", priceKES: 999, durationDays: 30 },
       { key: "MONTHLY", name: expectedOrder[0], priceKES: 149, durationDays: 30 },
-      { key: "ANNUAL", name: expectedOrder[1], priceKES: 999, durationDays: 365 },
-      { key: "BUSINESS_POS", name: expectedOrder[4], priceKES: 499, durationDays: 30 },
+      { key: "ANNUAL", name: "Annual — KES 999/year", priceKES: 999, durationDays: 365 },
+      { key: "BUSINESS_POS", name: expectedOrder[3], priceKES: 499, durationDays: 30 },
       { key: "ERP_PRO", name: "POS / ERP - PRO", priceKES: 3000, durationDays: 30 },
     ];
     assertOrder(await render());
@@ -123,18 +124,18 @@ describe("homepage plan cards", () => {
     expect(html).toContain("AI Business Front Desk — KES 499/month");
     expect(html).toContain("Website Studio — KES 999/month");
     expect(html).toContain("Monthly — KES 149/month");
-    expect(html).toContain("Annual — KES 999/year");
+    expect(html).not.toContain('data-plan="ANNUAL"');
     // The price shown is always the stored price, never the name's text.
     expect(html).toContain(">KES 499<");
     // The POS card shows the stored name as-is rather than a price written into the page.
     expect(html).toContain("JATA AFTERCALL — Business POS");
   });
 
-  it("falls back to all seven advertised offers when plans cannot be read", async () => {
+  it("falls back to the six visible homepage offers when plans cannot be read", async () => {
     state.fail = true;
     const html = await render();
     state.fail = false;
-    for (const name of ["Monthly — KES 149/month", "AI Business Front Desk — KES 499/month", "Annual — KES 999/year", "Website Studio — KES 999/month"]) {
+    for (const name of ["Monthly — KES 149/month", "AI Business Front Desk — KES 499/month", "Website Studio — KES 999/month"]) {
       expect(html, name).toContain(name);
     }
     // The POS, BOS PRO and JATA Autopilot cards are filled from their canonical fallback rows,
@@ -148,10 +149,10 @@ describe("homepage plan cards", () => {
     expect(html).toContain("JATA Autopilot — KES 2,499/month");
     expect(html).toContain("Open JATA Autopilot");
     expect(html).toContain('href="/dashboard/autopilot"');
-    expect(html.match(/class="lp-plan"/g)).toHaveLength(7);
+    expect(html.match(/class="lp-plan"/g)).toHaveLength(6);
   });
 
-  it("advertises all seven offers in one list in the 2026-10-29 owner order, with JATA Autopilot last", () => {
+  it("retains all seven catalogue offers for /pricing and the subscription catalogue", () => {
     expect([...HOMEPAGE_PLAN_ORDER]).toEqual([
       "MONTHLY",
       "ANNUAL",
