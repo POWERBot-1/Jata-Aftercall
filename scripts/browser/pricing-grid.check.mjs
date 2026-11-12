@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Pricing grid browser check — every catalogue offer in one grid (2026-10-29 owner order with
- * the AI Front Desk 2.0 tiers slotted after Starter: Monthly, Annual, Front Desk
+ * the AI Front Desk 2.0 tiers slotted after Starter: Monthly, Front Desk
  * Starter/Standard/Pro/Voice, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot).
  * The check follows the actual active catalogue: Standard/Pro are optional until configured;
  * Voice is deliberately excluded until inbound voice reception is operational.
@@ -61,13 +61,12 @@ const VIEWPORTS = [
 
 // The authoritative commercial data this change must not alter. Order is the owner-mandated
 // 2026-10-29 mobile-first homepage sequence with the AI Front Desk 2.0 tiers directly after the
-// Starter card: Monthly, Annual, Front Desk Starter/Standard/Pro/Voice, Website Studio,
+// Starter card: Monthly, Front Desk Starter/Standard/Pro/Voice, Website Studio,
 // Business POS, JATA BOS PRO, JATA Autopilot. The three newer tiers exist only where their
 // stored PlanConfig rows exist (the seeded CI catalogue); production pre-migration renders the
-// original seven cards.
+// six homepage cards before optional Front Desk tiers.
 const EXPECTED = [
-  { key: "MONTHLY", price: "KES 149", period: "per 30 days", cta: "/register" },
-  { key: "ANNUAL", price: "KES 999", period: "per year", cta: "/register" },
+  { key: "MONTHLY", price: "KES 149", period: "per 30 days", cta: "/products/business-page" },
   { key: "AI_BUSINESS_FRONT_DESK", price: "KES 499", period: "per 30 days", cta: "/register" },
   { key: "AI_FRONT_DESK_STANDARD", price: "KES 999", period: "per 30 days", cta: "/register" },
   { key: "AI_FRONT_DESK_PRO", price: "KES 1,999", period: "per 30 days", cta: "/register" },
@@ -158,7 +157,7 @@ for (const viewport of VIEWPORTS) {
     f.gridCount === 1 && f.cards.length === expectedVisible.length &&
       f.strayCards === 0 && f.cards.every((card) => card.insideGrid) &&
       actualKeys.every((key) => expectedKeys.includes(key)) &&
-      ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"].every((key) => actualKeys.includes(key)),
+      ["MONTHLY", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"].every((key) => actualKeys.includes(key)),
     `grids=${f.gridCount} cards=${f.cards.length} expectedActive=${expectedKeys.length}`);
   check(`${viewport.label}px: Voice tier is not advertised before voice reception readiness`,
     !actualKeys.includes("AI_FRONT_DESK_VOICE"));
