@@ -214,6 +214,22 @@ for (const viewport of VIEWPORTS) {
   await page.close();
 }
 
+const businessPageDetails = await browser.newPage();
+await businessPageDetails.goto(`${base}/products/business-page`, { waitUntil: "networkidle2", timeout: 120000 });
+const businessPageOptions = await businessPageDetails.$eval("[data-business-page-plan]", (cards) => cards.map((card) => ({
+  key: card.getAttribute("data-business-page-plan"),
+  text: card.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+  href: card.querySelector("a")?.getAttribute("href") ?? "",
+})));
+check("Business Page detail exposes both Monthly KES 149 and Annual KES 999 options",
+  businessPageOptions.length === 2 && businessPageOptions[0].key === "MONTHLY" && businessPageOptions[0].text.includes("KES 149 / 30 days") && businessPageOptions[1].key === "ANNUAL" && businessPageOptions[1].text.includes("KES 999 / 365 days"),
+  businessPageOptions.map((option) => `${option.key}:${option.text}`).join(" | "));
+check("both Business Page options lead to account creation before dashboard selection",
+  businessPageOptions.length === 2 && businessPageOptions.every((option) => option.href === "/register"),
+  businessPageOptions.map((option) => `${option.key}:${option.href}`).join(" | "));
+await shot(businessPageDetails, "business-page-plan-options");
+await businessPageDetails.close();
+
 await browser.close();
 const failed = rows.filter((row) => !row.ok);
 console.log(`\n${rows.length - failed.length}/${rows.length} checks passed`);
