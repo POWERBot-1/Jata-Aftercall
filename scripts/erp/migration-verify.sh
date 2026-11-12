@@ -333,7 +333,7 @@ SQL
     return
   fi
 
-  local tables=( ErpRequisitionLine ErpRequisition ErpGoodsReceiptLine ErpGoodsReceipt ErpPurchaseOrderLine ErpPurchaseOrder ErpApprovalEvent ErpApprovalRequest ErpNotificationRead ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent ErpEntitlement ErpSubscription ErpConfiguration )
+  local tables=( ErpRequisitionLine ErpRequisition ErpGoodsReceiptLine ErpGoodsReceipt ErpPurchaseOrderLine ErpPurchaseOrder ErpApprovalEvent ErpApprovalRequest ErpNotificationRead ErpTask ErpJournalLine ErpPaymentAllocation ErpInvoiceLine ErpCreditNote ErpStoreOrderItem MsgCampaignRecipient MsgMessageEvent MsgSenderIdEvent MsgConsentRecord MsgLedgerEntry MsgSuppression MsgAudience ErpAutomationRun ErpKycDocument ErpNotification ErpPayment ErpInvoice ErpExpense ErpSupplierBill ErpStoreOrder MsgCampaign MsgTemplate MsgSenderId MsgChannelConnection MsgContact MsgWallet ErpJournal ErpPeriod ErpAccount ErpTaxRule ErpComplianceProfile ErpAutomationRule ErpSequence ErpIdempotencyRecord ErpAuditEvent MjengoEntitlement MjengoSubscription ErpProEntitlement ErpProSubscription ErpEntitlement ErpSubscription ErpConfiguration )
   local dropped=0 t
   for t in "${tables[@]}"; do
     if "$PSQL" "$DB_URL" -v ON_ERROR_STOP=1 -q -c "DROP TABLE \"$t\";" >/dev/null 2>&1; then
