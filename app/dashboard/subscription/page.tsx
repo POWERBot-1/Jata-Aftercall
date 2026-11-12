@@ -157,13 +157,14 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   // Read-only status lookups for the separate products, scoped to the owner's own selected
   // business. These are `findUnique` reads only — viewing this page writes nothing, creates no
   // subscription and alters no existing one, and no other tenant's row can be reached from here.
-  const [posSubscription, erpSubscription, autopilotSubscription] = selected
+  const [posSubscription, erpSubscription, autopilotSubscription, mjengoSubscription] = selected
     ? await Promise.all([
         prisma.posSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
         prisma.erpSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
         prisma.autopilotSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
+        (prisma as any).mjengoSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
       ])
-    : [null, null, null];
+    : [null, null, null, null];
 
   // The complete catalogue in the marketing order — the single authoritative source shared with
   // the homepage and /pricing, so the three surfaces can never disagree. A stored `PlanConfig`
@@ -203,9 +204,11 @@ export default async function SubscriptionPage({ searchParams }: Props) {
     const separateRow =
       offer.key === "BUSINESS_POS"
         ? posSubscription
-        : offer.key === "ERP_PRO" || offer.key === "MJENGO_OS"
+        : offer.key === "ERP_PRO"
           ? erpSubscription
-          : offer.key === "JATA_AUTOPILOT"
+          : offer.key === "MJENGO_OS"
+            ? mjengoSubscription
+            : offer.key === "JATA_AUTOPILOT"
             ? autopilotSubscription
             : null;
     if (separateRow && (separateRow as { planKey?: string | null }).planKey === offer.key) {
