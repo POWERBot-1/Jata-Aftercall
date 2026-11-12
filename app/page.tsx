@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
  *     JATA Autopilot plans never become payable choices. Marketing order comes from
  *     `homepagePlanCards()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
- *   • Under the 2026-10-29 mobile-first owner order the grid runs Monthly, Annual, AI Business
+ *   • Under the 2026-10-29 mobile-first owner order the grid runs Monthly, AI Business
  *     Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot — the exact mobile
  *     reading order, since the grid is a single column on phones. The three owner-only products
  *     keep their own CTAs: Business POS links to the authenticated `/dashboard/pos` flow, JATA
@@ -53,19 +53,19 @@ export default async function HomePage() {
   } catch {
     storedPlans = [];
   }
-  // An unreadable or empty plan table falls back to every advertised plan, POS included.
+  // An unreadable or empty plan table falls back to the canonical catalogue; the homepage hides the annual Business Page card, while its detail page keeps both billing options.
   // Voice reception is still pending implementation and owner readiness approval; it never
   // becomes a payable card in this grid — but the informational family block below always
   // shows the tier, gated, so the complete approved package family is discoverable here
   // without visiting /products first (customer-interface completion directive).
   const plans = homepagePlanCards(storedPlans.length > 0 ? storedPlans : FALLBACK_PLANS)
-    .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE");
+    .filter((plan) => plan.key !== "AI_FRONT_DESK_VOICE" && plan.key !== "ANNUAL");
   const mjengoPlan = storedPlans.find((plan) => plan.key === "MJENGO_OS") ?? null;
   const mjengoPlanValid = Boolean(mjengoPlan && mjengoPlan.priceKES === MJENGO_PLAN_PRICE_KES && mjengoPlan.durationDays === MJENGO_PLAN_DURATION_DAYS);
 
   // The four AI Front Desk 2.0 tiers, at the approved tier prices, with availability from
   // the same price-matched catalogue row and Voice provider gate /products uses. The grid
-  // above keeps the owner-mandated seven cards; this family block is presentation only —
+  // above keeps the six visible homepage cards; this family block is presentation only —
   // it never starts checkout and never grants an entitlement.
   const voiceReadiness = getVoiceReadiness();
   const frontDeskFamily = FRONT_DESK_TIER_KEYS.map((key) =>
@@ -200,7 +200,7 @@ export default async function HomePage() {
                     ) : null}
                     {/* Separate products open their own verified routes; nothing here sells or activates them. */}
                     <Link
-                      href={isPos ? "/dashboard/pos" : isErpPro ? "/products/erp-pro" : isAutopilot ? "/dashboard/autopilot" : "/register"}
+                      href={isPos ? "/dashboard/pos" : isErpPro ? "/products/erp-pro" : isAutopilot ? "/dashboard/autopilot" : p.key === "MONTHLY" ? "/products/business-page" : "/register"}
                       className="lp-plan__cta"
                     >
                       {ownerCard ? ownerCard.cta : "Get my business page"}
