@@ -82,14 +82,16 @@ export async function POST(req: Request) {
             },
           });
         } else if (changed.count && refundPayment.businessId && refundPlanKey === MJENGO_PLAN_KEY) {
-          await tx.mjengoSubscription.updateMany({
+          const suspendedMjengo = await tx.mjengoSubscription.updateMany({
             where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },
             data: { status: "SUSPENDED" },
           });
-          await tx.mjengoEntitlement.updateMany({
-            where: { businessId: refundPayment.businessId },
-            data: { status: "SUSPENDED" },
-          });
+          if (suspendedMjengo.count > 0) {
+            await tx.mjengoEntitlement.updateMany({
+              where: { businessId: refundPayment.businessId },
+              data: { status: "SUSPENDED" },
+            });
+          }
         } else if (changed.count && refundPayment.businessId && isAutopilotPlanKey(refundPlanKey)) {
           const suspendedSub = await tx.autopilotSubscription.updateMany({
             where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },
