@@ -7,6 +7,7 @@ import { ensureDefaultStudioWebsite } from "@/lib/experience/ensure-default-webs
 import { StudioTabs } from "@/components/dashboard/StudioTabs";
 import { EntitlementBanner } from "@/components/dashboard/EntitlementBanner";
 import { OpenPageEditor } from "@/components/studio/openpage/OpenPageEditor";
+import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function WebsiteStudioPage({ params }: Props) {
         </p>
       </div>
 
-      <StudioTabs businessId={workspace.business.id} capabilities={workspace.profile.capabilities} />
+      <StudioTabs businessId={workspace.business.id} capabilities={workspace.profile.capabilities} showEnquiries={usesServiceEnquiries(workspace.profile.key)} />
 
       <EntitlementBanner
         businessId={workspace.business.id}
