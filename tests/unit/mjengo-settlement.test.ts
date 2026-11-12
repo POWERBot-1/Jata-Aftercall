@@ -176,8 +176,8 @@ describe("mjengo: settlement", () => {
 
   it("allows MJENGO OS to coexist without reading or overwriting ERP PRO storage", async () => {
     const { tx, seen } = fakeTx();
-    tx.erpSubscription = { findUnique: vi.fn(() => { throw new Error("ERP PRO must not be queried"); }), upsert: vi.fn(() => { throw new Error("ERP PRO must not be written"); }) };
-    tx.erpEntitlement = { findUnique: vi.fn(() => { throw new Error("ERP PRO must not be queried"); }), upsert: vi.fn(() => { throw new Error("ERP PRO must not be written"); }) };
+    tx.erpProSubscription = { findUnique: vi.fn(() => { throw new Error("ERP PRO must not be queried"); }), upsert: vi.fn(() => { throw new Error("ERP PRO must not be written"); }) };
+    tx.erpProEntitlement = { findUnique: vi.fn(() => { throw new Error("ERP PRO must not be queried"); }), upsert: vi.fn(() => { throw new Error("ERP PRO must not be written"); }) };
     await expect(assertMjengoStorageAvailable(tx, "biz1")).resolves.toBeUndefined();
     await expect(settleMjengoPayment(tx, {
       payment: { id: "pay_1", businessId: "biz1", userId: "user1", status: "PENDING" },
@@ -185,10 +185,10 @@ describe("mjengo: settlement", () => {
       verification: evidence,
     })).resolves.toMatchObject({ mjengoSubscription: true, alreadySettled: false });
     expect(seen.upsert).toHaveLength(2);
-    expect(tx.erpSubscription.findUnique).not.toHaveBeenCalled();
-    expect(tx.erpSubscription.upsert).not.toHaveBeenCalled();
-    expect(tx.erpEntitlement.findUnique).not.toHaveBeenCalled();
-    expect(tx.erpEntitlement.upsert).not.toHaveBeenCalled();
+    expect(tx.erpProSubscription.findUnique).not.toHaveBeenCalled();
+    expect(tx.erpProSubscription.upsert).not.toHaveBeenCalled();
+    expect(tx.erpProEntitlement.findUnique).not.toHaveBeenCalled();
+    expect(tx.erpProEntitlement.upsert).not.toHaveBeenCalled();
   });
 
   it("renewal extends from the paid-through date, never from today", async () => {
