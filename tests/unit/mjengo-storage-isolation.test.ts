@@ -12,11 +12,14 @@ describe("MJENGO independent storage", () => {
     expect(schema).toMatch(/model MjengoEntitlement \{[\s\S]*?businessId\s+String\s+@unique/);
   });
 
-  it("creates only additive MJENGO tables and does not alter ERP or POS rows", () => {
+  it("creates dedicated MJENGO tables and moves only legacy MJENGO rows", () => {
     expect(migration).toContain('CREATE TABLE "MjengoSubscription"');
     expect(migration).toContain('CREATE TABLE "MjengoEntitlement"');
     expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN)|TRUNCATE/i);
-    expect(migration).not.toMatch(/UPDATE\s+"(ErpSubscription|ErpEntitlement|PosSubscription|PosEntitlement)"/i);
+    expect(migration).toContain('DELETE FROM "ErpSubscription" WHERE "planKey" = \'MJENGO_OS\'');
+    expect(migration).toContain('DELETE FROM "ErpEntitlement" WHERE "packageKey" = \'MJENGO_OS\'');
+    expect(migration).not.toMatch(/DELETE\s+FROM\s+"(PosSubscription|PosEntitlement)"/i);
+    expect(migration).not.toMatch(/DELETE\s+FROM\s+"ErpSubscription"\s+WHERE\s+"planKey"\s*<>/i);
   });
 
   it("backfills only legacy MJENGO records and excludes ERP_PRO", () => {
