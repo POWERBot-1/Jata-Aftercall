@@ -1,5 +1,5 @@
 -- Dedicated MJENGO OS subscription and entitlement storage.
--- Additive only: existing ERP PRO, POS, payment, and customer records are not modified.
+-- Additive schema plus a scoped data move: ERP_PRO, POS, payment and customer records are preserved.
 CREATE TABLE "MjengoSubscription" (
   "id" TEXT NOT NULL,
   "businessId" TEXT NOT NULL,
@@ -62,3 +62,8 @@ SELECT
 FROM "ErpEntitlement" e
 WHERE e."packageKey" = 'MJENGO_OS'
 ON CONFLICT ("businessId") DO NOTHING;
+
+-- After the MJENGO copies exist, free the legacy one-row ERP slots for ERP_PRO.
+-- These predicates delete only the exact MJENGO discriminator; no ERP_PRO row can match.
+DELETE FROM "ErpSubscription" WHERE "planKey" = 'MJENGO_OS';
+DELETE FROM "ErpEntitlement" WHERE "packageKey" = 'MJENGO_OS';
