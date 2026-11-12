@@ -644,6 +644,8 @@ function createFallbackPrisma(): any {
     erpConfiguration: emptyModel(),
     erpSubscription: emptyModel(),
     erpEntitlement: emptyModel(),
+    mjengoSubscription: emptyModel(),
+    mjengoEntitlement: emptyModel(),
     erpSequence: emptyModel(),
     erpAuditEvent: emptyModel(),
     erpIdempotencyRecord: emptyModel(),
