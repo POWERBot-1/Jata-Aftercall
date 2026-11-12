@@ -4,32 +4,37 @@ import { describe, expect, it } from "vitest";
 const schema = readFileSync("prisma/schema.prisma", "utf8");
 const migration = readFileSync("prisma/migrations/20261112090000_mjengo_isolated_entitlements/migration.sql", "utf8");
 
-describe("MJENGO independent storage", () => {
-  it("declares tenant-scoped subscription and entitlement models with independent uniqueness", () => {
+describe("independent ERP PRO and MJENGO OS storage", () => {
+  it("declares tenant-scoped independent models for both products", () => {
+    expect(schema).toContain("erpProSubscription      ErpProSubscription?");
+    expect(schema).toContain("erpProEntitlement       ErpProEntitlement?");
     expect(schema).toContain("mjengoSubscription      MjengoSubscription?");
     expect(schema).toContain("mjengoEntitlement       MjengoEntitlement?");
-    expect(schema).toMatch(/model MjengoSubscription \{[\s\S]*?businessId\s+String\s+@unique/);
-    expect(schema).toMatch(/model MjengoEntitlement \{[\s\S]*?businessId\s+String\s+@unique/);
+    for (const model of ["ErpProSubscription", "ErpProEntitlement", "MjengoSubscription", "MjengoEntitlement"]) {
+      expect(schema).toMatch(new RegExp("model " + model + " \\{[\\s\\S]*?businessId\\s+String\\s+@unique"));
+    }
   });
 
-  it("creates dedicated MJENGO tables and moves only legacy MJENGO rows", () => {
-    expect(migration).toContain('CREATE TABLE "MjengoSubscription"');
-    expect(migration).toContain('CREATE TABLE "MjengoEntitlement"');
-    expect(migration).not.toMatch(/DROP\s+(TABLE|COLUMN)|TRUNCATE/i);
-    expect(migration).toContain('DELETE FROM "ErpSubscription" WHERE "planKey" = \'MJENGO_OS\'');
-    expect(migration).toContain('DELETE FROM "ErpEntitlement" WHERE "packageKey" = \'MJENGO_OS\'');
-    expect(migration).not.toMatch(/DELETE\s+FROM\s+"(PosSubscription|PosEntitlement)"/i);
-    expect(migration).not.toMatch(/DELETE\s+FROM\s+"ErpSubscription"\s+WHERE\s+"planKey"\s*<>/i);
+  it("creates four dedicated product tables without deleting or rewriting legacy rows", () => {
+    for (const table of ["ErpProSubscription", "ErpProEntitlement", "MjengoSubscription", "MjengoEntitlement"]) {
+      expect(migration).toContain('CREATE TABLE "' + table + '"');
+    }
+    expect(migration).not.toMatch(/DROP\\s+(TABLE|COLUMN)|TRUNCATE|DELETE\\s+FROM/i);
+    expect(migration).not.toMatch(/UPDATE\\s+"(ErpSubscription|ErpEntitlement|PosSubscription|PosEntitlement)"/i);
   });
 
-  it("backfills only legacy MJENGO records and excludes ERP_PRO", () => {
-    expect(migration).toMatch(/FROM "ErpSubscription" s\s+WHERE s\."planKey" = 'MJENGO_OS'/);
-    expect(migration).toMatch(/FROM "ErpEntitlement" e\s+WHERE e\."packageKey" = 'MJENGO_OS'/);
-    expect(migration).toContain('ON CONFLICT ("businessId") DO NOTHING');
+  it("backfills legacy ERP PRO and MJENGO rows only into their matching product tables", () => {
+    expect(migration).toMatch(/FROM "ErpSubscription" s\\s+WHERE s\\."planKey" = 'ERP_PRO'/);
+    expect(migration).toMatch(/FROM "ErpEntitlement" e\\s+WHERE e\\."packageKey" = 'ERP_PRO'/);
+    expect(migration).toMatch(/FROM "ErpSubscription" s\\s+WHERE s\\."planKey" = 'MJENGO_OS'/);
+    expect(migration).toMatch(/FROM "ErpEntitlement" e\\s+WHERE e\\."packageKey" = 'MJENGO_OS'/);
+    expect(migration.match(/ON CONFLICT \\("businessId"\\) DO NOTHING/g)?.length).toBe(4);
   });
 
-  it("keeps both MJENGO models available in the offline Prisma fallback", () => {
+  it("keeps all four isolated models available in the offline Prisma fallback", () => {
     const db = readFileSync("lib/db.ts", "utf8");
+    expect(db).toContain("erpProSubscription: emptyModel()");
+    expect(db).toContain("erpProEntitlement: emptyModel()");
     expect(db).toContain("mjengoSubscription: emptyModel()");
     expect(db).toContain("mjengoEntitlement: emptyModel()");
   });
