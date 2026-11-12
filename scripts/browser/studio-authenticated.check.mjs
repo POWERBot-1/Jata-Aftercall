@@ -262,7 +262,7 @@ async function waitForOpenPageVersion(websiteId, expectedVersion, timeoutMs = 15
 async function openPageEditorUI(page, fixture) {
   await page.goto(`${origin}/dashboard/businesses/${fixture.id}/studio`, { waitUntil: "networkidle0" });
   await page.waitForSelector(".openpage-editor-root", { timeout: 20000 });
-  const website = await prisma.studioWebsite.findUniqueOrThrow({ where: { businessId: fixture.id } });
+  const website = await prisma.studioWebsite.findFirstOrThrow({ where: { businessId: fixture.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] });
   fixture.studioWebsiteId = website.id;
   const initial = await api(page, `/api/studio/openpage/document?websiteId=${encodeURIComponent(website.id)}`);
   check(`${fixture.category}: tenant-scoped OpenPage document read`, initial.status === 200 && initial.body?.document === null);
