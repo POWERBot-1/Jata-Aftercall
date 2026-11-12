@@ -34,9 +34,9 @@ export const dynamic = "force-dynamic";
  *     JATA Autopilot plans never become payable choices. Marketing order comes from
  *     `homepagePlanCards()`.
  *   • A database failure falls back to every advertised plan, not just the original two.
- *   • Under the 2026-10-29 mobile-first owner order the grid runs Monthly, AI Business
- *     Front Desk, Website Studio, Business POS, JATA BOS PRO, JATA Autopilot — the exact mobile
- *     reading order, since the grid is a single column on phones. The three owner-only products
+ *   • The homepage shows Monthly, AI Business Front Desk, Website Studio, Business POS, JATA BOS PRO
+ *     and JATA Autopilot. The Annual Business Page option is reached from the Monthly card's detail
+ *     page and remains in /pricing; it is not duplicated on the homepage. The three owner-only products
  *     keep their own CTAs: Business POS links to the authenticated `/dashboard/pos` flow, JATA
  *     BOS PRO to its public detail page `/products/erp-pro`, and the standard JATA Autopilot
  *     package to `/dashboard/autopilot` — never to `/register` or the business-page checkout —
@@ -161,7 +161,6 @@ export default async function HomePage() {
                 // Every card renders its product icon (decorative; the plan name is the label),
                 // so the shared card rows stay aligned and each product is recognisable at a glance.
                 const icon = ownerCard ? ownerCard.icon : PLAN_ICONS[p.key] ?? "tag";
-                const featured = p.key === "ANNUAL";
                 return (
                   <article
                     key={p.key}
