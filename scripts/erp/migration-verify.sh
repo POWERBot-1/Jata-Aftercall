@@ -30,8 +30,8 @@ ERP_MIGRATION="20261027000000_pos_erp_pro"
 # Every migration this product owns, in order. The upgrade path stops before the first one and
 # applies the rest; the rollback scenario drops what all of them create.
 ERP_MIGRATIONS=("20261027000000_pos_erp_pro" "20261028000000_erp_tasks" "20261029000000_erp_notifications" "20261030000000_erp_approvals" "20261031000000_erp_approval_consumption" "20261032000000_erp_procurement" "20261033000000_erp_requisitions")
-# Tables the ERP migrations create (Erp* / Msg*). Update when an additive migration adds one.
-ERP_TABLE_TOTAL=48
+# Product-owned ERP, messaging and MJENGO tables. Update when an additive migration adds one.
+ERP_TABLE_TOTAL=52
 LAST_RELEASE_MIGRATION="20261010000200_checkout_idempotency"
 PSQL="${PSQL:-psql}"
 PG_DUMP="${PG_DUMP:-pg_dump}"
@@ -88,10 +88,10 @@ apply_until() { # apply_until [stop-before-dir]
 }
 
 erp_table_count() {
-  "$PSQL" "$DB_URL" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and (table_name like 'Erp%' or table_name like 'Msg%');"
+  "$PSQL" "$DB_URL" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and (table_name like 'Erp%' or table_name like 'Msg%' or table_name like 'Mjengo%');"
 }
 base_table_count() {
-  "$PSQL" "$DB_URL" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'Erp%' and table_name not like 'Msg%';"
+  "$PSQL" "$DB_URL" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'Erp%' and table_name not like 'Msg%' and table_name not like 'Mjengo%';"
 }
 scalar() { "$PSQL" "$DB_URL" -tAc "$1"; }
 
@@ -112,7 +112,7 @@ measure_base_tables() {
       return 1
     fi
   done
-  count=$("$PSQL" "$url" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'Erp%' and table_name not like 'Msg%';")
+  count=$("$PSQL" "$url" -tAc "select count(*) from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and table_name not like 'Erp%' and table_name not like 'Msg%' and table_name not like 'Mjengo%';")
   "$PSQL" "$ADMIN_URL" -q -c "DROP DATABASE IF EXISTS \"$stamp_db\";" >/dev/null 2>&1
   echo "$count"
 }
@@ -244,7 +244,7 @@ SQL
   local dump_args=() t
   while IFS= read -r t; do
     [ -n "$t" ] && dump_args+=(-t "\"$t\"")
-  done < <("$PSQL" "$DB_URL" -tAc "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and (table_name like 'Erp%' or table_name like 'Msg%') order by table_name;")
+  done < <("$PSQL" "$DB_URL" -tAc "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' and (table_name like 'Erp%' or table_name like 'Msg%' or table_name like 'Mjengo%') order by table_name;")
   if [ "${#dump_args[@]}" -lt $((ERP_TABLE_TOTAL * 2)) ]; then # 2 arguments per table (-t and name)
     fail "could not enumerate the ERP tables for export (${#dump_args[@]} arguments)"; return
   fi
