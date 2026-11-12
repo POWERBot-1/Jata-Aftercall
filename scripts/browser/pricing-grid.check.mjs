@@ -216,9 +216,9 @@ for (const viewport of VIEWPORTS) {
 
 const businessPageDetails = await browser.newPage();
 await businessPageDetails.goto(`${base}/products/business-page`, { waitUntil: "networkidle2", timeout: 120000 });
-const businessPageOptions = await businessPageDetails.$eval("[data-business-page-plan]", (cards) => cards.map((card) => ({
+const businessPageOptions = await businessPageDetails.$$eval("[data-business-page-plan]", (cards) => cards.map((card) => ({
   key: card.getAttribute("data-business-page-plan"),
-  text: card.textContent?.replace(/\\s+/g, " ").trim() ?? "",
+  text: card.textContent?.replace(/\s+/g, " ").trim() ?? "",
   href: card.querySelector("a")?.getAttribute("href") ?? "",
 })));
 check("Business Page detail exposes both Monthly KES 149 and Annual KES 999 options",
