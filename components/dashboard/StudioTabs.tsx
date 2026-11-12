@@ -9,6 +9,7 @@ import {
   Gift,
   Image as ImageIcon,
   Megaphone,
+  MessageSquare,
   Package,
   QrCode,
   Receipt,
@@ -23,11 +24,12 @@ import { cn } from "@/lib/ui";
  * OpenPage is the sole website editing surface. The remaining links are business operations
  * (catalogue, media, orders, customers and analytics), not competing website editors.
  */
-export function StudioTabs({ businessId, capabilities }: { businessId: string; capabilities: string[] }) {
+export function StudioTabs({ businessId, capabilities, showEnquiries = false }: { businessId: string; capabilities: string[]; showEnquiries?: boolean }) {
   const base = `/dashboard/businesses/${businessId}`;
   const pathname = usePathname() || "";
   const tabs = [
     { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
+    ...(showEnquiries ? [{ href: `${base}/enquiries`, label: "Enquiries", icon: MessageSquare }] : []),
     { href: `${base}/items`, label: "Products & services", icon: Package },
     { href: `${base}/photos`, label: "Gallery", icon: ImageIcon },
     ...(capabilities.includes("commerce") || capabilities.includes("booking")
