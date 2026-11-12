@@ -165,7 +165,7 @@ export default async function HomePage() {
                   <article
                     key={p.key}
                     className="lp-plan"
-                    data-featured={featured}
+                    data-featured={false}
                     data-plan={p.key}
                     aria-label={isErpPro ? `${ERP_PRO_PLAN_CARD.name} — ${ERP_PRO_PLAN_CARD.subtitle}` : planDisplayName(p)}
                   >
