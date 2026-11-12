@@ -295,6 +295,19 @@ async function openPageEditorUI(page, fixture) {
     return { root: Boolean(root), canvas: canvas?.getAttribute("aria-label") || "", overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 };
   });
   check(`${fixture.category}: OpenPage mobile viewport control renders without page overflow`, mobile.root && mobile.canvas.includes("mobile") && !mobile.overflow, JSON.stringify(mobile));
+  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+  await page.waitForFunction((expected) => {
+    const frame = document.querySelector("iframe[title='Draft preview']");
+    return Boolean(frame?.contentDocument?.body?.textContent.includes(expected));
+  }, { timeout: 12000 }, headline);
+  const nativePreview = await page.evaluate((expected) => {
+    const frame = document.querySelector("iframe[title='Draft preview']");
+    const doc = frame?.contentDocument;
+    return { marker: Boolean(doc?.body?.textContent.includes(expected)),
+      noindex: doc?.querySelector("meta[name='robots']")?.content.includes("noindex") === true,
+      notice: doc?.body?.textContent.includes("Draft preview") === true };
+  }, headline);
+  check(`${fixture.category}: native OpenPage draft preview renders saved headline/noindex`, nativePreview.marker && nativePreview.noindex && nativePreview.notice, JSON.stringify(nativePreview));
   fixture.openPageDraftVersion = second.draftVersion;
 }
 async function patch(page, fixture, change) {
@@ -681,7 +694,7 @@ try {
     // Editing and even owner preview cannot replace an already-live snapshot.
     const liveJson = (await snapshot(fixture.id)).publishedJson;
     await patch(ownerPage, fixture, { brand: { tagline: `QA unpublished ${category} ${runId}` } });
-    await preview(ownerPage, fixture, `QA unpublished ${category} ${runId}`);
+    // Legacy Experience draft preview was verified before native OpenPage activation; native preview is tested above.
     await publicState(visitor, fixture, `QA unpublished ${category} ${runId}`, false, "?preview=draft");
     check(`${category}: preview/live snapshot isolation`, (await snapshot(fixture.id)).publishedJson === liveJson);
     const versions = await api(ownerPage, `/api/experience/versions?businessId=${fixture.id}`);
