@@ -130,7 +130,7 @@ async function main() {
       teamRolesJson: JSON.stringify({ [viewer.id]: "VIEWER" }),
     },
   });
-  await prisma.erpSubscription.create({
+  await prisma.erpProSubscription.create({
     data: {
       businessId: business.id,
       userId: owner.id,
@@ -144,8 +144,8 @@ async function main() {
 
   async function cleanup() {
     await prisma.erpTask.deleteMany({ where: { businessId: { in: [business.id, otherBusiness.id] } } });
-    await prisma.erpEntitlement.deleteMany({ where: { businessId: business.id } }).catch(() => null);
-    await prisma.erpSubscription.deleteMany({ where: { businessId: business.id } });
+    await prisma.erpProEntitlement.deleteMany({ where: { businessId: business.id } }).catch(() => null);
+    await prisma.erpProSubscription.deleteMany({ where: { businessId: business.id } });
     await prisma.erpConfiguration.deleteMany({ where: { businessId: business.id } });
     await prisma.businessMember.deleteMany({ where: { businessId: business.id } });
     await prisma.business.deleteMany({ where: { id: { in: [business.id, otherBusiness.id] } } });
