@@ -38,3 +38,27 @@ CREATE UNIQUE INDEX "MjengoEntitlement_businessId_key" ON "MjengoEntitlement"("b
 CREATE INDEX "MjengoEntitlement_businessId_status_idx" ON "MjengoEntitlement"("businessId", "status");
 ALTER TABLE "MjengoEntitlement" ADD CONSTRAINT "MjengoEntitlement_businessId_fkey"
   FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Preserve MJENGO-only paid state previously stored in the shared ERP rows.
+-- ERP_PRO rows are excluded and remain untouched.
+INSERT INTO "MjengoSubscription" (
+  "id", "businessId", "userId", "planId", "planKey", "status", "startAt", "expiresAt",
+  "graceUntil", "paymentId", "paymentReference", "cancelledAt", "createdAt", "updatedAt"
+)
+SELECT
+  'mjengo_' || s."id", s."businessId", s."userId", s."planId", 'MJENGO_OS', s."status",
+  s."startAt", s."expiresAt", s."graceUntil", s."paymentId", s."paymentReference",
+  s."cancelledAt", s."createdAt", CURRENT_TIMESTAMP
+FROM "ErpSubscription" s
+WHERE s."planKey" = 'MJENGO_OS'
+ON CONFLICT ("businessId") DO NOTHING;
+
+INSERT INTO "MjengoEntitlement" (
+  "id", "businessId", "packageKey", "status", "activatedAt", "expiresAt", "createdAt", "updatedAt"
+)
+SELECT
+  'mjengo_' || e."id", e."businessId", 'MJENGO_OS', e."status", e."activatedAt",
+  e."expiresAt", e."createdAt", CURRENT_TIMESTAMP
+FROM "ErpEntitlement" e
+WHERE e."packageKey" = 'MJENGO_OS'
+ON CONFLICT ("businessId") DO NOTHING;
