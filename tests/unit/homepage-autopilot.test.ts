@@ -60,13 +60,12 @@ const planCards = (html: string) =>
   }));
 
 describe("the homepage renders the standard JATA Autopilot package in the shared pricing grid", () => {
-  it("puts JATA Autopilot seventh (last) in the one grid under the 2026-10-29 owner order", async () => {
+  it("puts JATA Autopilot last in the six-card homepage grid", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
     expect(cards.map((card) => card.key)).toEqual([
       "MONTHLY",
-      "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
@@ -74,7 +73,7 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
       "JATA_AUTOPILOT",
     ]);
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
-    expect(html).toContain('data-plan-count="7"');
+    expect(html).toContain('data-plan-count="6"');
     expect(html.match(/data-plan="JATA_AUTOPILOT"/g)).toHaveLength(1);
   });
 
@@ -106,7 +105,7 @@ describe("the homepage renders the standard JATA Autopilot package in the shared
     expect(autopilot.inner.indexOf("lp-plan__icon")).toBeLessThan(autopilot.inner.indexOf("lp-plan__name"));
     // Every card renders an icon, so the shared rows stay aligned at every width.
     for (const card of cards) expect(card.inner, card.key).toContain("lp-plan__icon");
-    expect(html.match(/lp-plan__icon/g)).toHaveLength(7);
+    expect(html.match(/lp-plan__icon/g)).toHaveLength(6);
   });
 
   it("names the standard package, the verified price and the way in", async () => {
@@ -209,15 +208,17 @@ describe("the Autopilot card does not weaken any purchase boundary", () => {
     expect(route).toContain('if (!session) redirect("/login")');
   });
 
-  it("leaves the other five plans, their prices and their destinations untouched", async () => {
+  it("keeps the monthly, AI Front Desk and Website Studio destinations, and hides the annual Business Page card", async () => {
     const html = await renderHome();
     const cards = planCards(html);
-    for (const key of ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]) {
+    expect(cards.find((card) => card.key === "MONTHLY")!.inner).toContain('href="/products/business-page"');
+    for (const key of ["AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]) {
       expect(cards.find((card) => card.key === key)!.inner, key).toContain('href="/register"');
     }
+    expect(cards.some((card) => card.key === "ANNUAL")).toBe(false);
     expect(cards.find((card) => card.key === "BUSINESS_POS")!.inner).toContain('href="/dashboard/pos"');
     expect(html).toContain("Monthly — KES 149/month");
-    expect(html).toContain("Annual — KES 999/year");
+    expect(html).not.toContain('data-plan="ANNUAL"');
     expect(html).toContain("AI Business Front Desk — KES 499/month");
     expect(html).toContain("Website Studio — KES 999/month");
     expect(html).toContain("Open Business POS");
