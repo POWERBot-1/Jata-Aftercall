@@ -4,8 +4,8 @@
  * 1. Production rendered "AI Business Front Desk � KES 499/month" and "Interactive Business �
  *    KES 999/month": the stored plan names carried U+FFFD. Known plans now fall back to their
  *    canonical name when the stored one is corrupt; correct stored names are shown untouched.
- * 2. When the plan read failed the page fell back to Monthly and Annual only, silently dropping
- *    two advertised products. The fallback now lists every advertised plan.
+ * 2. The homepage promotes Monthly to the shared Business Page detail page and keeps Annual
+ *    discoverable there and on /pricing, not as a duplicate homepage card.
  *
  * Current homepage presentation: six cards in one grid — Monthly Business Page, AI Business Front Desk,
  * Website Studio, Business POS, JATA BOS PRO (ERP_PRO, marketing surface only), JATA Autopilot.
@@ -73,7 +73,9 @@ describe("homepage plan cards", () => {
     const grid = html.slice(html.indexOf('class="lp-plans"'), html.indexOf('class="lp-pricing__note"'));
     for (const name of expectedOrder) expect(grid, name).toContain(name);
     expect(grid).not.toContain('data-plan="ANNUAL"');
-    const monthly = grid.match(/<article class="lp-plan"[^>]*data-plan="MONTHLY"[^>]*>([\\s\\S]*?)<\\/article>/)?.[1] ?? "";
+    const monthlyStart = grid.indexOf('data-plan="MONTHLY"');
+    const monthlyEnd = grid.indexOf("</article>", monthlyStart);
+    const monthly = grid.slice(monthlyStart, monthlyEnd);
     expect(monthly).toContain('href="/products/business-page"');
     expect(html).not.toContain('id="business-pos-heading"');
     expect(html.match(/class="lp-plan"/g)).toHaveLength(6);
