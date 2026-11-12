@@ -1,9 +1,8 @@
 /**
  * JATA BOS PRO (`ERP_PRO`) in the public catalogue — homepage, /pricing and the shared helpers.
  *
- * The 2026-10-29 mobile-first owner order puts seven offers in one grid:
+ * The homepage shows six offers in one grid; /pricing retains the annual option in its seven-offer catalogue:
  *   1. JATA Monthly — KES 149        5. Business POS — KES 499/month
- *   2. JATA Annual — KES 999         6. JATA BOS PRO — KES 3,000 per 30 days
  *   3. AI Business Front Desk        7. JATA Autopilot — KES 2,499/month
  *   4. Website Studio — KES 999
  *
@@ -54,10 +53,9 @@ import { ERP_PRO_PLAN_CARD, PLAN_BADGES, PLAN_INCLUDES, PLAN_ICONS } from "@/lib
 const root = path.resolve(__dirname, "../..");
 const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 
-/** The seven offers in the required order, as the homepage must render them. */
+/** The six offers visible in the homepage grid. */
 const REQUIRED_ORDER = [
   "MONTHLY",
-  "ANNUAL",
   "AI_BUSINESS_FRONT_DESK",
   "INTERACTIVE_BUSINESS",
   "BUSINESS_POS",
@@ -67,13 +65,15 @@ const REQUIRED_ORDER = [
 
 const REQUIRED_NAMES = [
   "Monthly — KES 149/month",
-  "Annual — KES 999/year",
   "AI Business Front Desk — KES 499/month",
   "Website Studio — KES 999/month",
   "JATA AFTERCALL — Business POS",
   "JATA BOS PRO",
   "JATA Autopilot — KES 2,499/month",
 ];
+
+const PRICING_ORDER = ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS", "BUSINESS_POS", "ERP_PRO", "JATA_AUTOPILOT"];
+const PRICING_NAMES = ["Monthly — KES 149/month", "Annual — KES 999/year", ...REQUIRED_NAMES.slice(1)];
 
 /** Full active catalogue as stored — the production-shape rows plus the ERP_PRO row. */
 const STORED_ROWS = [
@@ -95,8 +95,8 @@ const planCards = (html: string) =>
 const renderHome = async () => renderToStaticMarkup(await HomePage());
 const renderPricing = async () => renderToStaticMarkup(await PricingPage());
 
-describe("homepage: the seven offers in the exact mobile-first order", () => {
-  it("renders exactly seven cards in the required order, one grid, no extra sections", async () => {
+describe("homepage: the six visible offers in the exact mobile-first order", () => {
+  it("renders exactly six cards in the required order, one grid, no annual card", async () => {
     state.fail = false;
     state.plans = STORED_ROWS;
     const html = await renderHome();
@@ -104,8 +104,9 @@ describe("homepage: the seven offers in the exact mobile-first order", () => {
 
     expect(cards.map((card) => card.key)).toEqual(REQUIRED_ORDER);
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
-    expect(html).toContain('data-plan-count="7"');
+    expect(html).toContain('data-plan-count="6"');
     // Names appear in the required order (first occurrence in the grid).
+    expect(html).not.toContain('data-plan="ANNUAL"');
     const positions = REQUIRED_NAMES.map((name) => html.indexOf(name));
     expect(positions.every((index) => index >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
@@ -209,12 +210,12 @@ describe("stored catalogue pricing beats the fallback", () => {
 });
 
 describe("public /pricing shows every offer", () => {
-  it("lists all seven offers in the marketing order, each with price, period and a details link", async () => {
+  it("lists all seven offers in /pricing, including the annual Business Page option", async () => {
     state.fail = false;
     state.plans = STORED_ROWS;
     const html = await renderPricing();
 
-    for (const name of REQUIRED_NAMES) {
+    for (const name of PRICING_NAMES) {
       expect(html, name).toContain(name);
     }
     // Exactly one BOS PRO card, and it points at its product page.
@@ -222,7 +223,7 @@ describe("public /pricing shows every offer", () => {
     expect(html).toContain('href="/products/erp-pro"');
     expect(html).toContain("KES 3,000 per 30 days");
     // Offer order in the DOM matches the required order.
-    const positions = REQUIRED_ORDER.map((key) => html.indexOf(`data-plan="${key}"`));
+    const positions = PRICING_ORDER.map((key) => html.indexOf(`data-plan="${key}"`));
     expect(positions.every((index) => index >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
