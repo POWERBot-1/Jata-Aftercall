@@ -64,22 +64,21 @@ const gridMarkup = (html: string) => {
 };
 
 describe("the homepage renders the Business POS in the shared pricing grid (2026-10-25)", () => {
-  it("keeps the POS fifth in the one grid under the 2026-10-29 owner order", async () => {
+  it("keeps the POS fourth in the six-card homepage grid", async () => {
     const html = await renderHome();
     const cards = planCards(html);
 
     expect(cards.map((card) => card.key)).toEqual([
       "MONTHLY",
-      "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
       "ERP_PRO",
       "JATA_AUTOPILOT",
     ]);
-    // One grid container holds all seven cards.
+    // One grid container holds all six visible homepage cards.
     expect(html.match(/class="lp-plans"/g)).toHaveLength(1);
-    expect(html).toContain('data-plan-count="7"');
+    expect(html).toContain('data-plan-count="6"');
     expect(gridMarkup(html)).toContain('data-plan="BUSINESS_POS"');
   });
 
@@ -154,12 +153,11 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
     expect(html).not.toMatch(/POS is (now )?(live|active)/i);
   });
 
-  it("preserves AFTERCALL prices and checkout for the four page plans", async () => {
+  it("preserves visible page-plan prices while hiding Annual from the homepage", async () => {
     const html = await renderHome();
 
     for (const name of [
       "Monthly — KES 149/month",
-      "Annual — KES 999/year",
       "AI Business Front Desk — KES 499/month",
       "Website Studio — KES 999/month",
     ]) {
@@ -170,15 +168,17 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
     expect(html).toContain("Get my business page");
     expect(html).toContain("Secure Paystack checkout. Your plan starts once payment is confirmed.");
 
-    // The four page plans still buy through /register; only the POS uses its own flow.
+    // Monthly opens the shared Business Page detail page, which presents both billing options.
     const cards = planCards(html);
-    for (const key of ["MONTHLY", "ANNUAL", "AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]) {
+    expect(cards.find((card) => card.key === "MONTHLY")!.inner).toContain('href="/products/business-page"');
+    for (const key of ["AI_BUSINESS_FRONT_DESK", "INTERACTIVE_BUSINESS"]) {
       expect(cards.find((card) => card.key === key)!.inner, key).toContain('href="/register"');
     }
+    expect(cards.some((card) => card.key === "ANNUAL")).toBe(false);
     expect(cards.find((card) => card.key === "BUSINESS_POS")!.inner).not.toContain('href="/register"');
   });
 
-  it("still renders all seven cards when the database is unavailable (the existing fallback)", async () => {
+  it("still renders all six homepage cards when the database is unavailable (the existing fallback)", async () => {
     const db = await import("@/lib/db");
     const findMany = db.default.planConfig.findMany as unknown as { mockImplementationOnce: (fn: () => Promise<never>) => void };
     findMany.mockImplementationOnce(async () => {
@@ -188,7 +188,6 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
     const html = renderToStaticMarkup(await HomePage());
     expect(planCards(html).map((card) => card.key)).toEqual([
       "MONTHLY",
-      "ANNUAL",
       "AI_BUSINESS_FRONT_DESK",
       "INTERACTIVE_BUSINESS",
       "BUSINESS_POS",
@@ -196,7 +195,7 @@ describe("the homepage renders the Business POS in the shared pricing grid (2026
       "JATA_AUTOPILOT",
     ]);
     expect(html).toContain("Monthly — KES 149/month");
-    expect(html).toContain("Annual — KES 999/year");
+    expect(html).not.toContain('data-plan="ANNUAL"');
     expect(html).toContain("Business POS");
     expect(html).toContain(`>KES ${POS_PLAN_PRICE_KES}<`);
     expect(html).toContain('href="/dashboard/pos"');
