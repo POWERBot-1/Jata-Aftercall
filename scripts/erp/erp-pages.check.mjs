@@ -202,7 +202,7 @@ async function seed() {
       teamRolesJson: JSON.stringify({ [manager.id]: "MANAGER", [staff.id]: "STAFF", [viewer.id]: "VIEWER" }),
     },
   });
-  await prisma.erpSubscription.create({
+  await prisma.erpProSubscription.create({
     data: {
       businessId: business.id,
       userId: owner.id,
@@ -214,7 +214,7 @@ async function seed() {
     },
   });
   await prisma.erpConfiguration.create({ data: { businessId: otherBusiness.id } });
-  await prisma.erpSubscription.create({
+  await prisma.erpProSubscription.create({
     data: {
       businessId: otherBusiness.id,
       userId: outsider.id,
@@ -305,8 +305,8 @@ async function cleanup() {
     await prisma.erpNotification.deleteMany({ where: { businessId } }).catch(() => null);
     await prisma.erpAuditEvent.deleteMany({ where: { businessId } }).catch(() => null);
     await prisma.erpSequence.deleteMany({ where: { businessId } }).catch(() => null);
-    await prisma.erpSubscription.deleteMany({ where: { businessId } }).catch(() => null);
-    await prisma.erpEntitlement.deleteMany({ where: { businessId } }).catch(() => null);
+    await prisma.erpProSubscription.deleteMany({ where: { businessId } }).catch(() => null);
+    await prisma.erpProEntitlement.deleteMany({ where: { businessId } }).catch(() => null);
     await prisma.erpConfiguration.deleteMany({ where: { businessId } }).catch(() => null);
     await prisma.posProduct.deleteMany({ where: { businessId } }).catch(() => null);
     await prisma.posSupplier.deleteMany({ where: { businessId } }).catch(() => null);
