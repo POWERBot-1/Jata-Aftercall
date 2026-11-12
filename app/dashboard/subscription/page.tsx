@@ -157,10 +157,10 @@ export default async function SubscriptionPage({ searchParams }: Props) {
   // Read-only status lookups for the separate products, scoped to the owner's own selected
   // business. These are `findUnique` reads only — viewing this page writes nothing, creates no
   // subscription and alters no existing one, and no other tenant's row can be reached from here.
-  const [posSubscription, erpSubscription, autopilotSubscription, mjengoSubscription] = selected
+  const [posSubscription, erpProSubscription, autopilotSubscription, mjengoSubscription] = selected
     ? await Promise.all([
         prisma.posSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
-        prisma.erpSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
+        prisma.erpProSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
         prisma.autopilotSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
         (prisma as any).mjengoSubscription?.findUnique?.({ where: { businessId: selected.id } }).catch(() => null) ?? null,
       ])
@@ -205,7 +205,7 @@ export default async function SubscriptionPage({ searchParams }: Props) {
       offer.key === "BUSINESS_POS"
         ? posSubscription
         : offer.key === "ERP_PRO"
-          ? erpSubscription
+          ? erpProSubscription
           : offer.key === "MJENGO_OS"
             ? mjengoSubscription
             : offer.key === "JATA_AUTOPILOT"
