@@ -120,7 +120,7 @@ async function seed() {
   const owner = await prisma.user.create({ data: { email: `erpvisual-${runId}@example.test`, name: `Visual ${runId}`, passwordHash: "x" } });
   const business = await prisma.business.create({ data: { ownerId: owner.id, name: `Visual Check ${runId}`, slug: `visual-check-${runId}`, category: "retail", phone: "0700000000" } });
   await prisma.erpConfiguration.create({ data: { businessId: business.id, legalName: `Visual Check ${runId}` } });
-  await prisma.erpSubscription.create({
+  await prisma.erpProSubscription.create({
     data: { businessId: business.id, userId: owner.id, planId: "plan-erp-pro-visual", planKey: "ERP_PRO", status: "ACTIVE", startAt: new Date(), expiresAt: new Date(Date.now() + 30 * 864e5) },
   });
   const supplier = await prisma.posSupplier.create({ data: { businessId: business.id, name: `Cement Traders ${runId}`, termsDays: 30 } });
@@ -192,7 +192,7 @@ async function seed() {
 async function cleanup() {
   if (!ids.business) return;
   const businessId = ids.business;
-  for (const model of ["erpRequisitionLine", "erpRequisition", "erpPurchaseOrderLine", "erpPurchaseOrder", "erpTask", "erpNotification", "erpAuditEvent", "erpSequence", "erpSubscription", "erpEntitlement", "erpConfiguration", "posProduct", "posSupplier"]) {
+  for (const model of ["erpRequisitionLine", "erpRequisition", "erpPurchaseOrderLine", "erpPurchaseOrder", "erpTask", "erpNotification", "erpAuditEvent", "erpSequence", "erpProSubscription", "erpProEntitlement", "erpConfiguration", "posProduct", "posSupplier"]) {
     await prisma[model].deleteMany({ where: { businessId } }).catch(() => null);
   }
   await prisma.businessMember.deleteMany({ where: { businessId } }).catch(() => null);
