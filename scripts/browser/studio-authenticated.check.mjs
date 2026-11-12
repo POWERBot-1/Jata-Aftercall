@@ -288,7 +288,7 @@ async function openPageEditorUI(page, fixture) {
   check(`${fixture.category}: immutable server revision history is complete`, revisions.length === 2 && revisions[0].draftVersion === 1 && revisions[1].draftVersion === 2);
   const localState = await page.evaluate(() => ({ config: localStorage.getItem("openpage-config"), projects: localStorage.getItem("openpage-projects") }));
   check(`${fixture.category}: OpenPage content is not persisted in browser local storage`, localState.config === null && localState.projects === null);
-  await clickText(page, ".openpage-editor-root button[aria-label]", "Mobile");
+  await clickText(page, '.openpage-editor-root button[aria-label="Mobile"]', "");
   const mobile = await page.evaluate(() => {
     const root = document.querySelector(".openpage-editor-root");
     const canvas = [...document.querySelectorAll('[role="region"][aria-label^="Site preview"]')][0];
