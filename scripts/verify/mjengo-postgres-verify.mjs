@@ -320,6 +320,9 @@ const erpPro = await db.query(
    VALUES ('sub_erp_pro', 'bizA', 'u_owner', 'p_erp', 'ERP_PRO', 'ACTIVE', NOW())
    RETURNING status`,
 );
+const mjengoSubscription = await db.query(
+  `SELECT status, "planKey" FROM "MjengoSubscription" WHERE "businessId" = 'bizA'`,
+);
 const mjengoEntitlement = await db.query(
   `SELECT status, "packageKey" FROM "MjengoEntitlement" WHERE "businessId" = 'bizA'`,
 );
@@ -327,9 +330,9 @@ const posEntitlement = await db.query(
   `SELECT status FROM "PosEntitlement" WHERE "businessId" = 'bizA'`,
 );
 record(
-  "separation: an ACTIVE BUSINESS_POS subscription creates no MJENGO_OS entitlement",
-  mjengoEntitlement.rows.length === 0,
-  `ERP PRO rows: ${erpPro.rows.length}; MJENGO rows for bizA: ${mjengoEntitlement.rows.length}; POS entitlement rows: ${posEntitlement.rows.length}`,
+  "separation: ERP PRO and BUSINESS_POS do not create MJENGO OS subscription or entitlement rows",
+  mjengoSubscription.rows.length === 0 && mjengoEntitlement.rows.length === 0,
+  `ERP PRO rows: ${erpPro.rows.length}; MJENGO subscription rows: ${mjengoSubscription.rows.length}; MJENGO entitlement rows: ${mjengoEntitlement.rows.length}; POS entitlement rows: ${posEntitlement.rows.length}`,
 );
 
 // ── Summary ──────────────────────────────────────────────────────────────────────────────────
