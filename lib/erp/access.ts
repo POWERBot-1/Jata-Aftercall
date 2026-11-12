@@ -328,8 +328,8 @@ export async function requireErpAccess(
 
 async function deriveQuietly(businessId: string): Promise<ErpEntitlementState> {
   try {
-    const subscription = await prisma.erpSubscription.findUnique({ where: { businessId } });
-    const entitlement = await prisma.erpEntitlement.findUnique({ where: { businessId } });
+    const subscription = await prisma.erpProSubscription.findUnique({ where: { businessId } });
+    const entitlement = await prisma.erpProEntitlement.findUnique({ where: { businessId } });
     const configuration = await prisma.erpConfiguration.findUnique({ where: { businessId } });
     const { deriveErpEntitlement } = await import("./entitlement");
     return deriveErpEntitlement({ subscription, entitlement, configured: Boolean(configuration) });
