@@ -262,6 +262,10 @@ async function waitForOpenPageVersion(websiteId, expectedVersion, timeoutMs = 15
 async function openPageEditorUI(page, fixture) {
   await page.goto(`${origin}/dashboard/businesses/${fixture.id}/studio`, { waitUntil: "networkidle0" });
   await page.waitForSelector(".openpage-editor-root", { timeout: 20000 });
+  if (["professional", "technical"].includes(fixture.category)) {
+    const enquiriesLink = await page.$("nav[aria-label='Website Studio sections'] a[href$='/enquiries']");
+    check(`${fixture.category}: owner has a dedicated Enquiries workspace tab`, Boolean(enquiriesLink));
+  }
   const website = await prisma.studioWebsite.findFirstOrThrow({ where: { businessId: fixture.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] });
   fixture.studioWebsiteId = website.id;
   const initial = await api(page, `/api/studio/openpage/document?websiteId=${encodeURIComponent(website.id)}`);
@@ -782,7 +786,7 @@ try {
       check(`${category}: foreign service cannot be attached to request`, foreign.status === 404 && await prisma.aIQualityEvent.count({ where: { businessId: fixture.id, eventType: 'LEAD_GENERAL_INQUIRY' } }) === 1);
       const board = await api(ownerPage, `/api/storefront/enquiry?businessId=${fixture.id}`);
       check(`${category}: authenticated owner receives durable request, no raw replay metadata`, board.status === 200 && board.body.enquiries.some((enquiry) => enquiry.id === result.enquiry.id && enquiry.customerName === enquiryCustomer) && !JSON.stringify(board.body).includes('requestHash'));
-      await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}`, { waitUntil: 'networkidle0' });
+      await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/enquiries`, { waitUntil: 'networkidle0' });
       await ownerPage.waitForFunction((name) => document.querySelector('[data-enquiry-board]')?.textContent.includes(name), {}, enquiryCustomer);
       check(`${category}: actual owner enquiry board receives browser request`, (await ownerPage.$eval('[data-enquiry-board]', (element) => element.textContent)).includes('QA actual scope enquiry'));
       check(`${category}: enquiry creates no booking/order/payment or dummy Product`, await prisma.booking.count({ where: { businessId: fixture.id } }) === bookingBefore && await prisma.order.count({ where: { businessId: fixture.id } }) === 0 && await prisma.payment.count({ where: { businessId: fixture.id } }) === 1 && await prisma.product.count({ where: { businessId: fixture.id } }) === 0);
