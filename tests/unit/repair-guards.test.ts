@@ -211,10 +211,6 @@ describe("runtime and schema guards", () => {
     // The fractional-quantity migration's only ALTERs are lossless type promotions: every
     // integer value is exactly representable as a double, so no row is rewritten — authorised
     // here by their exact text, exactly like the Service backfill above.
-    const authorizedMjengoMove = [
-      'DELETE FROM "ErpSubscription" WHERE "planKey" = \'MJENGO_OS\';',
-      'DELETE FROM "ErpEntitlement" WHERE "packageKey" = \'MJENGO_OS\';',
-    ];
     const authorizedQuantityPromotions = [
       'ALTER TABLE "PosSaleItem"\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION;',
       'ALTER TABLE "PosInventoryItem"\n    ALTER COLUMN "quantity" SET DATA TYPE DOUBLE PRECISION;',
@@ -289,11 +285,6 @@ describe("runtime and schema guards", () => {
         }
       } else if (migration === "20261005030000_pos_fractional_quantities") {
         for (const statement of authorizedQuantityPromotions) {
-          expect(sql, statement).toContain(statement);
-          sql = sql.replace(statement, "");
-        }
-      } else if (migration === "20261112090000_mjengo_isolated_entitlements") {
-        for (const statement of authorizedMjengoMove) {
           expect(sql, statement).toContain(statement);
           sql = sql.replace(statement, "");
         }
