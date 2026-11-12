@@ -42,14 +42,14 @@ function fakeTx(options: {
       },
       findUnique: async () => ({ ...payment, status: "PAID" }),
     },
-    erpSubscription: {
+    mjengoSubscription: {
       findUnique: async () => options.subscription ?? null,
       upsert: async (args: any) => {
         seen.upsert.push(args);
         return { id: "sub_1", ...args.create, ...args.update };
       },
     },
-    erpEntitlement: {
+    mjengoEntitlement: {
       findUnique: async () => options.entitlement ?? null,
       upsert: async (args: any) => {
         seen.upsert.push(args);
@@ -174,17 +174,21 @@ describe("mjengo: settlement", () => {
     expect(seen.upsert).toEqual([]);
   });
 
-  it("refuses to overwrite another product's single storage row", async () => {
-    const { tx, seen } = fakeTx({ entitlement: { businessId: "biz1", packageKey: "ERP_PRO", status: "ACTIVE" } });
-    await expect(assertMjengoStorageAvailable(tx, "biz1")).rejects.toBeInstanceOf(MjengoCheckoutRefused);
-    await expect(
-      settleMjengoPayment(tx, {
-        payment: { id: "pay_1", businessId: "biz1", userId: "user1", status: "PENDING" },
-        plan,
-        verification: evidence,
-      }),
-    ).rejects.toThrow(/STORAGE_CONFLICT/);
-    expect(seen.upsert).toEqual([]);
+  it("allows MJENGO OS to coexist without reading or overwriting ERP PRO storage", async () => {
+    const { tx, seen } = fakeTx();
+    tx.erpSubscription = { findUnique: vi.fn(() => { throw new Error("ERP PRO must not be queried"); }), upsert: vi.fn(() => { throw new Error("ERP PRO must not be written"); }) };
+    tx.erpEntitlement = { findUnique: vi.fn(() => { throw new Error("ERP PRO must not be queried"); }), upsert: vi.fn(() => { throw new Error("ERP PRO must not be written"); }) };
+    await expect(assertMjengoStorageAvailable(tx, "biz1")).resolves.toBeUndefined();
+    await expect(settleMjengoPayment(tx, {
+      payment: { id: "pay_1", businessId: "biz1", userId: "user1", status: "PENDING" },
+      plan,
+      verification: evidence,
+    })).resolves.toMatchObject({ mjengoSubscription: true, alreadySettled: false });
+    expect(seen.upsert).toHaveLength(2);
+    expect(tx.erpSubscription.findUnique).not.toHaveBeenCalled();
+    expect(tx.erpSubscription.upsert).not.toHaveBeenCalled();
+    expect(tx.erpEntitlement.findUnique).not.toHaveBeenCalled();
+    expect(tx.erpEntitlement.upsert).not.toHaveBeenCalled();
   });
 
   it("renewal extends from the paid-through date, never from today", async () => {
