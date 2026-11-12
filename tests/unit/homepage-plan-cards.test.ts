@@ -33,9 +33,11 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 import HomePage from "@/app/page";
+import ProductDetailPage from "@/app/products/[slug]/page";
 import { FALLBACK_PLANS, HOMEPAGE_PLAN_ORDER, homepagePlanCards, orderHomepagePlans, planDisplayName, publiclyListedPlans } from "@/lib/pricing";
 
 const render = async () => renderToStaticMarkup(await HomePage());
+const renderBusinessPageDetails = async () => renderToStaticMarkup(await ProductDetailPage({ params: Promise.resolve({ slug: "business-page" }) }));
 
 describe("planDisplayName", () => {
   it("brands the stable INTERACTIVE_BUSINESS product as Website Studio even for healthy legacy stored names", () => {
@@ -94,6 +96,22 @@ describe("homepage plan cards", () => {
       { key: "ERP_PRO", name: "POS / ERP - PRO", priceKES: 3000, durationDays: 30 },
     ];
     assertOrder(await render());
+  });
+
+  it("opens the Business Page detail page with both monthly and annual billing choices", async () => {
+    const html = await renderBusinessPageDetails();
+    expect(html).toContain("Choose your Business Page plan");
+    const monthlyStart = html.indexOf('data-business-page-plan="MONTHLY"');
+    const monthlyEnd = html.indexOf("</article>", monthlyStart);
+    const monthly = html.slice(monthlyStart, monthlyEnd);
+    const annualStart = html.indexOf('data-business-page-plan="ANNUAL"');
+    const annualEnd = html.indexOf("</article>", annualStart);
+    const annual = html.slice(annualStart, annualEnd);
+    expect(monthly).toContain("KES 149 / 30 days");
+    expect(monthly).toContain('href="/register"');
+    expect(annual).toContain("KES 999 / 365 days");
+    expect(annual).toContain('href="/register"');
+    expect(html).toContain('href="/login"');
   });
 
   it("keeps the same required order on a database failure", async () => {
