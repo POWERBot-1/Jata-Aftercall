@@ -272,7 +272,7 @@ async function openPageEditorUI(page, fixture) {
   check(`${fixture.category}: native OpenPage editor autosaves first block`, firstConfig.pages?.[0]?.blocks?.[0]?.type === "hero" && first.draftVersion === 1);
   const firstRevision = await prisma.openPageSiteRevision.findUnique({ where: { websiteId_draftVersion: { websiteId: website.id, draftVersion: 1 } } });
   check(`${fixture.category}: first autosave creates immutable revision snapshot`, Boolean(firstRevision) && JSON.parse(firstRevision.snapshotJson).pages?.[0]?.blocks?.[0]?.type === "hero");
-  const fieldHandle = await page.waitForFunction(() => [...document.querySelectorAll(".openpage-editor-root label")].find((label) => label.textContent.trim() === "Headline")?.querySelector("input"));
+  const fieldHandle = await page.waitForFunction(() => [...document.querySelectorAll(".openpage-editor-root label")].find((label) => label.textContent.trim() === "Headline")?.parentElement?.querySelector("input"));
   const headlineInput = fieldHandle.asElement();
   if (!headlineInput) throw new Error("OpenPage hero headline input was not rendered.");
   const headline = `QA OpenPage ${fixture.category} ${runId}`;
