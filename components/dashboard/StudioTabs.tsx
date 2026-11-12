@@ -6,73 +6,46 @@ import {
   BarChart3,
   CalendarCheck,
   Coins,
-  Eye,
   Gift,
-  Home,
   Image as ImageIcon,
-  LayoutTemplate,
   Megaphone,
+  MessageSquare,
   Package,
-  Palette,
-  PanelsTopLeft,
   QrCode,
   Receipt,
-  Settings2,
   Sparkles,
-  UploadCloud,
   Users,
-  Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/ui";
 
 /**
- * Studio navigation (§4, §13)
+ * Website Studio workspace navigation.
  *
- * The owner's map of their website, named in their language: Home, Website, Products & services,
- * Photos, Design, Brand, Orders & bookings, Analytics, Preview — plus the publish panel back on
- * Home. Every destination is a 44px touch target, the current section is marked with
- * `aria-current="page"` and is visibly distinct, and the row scrolls horizontally on a phone
- * rather than wrapping into an unusable grid.
- *
- * The tabs now read their colours from the shared design system (`.jata-tab`), so the Studio
- * matches the dashboard, the POS and every other owner surface under all product themes.
+ * OpenPage is the sole website editing surface. The remaining links are business operations
+ * (catalogue, media, orders, customers and analytics), not competing website editors.
  */
-export function StudioTabs({ businessId, capabilities }: { businessId: string; capabilities: string[] }) {
+export function StudioTabs({ businessId, capabilities, showEnquiries = false }: { businessId: string; capabilities: string[]; showEnquiries?: boolean }) {
   const base = `/dashboard/businesses/${businessId}`;
   const pathname = usePathname() || "";
   const tabs = [
-    { href: base, label: "Home", icon: Home, exact: true },
-    // Prompt-first Website Studio. The Canvas and classic tabs remain until the replacement
-    // has passed acceptance, so no owner loses access to the editor they already know.
     { href: `${base}/studio`, label: "Website Studio", icon: Sparkles },
-    { href: `${base}/canvas`, label: "Canvas", icon: PanelsTopLeft },
-    { href: `${base}/sections`, label: "Website", icon: LayoutTemplate },
-    { href: `${base}/create`, label: "Create", icon: Wand2 },
+    ...(showEnquiries ? [{ href: `${base}/enquiries`, label: "Enquiries", icon: MessageSquare }] : []),
     { href: `${base}/items`, label: "Products & services", icon: Package },
     { href: `${base}/photos`, label: "Gallery", icon: ImageIcon },
-    { href: `${base}/design`, label: "Design", icon: Palette },
-    { href: `${base}/theme`, label: "Brand & settings", icon: Settings2 },
     ...(capabilities.includes("commerce") || capabilities.includes("booking")
       ? [{ href: `${base}/orders`, label: "Orders & bookings", icon: Receipt }]
       : []),
     ...(capabilities.includes("booking") ? [{ href: `${base}/bookings`, label: "Bookings", icon: CalendarCheck }] : []),
     { href: `${base}/insights`, label: "Analytics", icon: BarChart3 },
-    // Business Hub: customer conversion and retention on the KES149 / KES999 Business Page.
-    // These four are available to every business — they do not depend on an Interactive Business
-    // experience, because the Business Page subscription is what they extend.
     { href: `${base}/customers`, label: "Customers", icon: Users },
     { href: `${base}/promotions`, label: "Promotions", icon: Megaphone },
-    // Loyalty has two independent mechanisms: the stamp card and the points programme. Each is
-    // exact-matched so the two tabs never both light up.
     { href: `${base}/loyalty`, label: "Loyalty", icon: Gift, exact: true },
     { href: `${base}/loyalty/points`, label: "Points", icon: Coins },
     { href: `${base}/qr`, label: "QR code", icon: QrCode },
-    { href: `${base}/preview`, label: "Preview", icon: Eye },
-    { href: `${base}#publish`, label: "Publish", icon: UploadCloud },
   ];
 
   return (
-    <nav className="jata-workspace-tabs flex gap-2 overflow-x-auto pb-1" aria-label="Website studio sections">
+    <nav className="jata-workspace-tabs flex gap-2 overflow-x-auto pb-1" aria-label="Website Studio sections">
       {tabs.map((tab) => {
         const hashless = tab.href.split("#")[0];
         const active = tab.exact ? pathname === hashless : pathname === hashless || pathname.startsWith(`${hashless}/`);

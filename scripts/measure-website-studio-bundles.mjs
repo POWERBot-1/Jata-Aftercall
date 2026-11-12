@@ -35,8 +35,11 @@ const installedMotion = JSON.parse(readFileSync(join(root, "node_modules/motion/
 
 // Archived read-only v1 baseline (Next 15 / app-build-manifest method) for the record only.
 const legacyBaselineV1 = { "/b/[slug]/page": 115794, "/dashboard/businesses/[id]/design/page": 144384, "/page": 106682 };
-// v2 baseline, same Node gzip method, method as documented above.
-const baselineV2 = { "/b/[slug]/page": 189291, "/dashboard/businesses/[id]/design/page": 312331, "/page": 178633 };
+// v2 baselines, same Node gzip method. The native OpenPage editor is now mounted at
+// /studio; the retired /design route is a server redirect and has no client-reference manifest.
+// Its old bundle number is not comparable to the new editor route, so the new route is measured
+// without a claimed baseline on this first cutover. Record the measured value after this run.
+const baselineV2 = { "/b/[slug]/page": 189291, "/dashboard/businesses/[id]/studio/page": null, "/page": 178633 };
 
 /** Route key -> the file holding its client-reference manifest. */
 const routeManifestPath = (route) =>
@@ -63,7 +66,8 @@ const routes = {};
 for (const [route, baselineGzipBytes] of Object.entries(baselineV2)) {
   const files = entryFilesForRoute(route);
   const gzipBytes = files.reduce((sum, file) => sum + gzipSync(readFileSync(join(build, file))).length, 0);
-  routes[route] = { files, gzipBytes, baselineGzipBytes, deltaGzipBytes: gzipBytes - baselineGzipBytes };
+  routes[route] = { files, gzipBytes, baselineGzipBytes, deltaGzipBytes: baselineGzipBytes === null ? null : gzipBytes - baselineGzipBytes,
+    baselineStatus: baselineGzipBytes === null ? "NOT_ESTABLISHED_FIRST_NATIVE_OPENPAGE_MEASUREMENT" : "COMPARABLE_V2" };
 }
 
 let miniFiles = readdirSync(join(build, "static/chunks")).filter((file) => file.startsWith("website-studio-motion-mini") && file.endsWith(".js")).map((file) => `static/chunks/${file}`);
@@ -87,7 +91,10 @@ const report = {
 const output = process.env.BUNDLE_REPORT_PATH || join(root, ".cache", "verification", "motion-bundles.json");
 mkdirSync(join(output, ".."), { recursive: true });
 writeFileSync(output, JSON.stringify(report, null, 2));
-for (const [route, data] of Object.entries(routes)) console.log(`${route}: ${data.gzipBytes} B gzip entry (${data.deltaGzipBytes >= 0 ? "+" : ""}${data.deltaGzipBytes} B vs v2 baseline, ${data.files.length} files)`);
-console.log(`Lazy motion/mini: ${report.miniTotalGzipBytes} B gzip, ${miniChunks.length} chunk(s), absent from initial business/design/home entries. Installed=${installedMotion}, lock=${report.lockedMotion}.`);
+for (const [route, data] of Object.entries(routes)) {
+  const comparison = data.deltaGzipBytes === null ? "first native OpenPage measurement; no comparable legacy baseline" : `${data.deltaGzipBytes >= 0 ? "+" : ""}${data.deltaGzipBytes} B vs v2 baseline`;
+  console.log(`${route}: ${data.gzipBytes} B gzip entry (${comparison}, ${data.files.length} files)`);
+}
+console.log(`Lazy motion/mini: ${report.miniTotalGzipBytes} B gzip, ${miniChunks.length} chunk(s), absent from initial public-business/native-Studio/home entries. Installed=${installedMotion}, lock=${report.lockedMotion}.`);
 console.log("Method v2 (Next 16): file sets differ from the archived v1 baseline by construction; only v2-to-v2 deltas are meaningful.");
 console.log("Not total runtime payload, Core Web Vitals or physical device measurements.");

@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { loadWorkspace } from "@/lib/experience/workspace";
-import { loadStudioPreviewBase } from "@/lib/openpage/previewData";
-import { STUDIO_PROMPT_EXAMPLES } from "@/lib/openpage/requirements";
-import { getBusinessUrl } from "@/lib/url";
+import { ensureDefaultStudioWebsite } from "@/lib/experience/ensure-default-website";
 import { StudioTabs } from "@/components/dashboard/StudioTabs";
-import { WebsiteStudio } from "@/components/studio/openpage/WebsiteStudio";
+import { EntitlementBanner } from "@/components/dashboard/EntitlementBanner";
+import { OpenPageEditor } from "@/components/studio/openpage/OpenPageEditor";
+import { usesServiceEnquiries } from "@/lib/experience/enquiries";
 
 export const dynamic = "force-dynamic";
 
@@ -20,53 +20,53 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /**
- * The prompt-first Website Studio.
- *
- * Server component: resolves the tenant, the latest draft, the publication readiness and
- * one tenant-scoped preview dataset. All generation/refinement previews stay client-side
- * until the owner saves through the existing versioned draft API. The legacy editing
- * surfaces remain reachable through the tabs while this replacement is being proven.
+ * The sole Website Studio editor surface.
+ * OpenPage owns native site composition; JATA retains tenant identity, subscription
+ * entitlement, operational tabs and the authenticated document persistence boundary.
+ * Existing ExperienceDocument and public-site records are not converted or overwritten here.
  */
-export default async function PromptStudioPage({ params }: Props) {
+export default async function WebsiteStudioPage({ params }: Props) {
   const { id } = await params;
   const workspace = await loadWorkspace(id);
   if (!workspace) notFound();
 
-  const previewBase = await loadStudioPreviewBase(id);
-  if (!previewBase) notFound();
-
-  const { business, experience, document, profile, entitlement, validation, hasUnpublishedChanges } = workspace;
+  const studioWebsite = await ensureDefaultStudioWebsite(workspace.business.id, workspace.session);
+  if (!studioWebsite) notFound();
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href={`/dashboard/businesses/${business.id}`} className="jata-btn jata-btn-ghost !px-2 !py-1 text-xs">
+        <Link href={`/dashboard/businesses/${workspace.business.id}`} className="jata-btn jata-btn-ghost !px-2 !py-1 text-xs">
           <ArrowLeft size={13} /> Workspace home
         </Link>
-        <p className="text-xs text-[color:var(--ws-muted)]">{profile.label} · saved draft v{experience?.draftVersion ?? 0}</p>
+        <p className="text-xs text-[color:var(--ws-muted)]">
+          Website Studio · KES 999 / 30 days
+        </p>
       </div>
 
-      <StudioTabs businessId={business.id} capabilities={profile.capabilities} />
+      <StudioTabs businessId={workspace.business.id} capabilities={workspace.profile.capabilities} showEnquiries={usesServiceEnquiries(workspace.profile.key)} />
 
-      <WebsiteStudio
-        business={{
-          id: business.id,
-          name: business.name,
-          slug: business.slug,
-          category: business.category,
-          isPublished: business.isPublished,
-        }}
-        initialDocument={document}
-        initialDraftVersion={experience?.draftVersion ?? 0}
-        publishedVersion={experience?.publishedVersion ?? 0}
-        hasExperience={Boolean(experience)}
-        hasUnpublishedChanges={hasUnpublishedChanges}
-        entitlement={entitlement}
-        validation={validation}
-        previewBase={previewBase}
-        publicUrl={getBusinessUrl(business.slug)}
-        examples={STUDIO_PROMPT_EXAMPLES}
+      <EntitlementBanner
+        businessId={workspace.business.id}
+        entitlement={workspace.entitlement}
+        isPublished={workspace.business.isPublished}
       />
+
+      {workspace.entitlement.entitled ? (
+        <OpenPageEditor
+          key={studioWebsite.websiteId}
+          websiteId={studioWebsite.websiteId}
+          businessId={workspace.business.id}
+          websiteName={`${workspace.business.name} Website`}
+        />
+      ) : (
+        <section className="rounded-2xl border border-[color:var(--ws-line)] bg-[color:var(--ws-paper)] p-5">
+          <h2 className="text-base font-semibold text-[color:var(--ws-text)]">Website Studio is locked</h2>
+          <p className="mt-1 text-sm text-[color:var(--ws-muted)]">
+            Activate the Website Studio subscription to open the editor. Your existing website content remains untouched.
+          </p>
+        </section>
+      )}
     </div>
   );
 }
