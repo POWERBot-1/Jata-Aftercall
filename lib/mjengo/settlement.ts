@@ -74,7 +74,7 @@ export function mjengoCheckoutRefusal(plan: { key?: string | null; priceKES?: nu
 /**
  * MJENGO's dedicated tables isolate its paid-through state from ERP PRO.
  */
-export async function assertMjengoStorageAvailable(tx: any, businessId: string): Promise<void> {
+export async function assertMjengoStorageAvailable(_tx: any, _businessId: string): Promise<void> {
   // Dedicated MJENGO storage is independent; ERP PRO is never queried or modified here.
 }
 
