@@ -81,8 +81,7 @@ export function assertMjengoPricing(plan: { key?: string; priceKES?: number; dur
 
 export function mjengoFeatureEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.MJENGO_OS_DISABLED === "true") return false;
-  if (env.MJENGO_OS_ENABLED === "true") return true;
-  return env.NODE_ENV !== "production";
+  return true;
 }
 
 /**
