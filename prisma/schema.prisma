@@ -545,6 +545,8 @@ model Business {
   erpConfiguration        ErpConfiguration?
   erpSubscription         ErpSubscription?
   erpEntitlement          ErpEntitlement?
+  mjengoSubscription      MjengoSubscription?
+  mjengoEntitlement       MjengoEntitlement?
   erpAccounts             ErpAccount[]
   erpPeriods              ErpPeriod[]
   erpJournals             ErpJournal[]
@@ -4819,4 +4821,42 @@ model StudioWebsiteMember {
   @@unique([websiteId, userId])
   @@index([userId, status])
   @@index([websiteId, status])
+}
+
+
+/// MJENGO OS subscription is isolated from ERP PRO so both products can coexist per tenant.
+model MjengoSubscription {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  planKey          String   @default("MJENGO_OS")
+  status           String   @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([businessId, status])
+  @@index([paymentId])
+}
+
+/// MJENGO OS entitlement is isolated from ERP PRO and POS entitlements.
+model MjengoEntitlement {
+  id          String   @id @default(cuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String   @default("MJENGO_OS")
+  status      String   @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId, status])
 }
