@@ -13,6 +13,7 @@ import { parseCoordinates } from "@/lib/location";
 import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 import { deriveDraftBusinessId, isValidDraftKey } from "@/lib/businessDraft";
 import { containsInlineImageDataUrl, INLINE_MEDIA_PERSISTENCE_CODE, INLINE_MEDIA_PERSISTENCE_MESSAGE } from "@/lib/media/persistence-policy";
+import { createBusinessWithOnboardingEvent } from "@/lib/automation/business-onboarding";
 
 function prismaErrorCode(error: unknown): string | undefined {
   return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
@@ -133,8 +134,7 @@ export async function POST(req: Request) {
 
     let business;
     try {
-      business = await prisma.business.create({
-      data: {
+      business = await prisma.$transaction((tx) => createBusinessWithOnboardingEvent(tx, {
         ...(draftBusinessId ? { id: draftBusinessId } : {}),
         ownerId: session.userId,
         slug,
@@ -151,11 +151,8 @@ export async function POST(req: Request) {
         aftercallMsg,
         openingHours: body.openingHours ? sanitizeText(JSON.stringify(body.openingHours), 2000) : null,
         socialLinks: body.socialLinks ? sanitizeText(JSON.stringify(body.socialLinks), 2000) : null,
-        // Nested write: Prisma creates the business and its OWNER membership in one transaction,
-        // so a failure can never leave a business without its owner membership.
         members: { create: { userId: session.userId, role: "OWNER" } },
-      },
-      });
+      }));
     } catch (error) {
       // A concurrent request for the same draft won the primary-key race: return that business.
       if (draftBusinessId && prismaErrorCode(error) === "P2002") {

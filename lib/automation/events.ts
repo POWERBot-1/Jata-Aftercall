@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import prisma from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 /** Minimal, non-authoritative envelope. Never place credentials or unnecessary PII in an event. */
 export type JataAutomationEvent = {
@@ -35,7 +36,16 @@ export function verifyAutomationSignature(rawBody: string, signature: string | n
   return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 
-/** Durable outbox; app transactions are not coupled to n8n uptime. */
+/** Insert into the caller's transaction so domain state and its event commit or roll back together. */
+export async function enqueueAutomationEvent(tx: Prisma.TransactionClient, event: JataAutomationEvent): Promise<void> {
+  if (!validateAutomationEvent(event)) throw new Error("AUTOMATION_EVENT_INVALID");
+  await tx.automationEvent.create({ data: {
+    eventId: event.id, tenantId: event.tenantId, product: event.source, eventType: event.type,
+    direction: "OUTBOUND", status: "PENDING", payload: event as never,
+  } });
+}
+
+/** For events whose producer is not yet migrated to an enclosing transaction. */
 export async function publishAutomationEvent(event: JataAutomationEvent): Promise<boolean> {
   if (!validateAutomationEvent(event)) return false;
   try {
