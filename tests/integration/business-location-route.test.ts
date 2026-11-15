@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: { userId: "owner-a", role: "CUSTOMER" } as any, guardResult: { ok: true } as any,
-  businessFind: vi.fn(), businessCreate: vi.fn(), businessUpdate: vi.fn(), memberCreate: vi.fn(), audit: vi.fn(),
+  businessFind: vi.fn(), businessCreate: vi.fn(), businessUpdate: vi.fn(), memberCreate: vi.fn(), eventCreate: vi.fn(), audit: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ getSession: vi.fn(async () => mocks.session) }));
 vi.mock("@/lib/tenant", () => ({ guardTenantMutation: vi.fn(async () => mocks.guardResult) }));
-vi.mock("@/lib/db", () => ({ default: { business: { findUnique: mocks.businessFind, create: mocks.businessCreate, update: mocks.businessUpdate }, businessMember: { create: mocks.memberCreate } } }));
+vi.mock("@/lib/db", () => ({ default: {
+  business: { findUnique: mocks.businessFind, create: mocks.businessCreate, update: mocks.businessUpdate },
+  businessMember: { create: mocks.memberCreate },
+  automationEvent: { create: mocks.eventCreate },
+  $transaction: vi.fn(async (callback: any) => callback({ business: { create: mocks.businessCreate }, automationEvent: { create: mocks.eventCreate } })),
+} }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
 import { PATCH, POST } from "@/app/api/business/route";
 
@@ -17,7 +22,7 @@ describe("business create and location updates", () => {
     mocks.session = { userId: "owner-a", role: "CUSTOMER" };
     mocks.guardResult = { ok: true };
     mocks.businessFind.mockResolvedValue(null);
-    mocks.businessCreate.mockResolvedValue({ id: "biz-a", ownerId: "owner-a", name: "Cafe", slug: "cafe", location: "Nairobi", lat: -1.28, lng: 36.82 });
+    mocks.businessCreate.mockResolvedValue({ id: "business-a", ownerId: "owner-a", name: "Cafe", slug: "cafe", category: "Other", createdAt: new Date(), location: "Nairobi", lat: -1.28, lng: 36.82 });
     mocks.businessUpdate.mockResolvedValue({ id: "biz-a", location: "Nairobi", lat: -1.28, lng: 36.82 });
     mocks.memberCreate.mockResolvedValue({ id: "member-a" });
   });
