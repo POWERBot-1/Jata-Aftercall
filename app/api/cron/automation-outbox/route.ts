@@ -32,7 +32,18 @@ export async function POST(request: NextRequest) {
   });
   let delivered = 0;
   let deferred = 0;
+  let disabled = 0;
   for (const row of due) {
+    // AI Front Desk follow-up routing is fail-closed by default. A tenant's authorized operator
+    // may pause it without deleting tasks or pending outbox rows. No customer communication is sent
+    // by this event; downstream activation remains a separately governed decision.
+    if (row.product === "ai_front_desk" && row.eventType === "ai_front_desk.followup_task.created") {
+      const config = await prisma.aIConfiguration.findUnique({ where: { businessId: row.tenantId }, select: { followupEventsEnabled: true } }).catch(() => null);
+      if (!config?.followupEventsEnabled) {
+        disabled++;
+        continue;
+      }
+    }
     if (row.attempts >= row.maxAttempts) {
       await prisma.automationEvent.update({ where: { id: row.id }, data: { status: "FAILED", leaseUntil: null, lastError: row.lastError ?? "RETRY_LIMIT_REACHED" } });
       continue;
@@ -61,5 +72,5 @@ export async function POST(request: NextRequest) {
       deferred++;
     }
   }
-  return NextResponse.json({ claimed: due.length, delivered, deferred });
+  return NextResponse.json({ claimed: due.length, delivered, deferred, disabled });
 }

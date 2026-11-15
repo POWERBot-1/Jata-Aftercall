@@ -16,6 +16,7 @@ import { resolveDeliveryZoneFee } from "./ai-config";
 import { calculateCommerceTotal } from "./commerce-pricing";
 import { evaluateProductAvailability } from "./inventory";
 import { captureLead, type LeadClassification } from "./leads";
+import { createAIFrontDeskHandoffTask } from "./ai-followup";
 import { createAuthoritativeOrder, hasServerVerifiedOrderPayment } from "./order";
 import { createPreOrderSummary, resolvePreorderPricing } from "./preorder";
 import { chargeableUnitPrice } from "./sale-pricing";
@@ -625,6 +626,9 @@ export async function executeBusinessTool(
 
     case "request_human": {
       const reason = typeof args.reason === "string" ? args.reason.trim() : "Customer requested human assistance";
+      if (!preview) {
+        await createAIFrontDeskHandoffTask({ businessId: context.businessId, conversationId: context.conversationId || "" });
+      }
       await captureLead({
         businessId: context.businessId,
         classification: "HUMAN_HANDOFF",

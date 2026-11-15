@@ -941,7 +941,8 @@ model AIConfiguration {
   salesBehavior      String     @default("informational") // informational | recommend | upsell | cross_sell | promotions
   orderingAllowed    Boolean    @default(true)
   preordersAllowed   Boolean    @default(false)
-  humanEscalation    String     @default("uncertain") // always | business_hours | specified_topics | uncertain
+  humanEscalation         String     @default("uncertain") // always | business_hours | specified_topics | uncertain
+  followupEventsEnabled   Boolean    @default(false)
   welcomeMessage     String?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
@@ -3730,9 +3731,11 @@ model ErpTask {
   completedBy    String?
   dueAt          DateTime?
   completedAt    DateTime?
-  /// Where the task came from: MANUAL | AUTOMATION | ORDER | INVOICE | COMPLIANCE.
-  sourceType     String?
-  sourceId       String?
+  /// Where the task came from: MANUAL | AUTOMATION | ORDER | INVOICE | COMPLIANCE | AI_FRONT_DESK_HANDOFF.
+  sourceType         String?
+  sourceId           String?
+  /// Active AI handoff dedupe key, cleared on terminal transition to allow a later new handoff.
+  aiHandoffActiveKey String?
   /// Relative link that opens the record the task is about.
   href           String?
   /// Set when an automation action raised the task, so a replayed event cannot duplicate it.
@@ -3741,6 +3744,7 @@ model ErpTask {
   updatedAt      DateTime  @updatedAt
 
   @@unique([businessId, idempotencyKey])
+  @@unique([businessId, aiHandoffActiveKey])
   @@index([businessId, status, dueAt])
   @@index([businessId, assignedTo, status])
   @@index([businessId, createdAt])

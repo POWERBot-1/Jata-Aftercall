@@ -3,8 +3,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { canAccessBusiness } from "@/lib/tenant";
 import AIDashboardClient from "@/components/AIDashboardClient";
 import AIFrontDeskWorkspace from "@/components/ai/AIFrontDeskWorkspace";
+import AIHandoffAutomationPause from "@/components/ai/AIHandoffAutomationPause";
 import { WorkspaceHero } from "@/components/workspace/WorkspaceUI";
 import { WORKSPACE_HERO_PHOTO } from "@/lib/workspaceImagery";
 import { getExtendedAIConfig } from "@/lib/ai-config";
@@ -44,24 +46,17 @@ export default async function AIDashboardPage({
     redirect("/login?callbackUrl=/dashboard/ai");
   }
 
-  const business = await prisma.business
-    .findFirst({
-      where: sp?.businessId
-        ? { id: sp.businessId, ...(user.role === "ADMIN" ? {} : { ownerId: user.id }) }
-        : { ownerId: user.id },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        category: true,
-        description: true,
-        location: true,
-        phone: true,
-        whatsapp: true,
-        openingHours: true,
-      },
-    })
-    .catch(() => null);
+  const selectBusiness = {
+    id: true, name: true, slug: true, category: true, description: true,
+    location: true, phone: true, whatsapp: true, openingHours: true,
+  };
+  const candidateBusiness = await (sp?.businessId
+    ? prisma.business.findUnique({ where: { id: sp.businessId }, select: selectBusiness })
+    : prisma.business.findFirst({ where: { ownerId: user.id }, select: selectBusiness })
+  ).catch(() => null);
+  const business = candidateBusiness && await canAccessBusiness(user.id, candidateBusiness.id, user.role)
+    ? candidateBusiness
+    : null;
 
   const businessId = business?.id || "";
   const businessSlug = business?.slug || "my-business";
@@ -108,6 +103,11 @@ export default async function AIDashboardPage({
 
   const extended = brain?.extendedConfig ?? (await getExtendedAIConfig(businessId, aiConfig));
   const hours = formatOpeningHours(business.openingHours);
+  const handoffTasks = await prisma.erpTask.findMany({
+    where: { businessId, sourceType: "AI_FRONT_DESK_HANDOFF" },
+    select: { id: true, title: true, status: true, priority: true, dueAt: true },
+    orderBy: { createdAt: "desc" }, take: 20,
+  }).catch(() => []);
 
   return (
     <div className="ws-stack">
@@ -238,6 +238,23 @@ export default async function AIDashboardPage({
             : null
         }
       />
+
+      <section className="ws-card" aria-labelledby="ai-handoff-tasks">
+        <div className="ws-card-header">
+          <div>
+            <p className="ws-kicker">Internal work queue</p>
+            <h2 id="ai-handoff-tasks">Human follow-up tasks</h2>
+            <p>Created only when the AI Front Desk explicitly requests human intervention. Creating a task does not send a customer message.</p>
+          </div>
+          <Link className="ws-btn-outline" href={`/dashboard/erp/${encodeURIComponent(businessId)}/tasks`}>Manage tasks</Link>
+        </div>
+        {handoffTasks.length ? (
+          <ul>{handoffTasks.map((task) => (
+            <li key={task.id}><strong>{task.title}</strong> — {task.status}, {task.priority}{task.dueAt ? `, due ${new Date(task.dueAt).toLocaleDateString()}` : ", no due date"}</li>
+          ))}</ul>
+        ) : <p>No AI Front Desk handoff tasks yet.</p>}
+        <AIHandoffAutomationPause businessId={businessId} enabled={aiConfig?.followupEventsEnabled === true} />
+      </section>
 
       <AIDashboardClient
         businessId={businessId}

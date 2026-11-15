@@ -1,6 +1,6 @@
 # AI Front Desk follow-up: product definition and persistence design
 
-**Status:** design proposal; owner/product decisions pending. **No implementation authorization implied.**  
+**Status:** design approved for internal human-handoff implementation only, subject to the conditions in the user approval recorded 2026-11-15. Approval does not authorize deployment, merge, paid infrastructure, or customer/external communications.
 **Design head:** `326d5191a9f52d32b66fbb41ce64ab8ba5bfe2f3`  
 **PR:** #116 (open)
 
@@ -99,18 +99,24 @@ After policy approval and implementation, add PostgreSQL-backed acceptance tests
 
 Tests require disposable PostgreSQL and exact-head CI. Until implementation, these are plans, not completed acceptance evidence.
 
-## 7. Explicit owner/product decisions required
+## 7. Approval record and remaining owner/product decisions
 
-1. Approve human-handoff task as first release, or choose scheduled customer communication (which would expand scope materially).
-2. Define exactly what qualifies: explicit customer request, an AI tool invocation, an owner-configured condition, or another action. Decide whether ambiguous/low-confidence AI may create a task (recommendation: no).
-3. Confirm whether one task per durable enquiry, per conversation, or per explicit handoff action; define repeat handoff behavior and idempotency scope.
-4. Identify the owner/operator roles allowed to create, view, assign/reassign, set due date/priority, complete, cancel and reopen; confirm how assignment affects visibility.
-5. Approve default priority and whether due dates are omitted or derived from a business-configured SLA. No default is assumed here.
-6. Approve the task UI/work queue location, whether customer-facing sources may be linked, and what operators are allowed to see about the source.
-7. Approve status transition/reopen and cancellation rules, audit visibility, retention/deletion/cascade policy, and whether `ErpTask` is the right shared entity.
-8. Approve the minimal outbox event contract/type and eligible downstream consumers. No downstream automation or customer communication is enabled by this design.
-9. Approve feature-flag ownership and operational failure messaging/monitoring.
-10. If model B is selected instead, approve its consent, opt-out, channels, content, timing, cancellation, provider, cost, retention and failure policies before any implementation.
+On 2026-11-15, the user explicitly approved implementation of the internal human-handoff task system subject to these constraints: AI may create durable tasks when human intervention is required; tenant isolation and owner/authorized-staff access; active duplicate prevention for the same enquiry or conversation; assignment, priority, optional due dates and lifecycle; interface within AI Front Desk; atomic task/outbox transaction; authorized operator can disable event processing without deleting tasks; existing permissions/financial/subscription/tenant authority unchanged; no customer communications or paid/external workflow activation; PostgreSQL acceptance and exact-head CI before completion. Approval does **not** authorize production deployment, PR merge or paid infrastructure.
+
+The following are explicitly out of scope and not approved: customer messaging/calling/SMS/marketing, provider activation, external workflow activation, changes to consent/billing/subscription/permissions, and production actions.
+
+Engineering must encode safe defaults without asserting further policy approval:
+
+1. The implementation trigger should be the explicit `request_human` operation, not generated answers, low-confidence inference, or response failure. If any broader condition is desired, obtain approval first.
+2. Deduplicate while active for the same tenant plus durable enquiry or conversation source. Repeated calls return the existing active task; terminal task behavior and whether a later explicit handoff may create a new task should be implemented consistently with “active duplicate” scope and tested.
+3. Reuse existing verified owner/staff authorization capabilities; assignment is not an independent grant of business access. Do not widen roles. Any capability gap must stop that surface rather than weaken authorization.
+4. Use existing priority values with `NORMAL` as a technical default unless the owner selects another; due date remains optional and has no invented SLA.
+5. Keep the task interface within AI Front Desk; link only to a source the viewer is already authorized to access and do not display copied conversation/contact data by default.
+6. Preserve existing terminal-state rules unless a needed cancellation/reassignment behavior is not supported; do not add reopen semantics without approval.
+7. Event-processing disable control must be exposed only to an already authorized operator, disable processing rather than task creation/history, and preserve pending events/tasks. Implementation must verify whether existing worker controls can provide a tenant-scoped switch without changing global automation policy.
+8. Event type and routing contract must be constrained to the approved internal task-routing purpose. No downstream consumer may send customer communications or activate external workflows under this approval.
+
+If existing authorization, worker controls, task data model, or UI cannot meet these requirements without policy changes, stop and report the specific gap for owner decision. Model B still requires separate approval and its consent, opt-out, channel, content, timing, cancellation, provider, cost, retention and failure policies; it remains unapproved.
 
 ## 8. Implementation sequence and remaining risks
 
