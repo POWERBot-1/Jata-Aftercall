@@ -857,6 +857,42 @@ model ProcessedWebhook {
   createdAt DateTime @default(now())
 }
 
+/// Durable automation boundary; separate from payment/business ledgers. Payloads must be minimized.
+model AutomationEvent {
+  id           String                @id @default(cuid())
+  eventId      String                @unique
+  tenantId     String
+  product      String
+  eventType    String
+  direction    AutomationEventDirection
+  status       AutomationEventStatus @default(PENDING)
+  payload      Json
+  attempts     Int                   @default(0)
+  maxAttempts  Int                   @default(8)
+  availableAt  DateTime              @default(now())
+  leaseUntil   DateTime?
+  completedAt  DateTime?
+  lastError    String?               @db.Text
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([direction, status, availableAt])
+  @@index([tenantId, createdAt])
+}
+
+enum AutomationEventDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum AutomationEventStatus {
+  PENDING
+  PROCESSING
+  RECEIVED
+  DELIVERED
+  FAILED
+}
+
 // ── Stage 2: self-service referral attribution ──
 // One row per referral touch. PENDING = anonymous attribution created when a recipient opens a
 // referral link; CONVERTED = the recipient registered and created their first business in the

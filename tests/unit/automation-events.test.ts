@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { signAutomationPayload, validateAutomationEvent, verifyAutomationSignature } from "@/lib/automation/events";
 
 const secret = "test-only-automation-hmac-secret-32chars";
-const event = { id: "evt_12345678", type: "payment.verified", occurredAt: new Date().toISOString(), tenantId: "biz_12345678", source: "jata", data: { reference: "test-ref" } };
+const event = { id: "evt_12345678", type: "payment.verified", occurredAt: new Date().toISOString(), tenantId: "biz_12345678", source: "business_page", data: { reference: "test-ref" } };
 
 describe("automation event boundary", () => {
   it("accepts a valid, tenant-addressed event and rejects malformed or tenantless input", () => {
