@@ -63,7 +63,7 @@ export async function createAIFrontDeskHandoffTask(input: {
         data: { businessId: task.businessId, taskId: task.id, purpose: "HUMAN_HANDOFF" },
       });
       return { task, created: true };
-    }, { isolationLevel: "Serializable" });
+    });
   } catch (error) {
     // Unique active-source key resolves concurrent duplicate calls. Return the committed winner only.
     if ((error as { code?: string })?.code === "P2002" || (error as { code?: string })?.code === "P2034") {
