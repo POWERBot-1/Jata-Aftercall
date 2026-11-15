@@ -16,6 +16,7 @@ import { isFrontDeskTierKey } from "@/lib/frontDeskTiers";
 import { evaluateAIReadiness } from "@/lib/ai-readiness";
 import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { formatOpeningHours } from "@/lib/openingHours";
+import { formatDate } from "@/lib/format";
 import { Bot, ExternalLink, Settings2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -250,7 +251,7 @@ export default async function AIDashboardPage({
         </div>
         {handoffTasks.length ? (
           <ul>{handoffTasks.map((task) => (
-            <li key={task.id}><strong>{task.title}</strong> — {task.status}, {task.priority}{task.dueAt ? `, due ${new Date(task.dueAt).toLocaleDateString()}` : ", no due date"}</li>
+            <li key={task.id}><strong>{task.title}</strong> — {task.status}, {task.priority}{task.dueAt ? `, due ${formatDate(task.dueAt)}` : ", no due date"}</li>
           ))}</ul>
         ) : <p>No AI Front Desk handoff tasks yet.</p>}
         <AIHandoffAutomationPause businessId={businessId} enabled={aiConfig?.followupEventsEnabled === true} />
