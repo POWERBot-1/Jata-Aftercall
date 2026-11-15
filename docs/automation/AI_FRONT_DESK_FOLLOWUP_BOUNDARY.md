@@ -2,11 +2,12 @@
 
 **Assessment date:** 2026-11-15  
 **Branch:** `arena/d1e54a52-jata-aftercall`  
-**Inspected starting head:** `4c4f9a80dd054dcc7707973e7a97f2e15dc87edc`
+**Original inspection head:** `4c4f9a80dd054dcc7707973e7a97f2e15dc87edc`
+**Design assessment head:** `326d5191a9f52d32b66fbb41ce64ab8ba5bfe2f3`
 
 ## Decision
 
-**BLOCKED — no safe authoritative AI Front Desk follow-up transaction boundary exists in the current implementation. No producer was added.** Do not treat an AI-generated answer, an in-memory conversation mutation, AI quality telemetry, lead capture, or an owner notification as a persisted follow-up schedule.
+**Implementation remains BLOCKED pending explicit product/owner decisions.** The original investigation found no current authoritative AI Front Desk follow-up transaction. The companion [product definition and persistence design](AI_FRONT_DESK_FOLLOWUP_PRODUCT_DESIGN.md) now proposes a human-handoff task as the lower-risk first-release candidate and specifies a future transaction/outbox shape, while clearly separating unresolved policy choices. This design is not an approval or implementation authorization. No producer was added. Do not treat an AI-generated answer, an in-memory conversation mutation, AI quality telemetry, lead capture, or an owner notification as a persisted follow-up schedule.
 
 This is a deliberate fail-closed decision, not an approval to alter the AI Front Desk's storage model or communication behavior.
 
