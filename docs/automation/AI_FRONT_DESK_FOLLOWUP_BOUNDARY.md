@@ -1,38 +1,22 @@
-# AI Front Desk follow-up producer: boundary assessment
+# AI Front Desk follow-up boundary assessment
 
-**Assessment date:** 2026-11-15  
-**Branch:** `arena/d1e54a52-jata-aftercall`  
-**Original inspection head:** `4c4f9a80dd054dcc7707973e7a97f2e15dc87edc`
-**Design assessment head:** `326d5191a9f52d32b66fbb41ce64ab8ba5bfe2f3`
+**Initial assessment:** 2026-11-15 at `4c4f9a80dd054dcc7707973e7a97f2e15dc87edc`
+**Product design:** [AI Front Desk follow-up product definition and persistence design](AI_FRONT_DESK_FOLLOWUP_PRODUCT_DESIGN.md)
+**Current implementation head when last verified:** `140c222fd43c6f3805f9a91f38fdc563930c9a91`
 
-## Decision
+## Current status
 
-**Implementation remains BLOCKED pending explicit product/owner decisions.** The original investigation found no current authoritative AI Front Desk follow-up transaction. The companion [product definition and persistence design](AI_FRONT_DESK_FOLLOWUP_PRODUCT_DESIGN.md) now proposes a human-handoff task as the lower-risk first-release candidate and specifies a future transaction/outbox shape, while clearly separating unresolved policy choices. This design is not an approval or implementation authorization. No producer was added. Do not treat an AI-generated answer, an in-memory conversation mutation, AI quality telemetry, lead capture, or an owner notification as a persisted follow-up schedule.
+The initial inspection correctly found no persisted follow-up transaction in the original AI Front Desk flows. Product approval was subsequently given for **internal human-handoff tasks only**, with the explicit `request_human` operation as the trigger and per-business event-processing pause control. The implementation adds an authoritative `ErpTask` row and inserts its minimal `ai_front_desk.followup_task.created` event using `enqueueAutomationEvent` within the same Prisma transaction. Active deduplication is tenant-plus-conversation scoped; terminal tasks release the active key. AI-generated answers, telemetry, lead capture, and owner notifications are not substitutes for this transaction.
 
-This is a deliberate fail-closed decision, not an approval to alter the AI Front Desk's storage model or communication behavior.
+**No customer message, call, SMS, marketing communication, provider activation, or external workflow activation is authorized.** Event processing is disabled by default and pending rows are retained. The authorized pause endpoint does not delete tasks or outbox rows. The design and approval do not authorize production deployment, merge, or paid infrastructure.
 
-## Inspected flows and evidence
+## Historical boundary findings retained
 
-1. **Conversation and turn state — `lib/ai-conversation.ts`, `lib/ai-front-desk.ts`.** `getOrCreateConversationContext` and `updateConversationContext` store contexts in process-local `Map`s keyed by business/conversation. `finalizeTurn` updates that in-memory context and returns the generated reply. This is neither durable storage nor a Prisma transaction. Concurrent requests, process restart, or cache loss are not covered by a database commit boundary.
-2. **Generated reply — `app/api/ai/chat/route.ts`, `lib/ai-channels.ts`.** The route passes the normalized event to `processNormalizedChannelEvent`; that runs `handleAIFrontDeskTurn` and returns reply text. There is no persisted follow-up/schedule record in this call path and no customer message send here. An assistant reply is not evidence that a follow-up was scheduled.
-3. **Quality telemetry — `AIQualityEvent` in `prisma/schema.prisma`, `lib/intelligence.ts:recordAIQualityEvent`, `lib/ai-front-desk.ts:finalizeTurn`.** `finalizeTurn` records `TURN_*` telemetry after generating the response. `recordAIQualityEvent` catches database errors and returns a synthetic fallback object. This is intentionally best-effort analytics, not authoritative follow-up state; it cannot anchor an atomic producer.
-4. **Lead and handoff capture — `lib/leads.ts`, `app/api/ai/leads/route.ts`, `lib/ai-tools.ts` (`create_lead`, `request_human`).** `captureLead` currently stores lead records and idempotency keys in process-local maps. `AIQualityEvent` insertion is optional/best-effort and uses metadata containing the lead record. Handoff may create a separate notification. The API authenticates and checks `canAccessBusiness` for signed-in callers; anonymous callers are limited to a currently published business. Those checks establish route access but do not make the in-memory lead a persistent transaction boundary.
-5. **Notifications — `lib/notification.ts`, `Notification` model.** `createNotification` writes an owner-directed `Notification` outside a caller-supplied transaction, catches persistence errors, and falls back to an in-memory notification. This is not an authoritative scheduled customer follow-up record and may represent human escalation. Making its insert fail-closed or folding it into unrelated transactions could change existing notification behavior and is out of scope.
-6. **Autopilot follow-up proposals — `AutopilotActionProposal` and `QUEUE_CONSENTED_FOLLOWUP`.** This is an Autopilot action proposal/consent/approval pathway, not an AI Front Desk follow-up transaction. Reusing it would conflate product semantics and could change approval or messaging policy.
+- Conversation context in `lib/ai-conversation.ts` is process-local; response generation and `AIQualityEvent` telemetry are not durable follow-up records.
+- `captureLead` in `lib/leads.ts` remains a separate process-local/best-effort path. Existing lead and notification behavior is not the authoritative source for the new task.
+- `Notification` is not a scheduled customer follow-up. Autopilot consented-follow-up proposals are a separate workflow and are not reused.
+- Existing Business Page `enquiry.created` and `business.created` producers remain unchanged.
 
-## Missing prerequisite before producer implementation
+## Verification gate
 
-The product needs an explicitly approved definition of an AI Front Desk “follow-up”: which persisted business action qualifies (for example, human-handoff task creation versus a scheduled customer communication), which actor/surface owns it, whether it may ever contact the customer, and what consent/authorization evidence is mandatory. Then an authoritative durable record must be created at that action boundary with:
-
-- a Business foreign key and tenant identity derived from the persisted relation;
-- a stable idempotency key and a unique constraint;
-- explicit lifecycle/status and due-time semantics if it is scheduled;
-- consent/purpose and permission evidence when customer communication is contemplated;
-- an atomic insert in the same Prisma transaction as the originating follow-up action;
-- a narrowly scoped event payload with no message body, phone, credentials, payment data, or secrets.
-
-If the approved semantics are only “human follow-up requested,” the durable task/lead record should be the authoritative transaction and no customer message should be sent. If scheduled customer communication is intended, a separate explicit consent and delivery policy is a prerequisite; this assessment does not authorize sending or scheduling any message.
-
-## No code / policy side effects
-
-No Prisma schema, event producer, AI behavior, permission, consent policy, notification, payment, or workflow was changed. Existing `business.created` and `enquiry.created` producers remain untouched. `PROGRAMME_READINESS.json` and its checker were not modified. No workflow was activated and no external message was sent.
+At `140c222fd43c6f3805f9a91f38fdc563930c9a91`, the PostgreSQL-backed journey, migration/schema, typecheck/build, failure-path, and full-suite checks passed (run IDs and labels recorded in the PR CI). The programme-completeness gate still fails on its existing outstanding records and must not be changed or represented as passed. Production smoke was skipped. The handoff implementation is not authorized for deployment or external event processing by this approval.
