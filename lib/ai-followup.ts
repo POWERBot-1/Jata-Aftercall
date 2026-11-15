@@ -4,6 +4,10 @@ import prisma from "@/lib/db";
 import { enqueueAutomationEvent } from "@/lib/automation/events";
 import { logErpAudit } from "@/lib/erp/audit";
 
+function sourceReference(businessId: string, conversationId: string) {
+  return `conv_${createHash("sha256").update(`${businessId}:${conversationId}`).digest("hex")}`;
+}
+
 function sourceKey(businessId: string, sourceId: string) {
   return `ai_handoff_${createHash("sha256").update(`${businessId}:${sourceId}`).digest("hex")}`;
 }
@@ -21,8 +25,9 @@ export async function createAIFrontDeskHandoffTask(input: {
   conversationId: string;
 }) {
   const businessId = input.businessId.trim();
-  const sourceId = input.conversationId.trim().slice(0, 100);
-  if (!businessId || !sourceId) throw new Error("AI_HANDOFF_SOURCE_REQUIRED");
+  const conversationId = input.conversationId.trim().slice(0, 100);
+  if (!businessId || !conversationId) throw new Error("AI_HANDOFF_SOURCE_REQUIRED");
+  const sourceId = sourceReference(businessId, conversationId);
   const activeKey = sourceKey(businessId, sourceId);
   try {
     return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {

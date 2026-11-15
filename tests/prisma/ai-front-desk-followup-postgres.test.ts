@@ -35,7 +35,9 @@ describe.skipIf(!realPrismaConfigured)("AI Front Desk human-handoff task/outbox 
     const result = await createAIFrontDeskHandoffTask({ businessId: business.id, conversationId: source });
     const event = await db.automationEvent.findFirst({ where: { tenantId: business.id, eventType: "ai_front_desk.followup_task.created" } });
     expect(result.created).toBe(true);
-    expect(result.task).toMatchObject({ businessId: business.id, sourceType: "AI_FRONT_DESK_HANDOFF", sourceId: source, status: "OPEN", priority: "NORMAL", assignedRole: "OWNER" });
+    expect(result.task).toMatchObject({ businessId: business.id, sourceType: "AI_FRONT_DESK_HANDOFF", status: "OPEN", priority: "NORMAL", assignedRole: "OWNER" });
+    expect(result.task.sourceId).toMatch(/^conv_[a-f0-9]{64}$/);
+    expect(result.task.sourceId).not.toBe(source);
     expect(event).toMatchObject({ tenantId: result.task.businessId, product: "ai_front_desk", eventType: "ai_front_desk.followup_task.created", direction: "OUTBOUND", status: "PENDING" });
     expect(event.payload).toMatchObject({ tenantId: business.id, data: { businessId: business.id, taskId: result.task.id, purpose: "HUMAN_HANDOFF" } });
     expect(JSON.stringify(event.payload)).not.toContain(source);
@@ -53,7 +55,7 @@ describe.skipIf(!realPrismaConfigured)("AI Front Desk human-handoff task/outbox 
     const again = await createAIFrontDeskHandoffTask({ businessId: business.id, conversationId: source });
     expect(results[0].task.id).toBe(results[1].task.id);
     expect(again.task.id).toBe(results[0].task.id);
-    expect((await db.erpTask.findMany({ where: { businessId: business.id, sourceId: source } })).length).toBe(1);
+    expect((await db.erpTask.findMany({ where: { businessId: business.id, sourceId: results[0].task.sourceId } })).length).toBe(1);
     expect(await db.automationEvent.count({ where: { tenantId: business.id, eventType: "ai_front_desk.followup_task.created" } })).toBe(1);
   });
 
