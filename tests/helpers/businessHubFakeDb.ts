@@ -73,6 +73,7 @@ export function businessHubSeed(): BusinessHubSeed {
     orderRequest: [],
     orderRequestItem: [],
     customerEnquiry: [],
+    automationEvent: [],
     promotion: [],
     loyaltyProgram: [],
     loyaltyCard: [],
@@ -100,6 +101,7 @@ export function businessHubSeed(): BusinessHubSeed {
 const HUB_UNIQUE_INDEXES: Record<string, string[][]> = {
   orderRequest: [["businessId", "requestKey"]],
   customerEnquiry: [["businessId", "requestKey"]],
+  automationEvent: [["eventId"]],
   loyaltyCard: [["code"]],
   loyaltyStampEvent: [["businessId", "transactionRef"]],
   loyaltyRedemption: [["cardId", "cycleIndex"]],

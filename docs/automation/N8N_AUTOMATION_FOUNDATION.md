@@ -23,7 +23,7 @@ These pieces are the durable transport foundation, not proof of end-to-end produ
 
 | Product | Event transport foundation | Verified producer / workflow |
 |---|---|---|
-| Business Page | **PASS** — product ID accepted by envelope | **NOT TESTED** — no producer or workflow |
+| Business Page | **PASS** — product ID accepted by envelope | `business.created` producer is DB-CI verified on prior candidate; `enquiry.created` producer is implemented in this change and awaits exact-head DB CI. No n8n workflow is operational. |
 | AI Business Front Desk (including English/Kiswahili) | **PASS** — product ID accepted | **NOT TESTED** — no producer, routing, handover or provider workflow |
 | Website Studio | **PASS** — product ID accepted | **NOT TESTED** — no producer or per-site workflow |
 | Business POS | **PASS** — product ID accepted | **NOT TESTED** — no producer; no sales/inventory automation |
@@ -32,7 +32,7 @@ These pieces are the durable transport foundation, not proof of end-to-end produ
 | Autopilot | **PASS** — product ID accepted | **NOT TESTED** — no producer/workflow or approval action integration |
 | TAPNET | **PASS** — product ID accepted | **BLOCKED** — no verified provider APIs/agreements or operational approval; no live activation claim |
 
-The transport accepts events for these product namespaces but this is not product-wide integration. Producers are not yet wired to verified transaction points; product-specific reminders, actions, reporting and admin execution visibility are not implemented. Existing pricing, entitlement and payment code were not changed. No customer-facing workflow has direct DB credentials. Voice/WhatsApp/TAPNET actions require provider API credentials, agreements and explicit authorization.
+The transport accepts events for these product namespaces but this is not product-wide integration. Business Page onboarding and enquiry producers are being integrated at verified transaction boundaries; the remaining six product producers, product-specific workflows, operational reminders/actions/reporting and admin execution visibility are not implemented. Existing pricing, entitlement and payment code were not changed. No customer-facing workflow has direct DB credentials. Voice/WhatsApp/TAPNET actions require provider API credentials, agreements and explicit authorization.
 
 Central templates requested (onboarding, payment verification, subscription lifecycle, enquiry/lead, appointment, daily report/inventory, health/failure, admin/support escalation) are **NOT CREATED**. Do not import empty placeholders and describe them as working workflows. P2+ implementation depends on a deployed n8n instance, durable JATA outbox/inbox and workflow ownership/approval decisions.
 
@@ -69,3 +69,11 @@ Do not use `NODE_TLS_REJECT_UNAUTHORIZED=0`, `strict-ssl=false`, unverified tarb
 2. A CI-built container only if sourced from an official pinned image digest and independently verified signature/provenance/SBOM, then deployed to owner-approved persistent staging. Do not substitute a locally rebuilt package or unverified mirror.
 
 Staging must be separately approved and budgeted before creation: persistent managed container/VM, isolated PostgreSQL and volume, private network, HTTPS reverse proxy, external secrets management/encryption key, backups plus restore test, monitoring/alerts, retention/pruning and recovery runbook. Existing Vercel Hobby project is not an n8n host. No paid resource has been provisioned and no deployment occurred.
+
+## Business Page `enquiry.created` producer (implementation pending exact-head CI)
+
+`POST /api/public/enquiry` first resolves the public slug to an existing, published, non-suspended Business and passes its database ID to `createEnquiry`. The service now reconfirms that Business by ID inside the same Prisma transaction that inserts `CustomerEnquiry` and its outbox row. It obtains the event tenant solely from the newly persisted enquiry's `businessId` and checks that it matches the transaction's Business row. The transaction uses `enqueueAutomationEvent` from the existing HMAC/outbox contract; invalid envelope or failed insert throws and rolls back the enquiry.
+
+The `enquiry.created` payload is limited to `businessId`, `enquiryId`, and opaque public reference. It deliberately excludes customer name, contact method/value, subject, message, IP/session hashes, payment data, and secrets. `eventId` is a deterministic SHA-256-derived key over the persisted tenant ID and request key; the existing unique `(businessId, requestKey)` guard and the outbox unique event key address repeated/concurrent submissions. The winning transaction's event is required before the API reports success. Existing `BusinessHubActivity` remains best-effort after the committed transaction, as before; it is not the automation event mechanism.
+
+`tests/prisma/business-page-enquiry-outbox-postgres.test.ts` adds PostgreSQL-gated tests for atomic commit/rollback (duplicate deterministic outbox key as an insertion failure), tenant binding across two tenants, repeat submission, concurrency, and outbox claim/lease/retry/terminal-failure semantics. The route-level in-memory hub journey is compatibility coverage only; it is not atomicity proof. Real DB results on this exact head are required before acceptance. Local run is skipped because this workspace has no configured PostgreSQL.
