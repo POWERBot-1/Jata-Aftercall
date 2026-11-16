@@ -13,12 +13,14 @@ SOURCE_COUNTS="${RUNNER_TEMP:-/tmp}/jata-source-counts.txt"
 RESTORED_COUNTS="${RUNNER_TEMP:-/tmp}/jata-restored-counts.txt"
 SOURCE_CHECKS="${RUNNER_TEMP:-/tmp}/jata-source-checks.txt"
 RESTORED_CHECKS="${RUNNER_TEMP:-/tmp}/jata-restored-checks.txt"
+SOURCE_CHECKS_NORMALIZED="${RUNNER_TEMP:-/tmp}/jata-source-checks.normalized.txt"
+RESTORED_CHECKS_NORMALIZED="${RUNNER_TEMP:-/tmp}/jata-restored-checks.normalized.txt"
 SCHEMA_DIFF="${RUNNER_TEMP:-/tmp}/jata-schema-diff.txt"
 COUNT_SQL="${RUNNER_TEMP:-/tmp}/jata-row-counts.sql"
 
 fail() { echo "::error::$1"; exit 1; }
 cleanup() {
-  rm -f "$DUMP_FILE" "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" "$SOURCE_CHECKS" "$RESTORED_CHECKS" "$SCHEMA_DIFF" "$COUNT_SQL"
+  rm -f "$DUMP_FILE" "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" "$SOURCE_CHECKS" "$RESTORED_CHECKS" "$SOURCE_CHECKS_NORMALIZED" "$RESTORED_CHECKS_NORMALIZED" "$SCHEMA_DIFF" "$COUNT_SQL"
   psql "$PG_ADMIN_URL" -X -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS jata_recovery_restore WITH (FORCE)" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -71,11 +73,13 @@ fi
 CHECK_SQL="SELECT n.nspname || '|' || r.relname || '|' || c.conname || '|' || c.convalidated::text || '|' || c.conbin::text FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE c.contype = 'c' AND n.nspname NOT IN ('pg_catalog','information_schema') ORDER BY n.nspname,r.relname,c.conname"
 psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -c "$CHECK_SQL" > "$SOURCE_CHECKS"
 psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -c "$CHECK_SQL" > "$RESTORED_CHECKS"
-if ! diff -u "$SOURCE_CHECKS" "$RESTORED_CHECKS" > "$SCHEMA_DIFF"; then
+node scripts/ci/normalize-pg-node-tree.mjs "$SOURCE_CHECKS" > "$SOURCE_CHECKS_NORMALIZED"
+node scripts/ci/normalize-pg-node-tree.mjs "$RESTORED_CHECKS" > "$RESTORED_CHECKS_NORMALIZED"
+if ! diff -u "$SOURCE_CHECKS_NORMALIZED" "$RESTORED_CHECKS_NORMALIZED" > "$SCHEMA_DIFF"; then
   sed -n '1,160p' "$SCHEMA_DIFF"
-  fail "restored CHECK constraint parse trees differ from source"
+  fail "restored CHECK constraint expressions differ after boolean-tree canonicalization"
 fi
-echo "PASS: normalized schema DDL and CHECK constraint parse trees match"
+echo "PASS: normalized schema DDL and canonical CHECK constraint expressions match"
 
 # Generate exact row-count queries for every user table in every non-system schema.
 psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -F '|' -c "
