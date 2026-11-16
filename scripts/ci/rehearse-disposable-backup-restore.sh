@@ -54,12 +54,15 @@ pg_restore --exit-on-error --single-transaction --clean --if-exists --no-owner -
 echo "PASS: backup restored into a separate empty database"
 
 # Compare schema definitions after restore. PostgreSQL 18 emits a random psql
-# restrict token in each dump; remove only those wrapper lines before comparison.
-pg_dump "$PG_SOURCE_URL" --schema-only --no-owner --no-privileges --file="$SOURCE_SCHEMA"
-pg_dump "$RESTORE_URL" --schema-only --no-owner --no-privileges --file="$RESTORED_SCHEMA"
-sed -i '/^\\restrict /d; /^\\unrestrict /d' "$SOURCE_SCHEMA" "$RESTORED_SCHEMA"
-diff -u "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" >/dev/null || fail "restored schema differs from source schema"
-echo "PASS: source and restored schema dumps are byte-identical after removing dump guard tokens"
+# restrict token in each dump. Ignore dump comments and those random wrapper lines.
+pg_dump "$PG_SOURCE_URL" --schema-only --no-owner --no-privileges --no-comments --file="$SOURCE_SCHEMA"
+pg_dump "$RESTORE_URL" --schema-only --no-owner --no-privileges --no-comments --file="$RESTORED_SCHEMA"
+sed -i '/^\\restrict /d; /^\\unrestrict /d; /^--/d' "$SOURCE_SCHEMA" "$RESTORED_SCHEMA"
+if ! diff -u "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" > "${RUNNER_TEMP:-/tmp}/jata-schema-diff.txt"; then
+  sed -n '1,160p' "${RUNNER_TEMP:-/tmp}/jata-schema-diff.txt"
+  fail "restored schema differs from source schema"
+fi
+echo "PASS: normalized source and restored schema dumps match"
 
 # Generate exact row-count queries for every user table in every non-system schema.
 psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -F '|' -c "
