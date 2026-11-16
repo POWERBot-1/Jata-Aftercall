@@ -1,7 +1,7 @@
 // Fail closed for Vercel Preview until every external dependency is isolated.
 export function validatePreviewEnvironment(env) {
   const errors = [];
-  const required = ["DATABASE_URL","DIRECT_URL","JATA_STAGING_DATABASE_HOST","PAYSTACK_PUBLIC_KEY","PAYSTACK_SECRET_KEY","JATA_STORAGE_PROVIDER","R2_ACCOUNT_ID","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","R2_BUCKET","R2_PUBLIC_BASE_URL","PUBLIC_BASE_URL","NEXTAUTH_URL"];
+  const required = ["DATABASE_URL","DIRECT_URL","JATA_STAGING_DATABASE_HOST","AUTH_SECRET","NEXTAUTH_SECRET","PAYSTACK_PUBLIC_KEY","PAYSTACK_SECRET_KEY","JATA_STORAGE_PROVIDER","R2_ACCOUNT_ID","R2_ACCESS_KEY_ID","R2_SECRET_ACCESS_KEY","R2_BUCKET","R2_PUBLIC_BASE_URL","PUBLIC_BASE_URL","NEXTAUTH_URL"];
   for (const key of required) if (!String(env[key] ?? "").trim()) errors.push(`missing ${key}`);
 
   const parseUrl = (key) => {
