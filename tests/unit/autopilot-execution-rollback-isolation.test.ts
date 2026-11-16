@@ -406,6 +406,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
         description: "Feeds 4 diners",
       },
       idempotencyKey: "idem_offer_1",
+      now: scenarioNow,
     });
     expect(dup.ok && dup.duplicate).toBe(true);
 
