@@ -356,6 +356,8 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
   });
 
   it("executes and rolls back CREATE_OR_UPDATE_OFFER and RESOLVE_UNANSWERED_FAQ idempotently with full audit trail", async () => {
+    // Freeze entitlement evaluation inside the fixture subscription window.
+    const scenarioNow = new Date("2026-10-25T09:00:00.000Z");
     // 1. Pre-existing offer on biz_a to verify exact snapshot restoration
     state.offers.set("biz_a", {
       id: "off_prior",
@@ -385,6 +387,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
         discountPercent: 0,
       },
       idempotencyKey: "idem_offer_1",
+      now: scenarioNow,
     });
     expect(offerProp.ok).toBe(true);
     if (offerProp.ok === false) return;
@@ -412,6 +415,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
       proposalId: offerProp.proposal.id,
       actorUserId: "user_owner_a",
       actorRole: "OWNER",
+      now: scenarioNow,
     });
     expect(execOffer.ok).toBe(true);
     expect(state.offers.get("biz_a")?.title).toBe("Family Swahili Platter");
@@ -422,6 +426,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
       proposalId: offerProp.proposal.id,
       actorUserId: "user_owner_a",
       actorRole: "OWNER",
+      now: scenarioNow,
     });
     expect(replay.ok && replay.idempotentReplay).toBe(true);
 
@@ -431,6 +436,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
       proposalId: offerProp.proposal.id,
       actorUserId: "user_owner_a",
       actorRole: "OWNER",
+      now: scenarioNow,
     });
     expect(rbOffer.ok).toBe(true);
     expect(state.offers.get("biz_a")?.title).toBe("Lunch Special");
@@ -450,6 +456,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
         answer: "Yes, we deliver to Lavington daily between 11:00 AM and 9:00 PM.",
       },
       idempotencyKey: "idem_faq_1",
+      now: scenarioNow,
     });
     expect(faqProp.ok).toBe(true);
     if (faqProp.ok === false) return;
@@ -459,6 +466,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
       proposalId: faqProp.proposal.id,
       actorUserId: "user_owner_a",
       actorRole: "OWNER",
+      now: scenarioNow,
     });
     expect(state.unanswered.get("uq_1")?.isResolved).toBe(true);
     expect(state.faqs.size).toBe(1);
@@ -468,6 +476,7 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
       proposalId: faqProp.proposal.id,
       actorUserId: "user_owner_a",
       actorRole: "OWNER",
+      now: scenarioNow,
     });
     expect(state.unanswered.get("uq_1")?.isResolved).toBe(false);
     expect(state.faqs.size).toBe(0);
