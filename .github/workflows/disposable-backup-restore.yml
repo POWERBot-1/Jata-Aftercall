@@ -52,13 +52,22 @@ jobs:
         with:
           node-version: "22.22.3"
           cache: npm
-      - name: Install PostgreSQL client
+      - name: Prepare PostgreSQL 18 client wrappers
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client
-          pg_dump --version
-          pg_restore --version
+          docker pull postgres:18
+          for tool in psql pg_dump pg_restore; do
+            cat > "$RUNNER_TEMP/$tool" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          tool="$(basename "$0")"
+          exec docker run --rm --network host -v "$RUNNER_TEMP:$RUNNER_TEMP" postgres:18 "$tool" "$@"
+          SH
+            chmod +x "$RUNNER_TEMP/$tool"
+          done
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pg_dump" --version
+          "$RUNNER_TEMP/pg_restore" --version
       - name: Install dependencies and generate Prisma client
         run: |
           set -euo pipefail
