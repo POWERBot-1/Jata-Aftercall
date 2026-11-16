@@ -50,7 +50,7 @@ echo "PASS: complete custom-format logical backup created and archive list verif
 psql "$PG_ADMIN_URL" -X -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS jata_recovery_restore WITH (FORCE)"
 psql "$PG_ADMIN_URL" -X -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE jata_recovery_restore"
 RESTORE_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.pathname="/jata_recovery_restore";u.search="";u.hash="";process.stdout.write(u.toString())')"
-pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_URL" "$DUMP_FILE"
+pg_restore --exit-on-error --single-transaction --clean --if-exists --no-owner --no-privileges --dbname="$RESTORE_URL" "$DUMP_FILE"
 echo "PASS: backup restored into a separate empty database"
 
 # Compare schema definitions after restore. PostgreSQL 18 emits a random psql
