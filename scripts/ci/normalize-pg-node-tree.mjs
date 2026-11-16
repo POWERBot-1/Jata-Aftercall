@@ -12,13 +12,13 @@ function tokenize(source) {
   const tokens = [];
   let i = 0;
   while (i < source.length) {
-    if (/\\s/.test(source[i])) { i++; continue; }
+    if (/\s/.test(source[i])) { i++; continue; }
     if ("{}()[]".includes(source[i])) { tokens.push(source[i++]); continue; }
     if (source[i] === '"' || source[i] === "'") {
       const quote = source[i];
       const begin = i++;
       while (i < source.length) {
-        if (quote === '"' && source[i] === "\\\\") { i += 2; continue; }
+        if (quote === '"' && source[i] === "\\") { i += 2; continue; }
         if (quote === "'" && source[i] === "'" && source[i + 1] === "'") { i += 2; continue; }
         if (source[i] === quote) { i++; break; }
         i++;
@@ -28,7 +28,7 @@ function tokenize(source) {
       continue;
     }
     const begin = i;
-    while (i < source.length && !/\\s/.test(source[i]) && !"{}()[]".includes(source[i])) i++;
+    while (i < source.length && !/\s/.test(source[i]) && !"{}()[]".includes(source[i])) i++;
     tokens.push(source.slice(begin, i));
   }
   if (!tokens.length) throw new Error("empty PostgreSQL node tree");
@@ -97,11 +97,11 @@ export function canonicalizePgNodeTree(source) {
 }
 
 export function canonicalizeCheckRows(source) {
-  return source.split(/\\r?\\n/).filter(Boolean).map((line) => {
+  return source.split(/\r?\n/).filter(Boolean).map((line) => {
     const separator = line.lastIndexOf("|");
     if (separator < 0) throw new Error("CHECK signature row has no node-tree delimiter");
     return line.slice(0, separator + 1) + canonicalizePgNodeTree(line.slice(separator + 1));
-  }).join("\\n") + "\\n";
+  }).join("\n") + "\n";
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
