@@ -12,6 +12,7 @@ const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(); if(
 const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const families=['cinematic','editorial','luxury','minimal','magazine','marketplace','product-first','storytelling','spatial','interactive-showroom','gallery','split-screen','fullscreen-media','scrollytelling','cardless-immersive','map-driven','catalog','portfolio','service-journey','experimental'];
 const sizes=[[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
+const baselineMode=process.env.MOTION_BASELINE_CAPTURE==='1';
 const out='motion-family-evidence'; mkdirSync(out,{recursive:true});
 const prisma=new PrismaClient(); const rows=[], steps=[];
 const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. No independent review, baseline recording or full route coverage.'},null,2));
@@ -57,7 +58,7 @@ try {
      await p.waitForFunction(()=>Boolean(document.querySelector('.eb-scope')?.dataset.renderMode),{timeout:10000}).catch(()=>{});
      row.observation=await p.evaluate(()=>{const r=document.querySelector('.eb-scope'); const ts=[...(r?.querySelectorAll('[data-motion-recipe]')||[])];return {family:r?.dataset.templateFamily,mode:r?.dataset.renderMode,reason:r?.dataset.motionReason,engine:r?.dataset.motionEngine,probes:r?.querySelectorAll('[data-motion-probe]').length,targets:ts.length,played:ts.filter(e=>e.dataset.motionPlayed).length,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
      const name=`${family}-${preview?'draft':'published'}-${width}x${height}-${reduced?'reduced':'normal'}.jpg`; await p.screenshot({path:path.join(out,name),type:'jpeg',quality:45,fullPage:true}); row.screenshot=name;
-     row.result=row.status===200 && row.observation.family===family && row.observation.probes===1 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL';
+     row.result=baselineMode?(row.status===200?'CAPTURED':'FAIL'):(row.status===200 && row.observation.family===family && row.observation.probes===1 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL');
     }catch(e){row.result='ERROR';row.error=String(e).slice(0,400);}
     rows.push(row); save(); if(!preview) await p.close();
     }
