@@ -49,7 +49,7 @@ jobs:
       - name: Start isolated production build
         run: |
           PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-server.log 2>&1 &
-          for i in $(seq 1 90); do curl -fsS http://localhost:4100/health >/dev/null 2>&1 && exit 0; sleep 2; done
+          for i in $(seq 1 90); do curl -fsS http://localhost:4100/ >/dev/null 2>&1 && exit 0; sleep 2; done
           cat /tmp/motion-server.log; exit 1
       # Bounded on purpose. On 2026-11-11 this step sat in_progress for 37+ minutes on
       # `sudo apt-get update` (an unbounded network call inside a 50-minute job): the capture steps
@@ -158,8 +158,8 @@ jobs:
           set -euo pipefail
           cd baseline
           npm ci
-          bash scripts/lib/prisma-generate.sh
-          bash scripts/lib/prisma-cli.sh migrate deploy
+          npx prisma generate
+          npx prisma migrate deploy
       - name: Generate and mask historical fixture password
         run: |
           set -euo pipefail
