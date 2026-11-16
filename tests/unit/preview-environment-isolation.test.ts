@@ -5,6 +5,8 @@ const safe = {
   DATABASE_URL: "postgresql://app:secret@ep-staging-pooler.c-2.us-east-1.aws.neon.tech/jata_staging?sslmode=require",
   DIRECT_URL: "postgresql://app:secret@ep-staging.c-2.us-east-1.aws.neon.tech/jata_staging?sslmode=require",
   JATA_STAGING_DATABASE_HOST: "ep-staging.c-2.us-east-1.aws.neon.tech",
+  AUTH_SECRET: "preview-only-test-secret",
+  NEXTAUTH_SECRET: "preview-only-test-secret",
   PAYSTACK_PUBLIC_KEY: "pk_test_example123",
   PAYSTACK_SECRET_KEY: "sk_test_example123",
   JATA_STORAGE_PROVIDER: "cloudflare-r2",
