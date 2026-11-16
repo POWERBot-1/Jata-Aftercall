@@ -80,9 +80,10 @@ export function assertMjengoPricing(plan: { key?: string; priceKES?: number; dur
 }
 
 export function mjengoFeatureEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.MJENGO_OS_DISABLED === "true") return false;
-  if (env.MJENGO_OS_ENABLED === "true") return true;
-  return env.NODE_ENV !== "production";
+  // Preserve the existing production contract: MJENGO is enabled unless an operator
+  // explicitly disables it. Requiring a new opt-in variable here would silently turn
+  // every existing production deployment into a 404 after this PR is released.
+  return env.MJENGO_OS_DISABLED !== "true";
 }
 
 /**
