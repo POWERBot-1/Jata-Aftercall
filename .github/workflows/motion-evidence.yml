@@ -187,7 +187,7 @@ jobs:
           set -euo pipefail
           cd baseline
           PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-baseline-server.log 2>&1 &
-          for i in $(seq 1 90); do curl -fsS http://localhost:4100/health >/dev/null 2>&1 && exit 0; sleep 2; done
+          for i in $(seq 1 90); do curl -fsS http://localhost:4100/ >/dev/null 2>&1 && exit 0; sleep 2; done
           cat /tmp/motion-baseline-server.log
           exit 1
       - name: Capture historical generated-family screenshots
