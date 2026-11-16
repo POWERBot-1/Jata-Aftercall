@@ -190,15 +190,15 @@ jobs:
           for i in $(seq 1 90); do curl -fsS http://localhost:4100/ >/dev/null 2>&1 && exit 0; sleep 2; done
           cat /tmp/motion-baseline-server.log
           exit 1
-      - name: Capture historical generated-family screenshots
-        timeout-minutes: 30
+      - name: Capture historical legacy published storefront baseline
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           mkdir -p baseline/scripts/motion
-          cp candidate/scripts/motion/generated-family-evidence.mjs baseline/scripts/motion/generated-family-evidence.mjs
+          cp candidate/scripts/motion/capture-legacy-public-baseline.mjs baseline/scripts/motion/capture-legacy-public-baseline.mjs
           cd baseline
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
-          MOTION_BASELINE_CAPTURE=1 node scripts/motion/generated-family-evidence.mjs
+          node scripts/motion/capture-legacy-public-baseline.mjs
       - name: Upload historical baseline screenshots and observations
         if: always()
         uses: actions/upload-artifact@v4
