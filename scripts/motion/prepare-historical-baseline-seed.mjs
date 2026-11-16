@@ -3,7 +3,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const target = process.argv[2];
-if (!target || !target.replaceAll("\\", "/").endsWith("/baseline/prisma/seed.ts")) {
+const normalizedTarget = target?.replaceAll("\\", "/");
+if (!normalizedTarget || !(normalizedTarget === "baseline/prisma/seed.ts" || normalizedTarget.endsWith("/baseline/prisma/seed.ts"))) {
   throw new Error("BLOCKED: expected the disposable baseline/prisma/seed.ts target");
 }
 const absolute = path.resolve(target);
