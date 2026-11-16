@@ -48,13 +48,21 @@ function parseTree(source) {
     if (token === "{") {
       const type = take();
       const fields = {};
+      const positional = [];
       while (peek() !== "}") {
+        if (peek() === undefined) throw new Error("unterminated PostgreSQL node");
+        // PostgreSQL pg_node_tree includes positional payloads for some node
+        // fields (notably Const :constvalue <length> [ <bytes...> ]). Preserve
+        // these in order instead of misreading the following '[' as a field.
+        if (!peek().startsWith(":")) {
+          positional.push(value());
+          continue;
+        }
         const field = take();
-        if (!field.startsWith(":")) throw new Error(`expected PostgreSQL node field, received ${JSON.stringify(field)} at token ${index - 1}`);
         fields[field.slice(1)] = value();
       }
       take();
-      return { kind: "node", type, fields };
+      return { kind: "node", type, fields, positional };
     }
     if (token === "(" || token === "[") {
       const close = token === "(" ? ")" : "]";
@@ -89,7 +97,7 @@ function stable(node) {
     flattened.sort((a,b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     fields.args = { ...fields.args, items: flattened };
   }
-  return { kind: "node", type: node.type, fields };
+  return { kind: "node", type: node.type, fields, positional: (node.positional ?? []).map(stable) };
 }
 
 export function canonicalizePgNodeTree(source) {
