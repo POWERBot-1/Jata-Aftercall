@@ -27,6 +27,7 @@ This work addresses the owner-dependent blockers without inventing policy or cha
 
 - The complete owner-provided advanced fintech motion specification is present verbatim in `docs/ADMIN_BUILDING_INSTRUCTIONS.md §032`. The earlier claim that this specification is unavailable is stale and should not be used as the current blocker.
 - The owner explicitly named `a28c1a46101ac90bbf28d374b4986b689196de8d` as the genuine pre-motion source revision in §042. The commit is present in repository history. This resolves the missing-reference question; it does **not** prove a reproduced screenshot baseline.
+- Added a historical-baseline CI job that checks out the owner-named revision, sanitizes its legacy fixture seed (no fixed admin/demo password and no synthetic PAID payment), then uses the current capture harness in baseline mode. The job is not yet accepted until it completes and yields the expected captures.
 - The acceptance still requires identical route, fixture data, browser, viewport and motion preference on the historical and candidate builds; actual before/after captures/recordings; all supported families and applicable generation/preview/publish routes; queue/re-entry/cleanup; reduced/disabled behavior; and independent visual review.
 - Existing exact-head Motion and E2E CI results are useful but do not prove the historical visual comparison or all Studio acceptance. No customer website is republished by this work.
 - **Still BLOCKED:** execute the same-fixture historical baseline harness and full remaining browser matrix; preserve the owner's existing visual design and each generated site's own brand.
@@ -36,7 +37,7 @@ This work addresses the owner-dependent blockers without inventing policy or cha
 - Added `scripts/ci/rehearse-disposable-backup-restore.sh` and integrated its job into the existing `.github/workflows/candidate-rehearsal.yml` so the exact-head pull-request workflow can execute it without waiting for a new workflow to reach the default branch.
 - The new workflow is designed to create a synthetic database on a disposable PostgreSQL 18 service, apply committed migrations, seed synthetic records, create a full custom-format logical backup, restore into a separate scratch database, compare schema dumps, compare row counts for every user table and compare the Prisma migration ledger.
 - The script refuses non-loopback hosts and refuses source database names other than `jata_recovery`; it never accepts a production URL. The workflow uses a PostgreSQL 18 client image to avoid client/server major-version mismatch.
-- **Not yet tested:** the integrated backup/restore job is currently running on the exact PR head; no PASS is claimed until its database job completes.
+- **First exact-head attempt:** the integrated job completed migrations, seed, dump and restore, then failed the schema-dump comparison. It did not reach row-count or ledger comparison and is not a PASS. The comparison now ignores PostgreSQL dump comments/random guard tokens and emits the diff on failure; an exact-head rerun is required.
 - **Still BLOCKED after that run:** Neon provider-side restore/PITR, snapshot inventory, RPO/RTO and recovery from an actual provider snapshot require separate read-only Neon Console access and owner acceptance. A disposable container is not Neon.
 
 ## 5. Production checks — ADMIN-009 / RELEASE-001
