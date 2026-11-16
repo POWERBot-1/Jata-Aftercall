@@ -11,11 +11,14 @@ SOURCE_SCHEMA="${RUNNER_TEMP:-/tmp}/jata-source-schema.sql"
 RESTORED_SCHEMA="${RUNNER_TEMP:-/tmp}/jata-restored-schema.sql"
 SOURCE_COUNTS="${RUNNER_TEMP:-/tmp}/jata-source-counts.txt"
 RESTORED_COUNTS="${RUNNER_TEMP:-/tmp}/jata-restored-counts.txt"
+SOURCE_CHECKS="${RUNNER_TEMP:-/tmp}/jata-source-checks.txt"
+RESTORED_CHECKS="${RUNNER_TEMP:-/tmp}/jata-restored-checks.txt"
+SCHEMA_DIFF="${RUNNER_TEMP:-/tmp}/jata-schema-diff.txt"
 COUNT_SQL="${RUNNER_TEMP:-/tmp}/jata-row-counts.sql"
 
 fail() { echo "::error::$1"; exit 1; }
 cleanup() {
-  rm -f "$DUMP_FILE" "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" "$COUNT_SQL"
+  rm -f "$DUMP_FILE" "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" "$SOURCE_CHECKS" "$RESTORED_CHECKS" "$SCHEMA_DIFF" "$COUNT_SQL"
   psql "$PG_ADMIN_URL" -X -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS jata_recovery_restore WITH (FORCE)" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -57,12 +60,22 @@ echo "PASS: backup restored into a separate empty database"
 # restrict token in each dump. Ignore dump comments and those random wrapper lines.
 pg_dump "$PG_SOURCE_URL" --schema-only --no-owner --no-privileges --no-comments --file="$SOURCE_SCHEMA"
 pg_dump "$RESTORE_URL" --schema-only --no-owner --no-privileges --no-comments --file="$RESTORED_SCHEMA"
-sed -i '/^\\restrict /d; /^\\unrestrict /d; /^--/d' "$SOURCE_SCHEMA" "$RESTORED_SCHEMA"
-if ! diff -u "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" > "${RUNNER_TEMP:-/tmp}/jata-schema-diff.txt"; then
-  sed -n '1,160p' "${RUNNER_TEMP:-/tmp}/jata-schema-diff.txt"
-  fail "restored schema differs from source schema"
+# pg_dump renders CHECK expressions through PostgreSQL's deparser. A dump/restore
+# round-trip can remove redundant parentheses without changing the stored expression.
+# Compare all other DDL textually, then compare CHECK parse trees from pg_constraint.
+sed -i '/^\\restrict /d; /^\\unrestrict /d; /^--/d; /^[[:space:]]*CONSTRAINT .* CHECK (/d' "$SOURCE_SCHEMA" "$RESTORED_SCHEMA"
+if ! diff -u "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" > "$SCHEMA_DIFF"; then
+  sed -n '1,160p' "$SCHEMA_DIFF"
+  fail "restored schema DDL differs from source schema outside CHECK expression rendering"
 fi
-echo "PASS: normalized source and restored schema dumps match"
+CHECK_SQL="SELECT n.nspname || '|' || r.relname || '|' || c.conname || '|' || c.convalidated::text || '|' || c.conbin::text FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE c.contype = 'c' AND n.nspname NOT IN ('pg_catalog','information_schema') ORDER BY n.nspname,r.relname,c.conname"
+psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -c "$CHECK_SQL" > "$SOURCE_CHECKS"
+psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -c "$CHECK_SQL" > "$RESTORED_CHECKS"
+if ! diff -u "$SOURCE_CHECKS" "$RESTORED_CHECKS" > "$SCHEMA_DIFF"; then
+  sed -n '1,160p' "$SCHEMA_DIFF"
+  fail "restored CHECK constraint parse trees differ from source"
+fi
+echo "PASS: normalized schema DDL and CHECK constraint parse trees match"
 
 # Generate exact row-count queries for every user table in every non-system schema.
 psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -F '|' -c "
