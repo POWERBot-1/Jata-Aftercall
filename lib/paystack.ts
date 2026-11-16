@@ -173,8 +173,8 @@ export async function activateSubscriptionForPayment(
       return settleAutopilotPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
     }
     // MJENGO OS — KES 2,000 / 30 days, independent of BUSINESS_POS (KES 499) and ERP_PRO
-    // (KES 3,000). It writes planKey='MJENGO_OS' rows, so a POS payment can never switch it on
-    // and a MJENGO payment can never switch POS on. The product-terms guard lives inside
+    // (KES 3,000). It writes dedicated MjengoSubscription/MjengoEntitlement rows, so ERP PRO
+    // and POS remain independent. The product-terms guard lives inside
     // settleMjengoPayment and refuses rather than granting a mismatched product.
     if (plan.key === MJENGO_PLAN_KEY) {
       return settleMjengoPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });

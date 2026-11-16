@@ -156,6 +156,9 @@ describe("runtime and schema guards", () => {
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",
       "20261112000000_agent_notification_outbox_plan",
+      // Product isolation backfills matching legacy rows into independent tables without deleting
+      // or rewriting any existing ERP, MJENGO, or POS records.
+      "20261112090000_mjengo_isolated_entitlements",
       "20261113000000_agent_notification_claim_state",
       "20261114000000_agent_notification_operator_review",
       "20261115000000_agent_referral_report_snapshot",
@@ -254,6 +257,9 @@ describe("runtime and schema guards", () => {
       "20261110000000_agent_admin_notification_event",
       "20261111000000_agent_commission_ledger",
       "20261112000000_agent_notification_outbox_plan",
+      // MJENGO isolation copies exact MJENGO_OS records into dedicated tables, then frees the
+      // legacy ERP unique slots using only the matching product discriminator.
+      "20261112090000_mjengo_isolated_entitlements",
       "20261113000000_agent_notification_claim_state",
       "20261114000000_agent_notification_operator_review",
       "20261115000000_agent_referral_report_snapshot",
