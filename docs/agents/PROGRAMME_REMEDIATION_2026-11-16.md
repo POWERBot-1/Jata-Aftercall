@@ -19,9 +19,9 @@ This work addresses the owner-dependent blockers without inventing policy or cha
 ## 2. Agent commissions — ADMIN-006 / ADMIN-013
 
 - Existing foundations include a pure commission evaluator, immutable ledger storage and read-only reconciliation primitives. They do not constitute a verified payment-to-commission lifecycle.
-- The evaluator is deliberately non-writing and rejects missing/unapproved policy. Its test rates are hypothetical fixtures, not JATA terms.
+- The evaluator is deliberately non-writing and rejects missing/unapproved policy. It now also rejects an `APPROVED`-looking snapshot if any governance dimension is absent: attribution precedence/window and renewal/correction treatment, tax/discount/fee treatment, recurrence, refund/chargeback/dispute reversals, caps, payout schedule/method/hold, hierarchy and retention/legal-hold. Test values are explicit `TEST_ONLY` placeholders, not JATA terms.
 - The repository's owner-decision matrix still lacks exact rates/basis, qualifying verified events, attribution precedence/window, recurrence/eligibility, tax/discount/refund/chargeback treatment, caps/holds, payout schedule/method and hierarchy compensation.
-- **Still BLOCKED:** no approved policy is present in the accessible project record. This branch does not invent one, enable an accrual writer, reconcile real payments, or initiate payouts. Policy-independent synthetic integration work can proceed only where it cannot create payable entries or imply real payment verification.
+- **Still BLOCKED:** no approved policy is present in the accessible project record. This branch does not invent one, enable an accrual writer, reconcile real payments, or initiate payouts. The new completeness guard is not proof of an approved policy or an end-to-end commission lifecycle. Policy-independent synthetic integration work can proceed only where it cannot create payable entries or imply real payment verification.
 
 ## 3. Website Studio motion — MOTION-007 / MOTION-008 / MOTION-017
 
@@ -33,10 +33,10 @@ This work addresses the owner-dependent blockers without inventing policy or cha
 
 ## 4. Recovery — ADMIN-014
 
-- Added `.github/workflows/disposable-backup-restore.yml` and `scripts/ci/rehearse-disposable-backup-restore.sh`.
+- Added `scripts/ci/rehearse-disposable-backup-restore.sh` and integrated its job into the existing `.github/workflows/candidate-rehearsal.yml` so the exact-head pull-request workflow can execute it without waiting for a new workflow to reach the default branch.
 - The new workflow is designed to create a synthetic database on a disposable PostgreSQL 18 service, apply committed migrations, seed synthetic records, create a full custom-format logical backup, restore into a separate scratch database, compare schema dumps, compare row counts for every user table and compare the Prisma migration ledger.
 - The script refuses non-loopback hosts and refuses source database names other than `jata_recovery`; it never accepts a production URL. The workflow uses a PostgreSQL 18 client image to avoid client/server major-version mismatch.
-- **Not yet tested:** the workflow has not run on this branch. Its success must be demonstrated on the exact PR head before claiming a disposable backup/restore PASS.
+- **Not yet tested:** the integrated backup/restore job is currently running on the exact PR head; no PASS is claimed until its database job completes.
 - **Still BLOCKED after that run:** Neon provider-side restore/PITR, snapshot inventory, RPO/RTO and recovery from an actual provider snapshot require separate read-only Neon Console access and owner acceptance. A disposable container is not Neon.
 
 ## 5. Production checks — ADMIN-009 / RELEASE-001
