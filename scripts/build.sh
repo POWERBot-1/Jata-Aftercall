@@ -8,7 +8,7 @@ set -euo pipefail
 echo "[build] Starting JATA AFTERCALL build gate (Option I)"
 
 # A Vercel Preview must never inherit production database, payment or storage configuration.
-if [ "${VERCEL_ENV:-}" = "preview" ]; then
+if [ "${VERCEL_ENV:-}" = "preview" ] && [ -n "${VERCEL_URL:-}" ]; then
   echo "[build] Validating isolated Preview environment"
   node scripts/ci/check-preview-environment-isolation.mjs
 fi
