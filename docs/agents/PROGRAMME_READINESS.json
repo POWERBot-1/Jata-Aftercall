@@ -1189,5 +1189,20 @@
     "assessmentReference": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §046",
     "currentAssessmentStatus": "PASS",
     "scopeNote": "Historical Website Studio 2.0 release outcome only. Does not resolve the 24 open programme requirements, authorize PR #109 merge, or authorize a new production deployment."
+  },
+  "RELEASE-005": {
+    "status": "PASS",
+    "acceptance": "The owner-authorized scope and conservative financial, commission, access and recovery decisions are recorded in append-only section 047 and the owner decision record. This is a governance authorization only; it does not assert implementation completion or release readiness.",
+    "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §047 (RELEASE-005)",
+    "implementationLocation": "docs/agents/OWNER_AUTHORIZED_PROGRAMME_DECISIONS_2026-11-16.md; docs/ADMIN_BUILDING_INSTRUCTIONS.md §047.",
+    "verificationMethod": "Exact-head programme-readiness checker validates the append-only instruction and the existence of both evidence records. Technical implementation, provider verification and independent acceptance remain separate.",
+    "testResult": "PASS — explicit owner authorization and adopted bounded policies are recorded. No production mutation, paid provisioning, operator grant, commission accrual or payout is authorized by this record.",
+    "evidence": [
+      "docs/ADMIN_BUILDING_INSTRUCTIONS.md",
+      "docs/agents/OWNER_AUTHORIZED_PROGRAMME_DECISIONS_2026-11-16.md"
+    ],
+    "assessmentReference": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §047",
+    "currentAssessmentStatus": "PASS",
+    "scopeNote": "Governance authorization only. Does not clear ADMIN-005/006/013, staging, recovery, motion, domain/payment inspection or any production release requirement."
   }
 }
