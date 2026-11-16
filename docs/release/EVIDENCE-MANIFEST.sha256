@@ -3,7 +3,7 @@
 # Verify with: sha256sum -c docs/release/EVIDENCE-MANIFEST.sha256
 # This file deliberately does not list itself; a digest of itself cannot verify.
 
-d268eaecfe4e14d29834faf01ed331e72145a79201245edcbc78766efeedbf26  .github/workflows/candidate-rehearsal.yml
+4dcc41e05c847caa1a48d2481359c25236828f2832f9b943c8dcc9fdf7919300  .github/workflows/candidate-rehearsal.yml
 31bf9ab50c5f1ff3dfd99ed2abe2b42234019f28f1e0a95a805489e5486bf721  .github/workflows/interactive-business-e2e.yml
 9d84ddb57796a1c5879c91a5933fad68ce7a60f8af19bff6a45d31243b22ca88  .github/workflows/production-smoke.yml
 31561de8b08db7b52eac67d9b29383d8f14150b43928f2ff9be49a6b7b7f015a  .github/workflows/release-validation.yml
