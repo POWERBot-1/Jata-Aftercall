@@ -26,9 +26,9 @@ const source = new URL(process.env.DATABASE_URL);
 const admin = new URL(process.env.PG_ADMIN_URL);
 const loopback = new Set(["localhost", "127.0.0.1", "::1"]);
 if (!loopback.has(source.hostname) || !loopback.has(admin.hostname)) throw new Error("BLOCKED: backup rehearsal requires loopback PostgreSQL only");
-if (decodeURIComponent(source.pathname.replace(/^\\//, "")) !== "jata_recovery") throw new Error("BLOCKED: source database must be exactly jata_recovery");
+if (decodeURIComponent(source.pathname.slice(1)) !== "jata_recovery") throw new Error("BLOCKED: source database must be exactly jata_recovery");
 if (source.hostname !== admin.hostname || source.port !== admin.port) throw new Error("BLOCKED: source/admin endpoints differ");
-if (decodeURIComponent(admin.pathname.replace(/^\\//, "")) !== "postgres") throw new Error("BLOCKED: admin connection must target postgres database");
+if (decodeURIComponent(admin.pathname.slice(1)) !== "postgres") throw new Error("BLOCKED: admin connection must target postgres database");
 NODE
 
 command -v pg_dump >/dev/null || fail "pg_dump is unavailable"
