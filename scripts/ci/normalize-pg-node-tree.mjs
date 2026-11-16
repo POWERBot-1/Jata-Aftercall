@@ -9,8 +9,29 @@ import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 function tokenize(source) {
-  const tokens = source.match(/"(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[{}()[\\]]|[^\\s{}()[\\]]+/g);
-  if (!tokens) throw new Error("empty PostgreSQL node tree");
+  const tokens = [];
+  let i = 0;
+  while (i < source.length) {
+    if (/\\s/.test(source[i])) { i++; continue; }
+    if ("{}()[]".includes(source[i])) { tokens.push(source[i++]); continue; }
+    if (source[i] === '"' || source[i] === "'") {
+      const quote = source[i];
+      const begin = i++;
+      while (i < source.length) {
+        if (quote === '"' && source[i] === "\\\\") { i += 2; continue; }
+        if (quote === "'" && source[i] === "'" && source[i + 1] === "'") { i += 2; continue; }
+        if (source[i] === quote) { i++; break; }
+        i++;
+      }
+      if (source[i - 1] !== quote) throw new Error("unterminated quoted PostgreSQL node value");
+      tokens.push(source.slice(begin, i));
+      continue;
+    }
+    const begin = i;
+    while (i < source.length && !/\\s/.test(source[i]) && !"{}()[]".includes(source[i])) i++;
+    tokens.push(source.slice(begin, i));
+  }
+  if (!tokens.length) throw new Error("empty PostgreSQL node tree");
   return tokens;
 }
 
