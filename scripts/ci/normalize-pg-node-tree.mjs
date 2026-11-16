@@ -6,6 +6,7 @@
  * sorts their operands; it preserves AND/OR boundaries and all other node data.
  */
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 function tokenize(source) {
   const tokens = source.match(/"(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[{}()[\\]]|[^\\s{}()[\\]]+/g);
@@ -82,7 +83,7 @@ export function canonicalizeCheckRows(source) {
   }).join("\\n") + "\\n";
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\\\/g, "/"))) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const input = readFileSync(process.argv[2], "utf8");
     process.stdout.write(canonicalizeCheckRows(input));
