@@ -38,7 +38,7 @@ jobs:
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
-          --timeout 5s
+          --health-timeout 5s
           --retries 10
     env:
       CI: "true"
