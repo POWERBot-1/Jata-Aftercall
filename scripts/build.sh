@@ -7,6 +7,12 @@ set -euo pipefail
 
 echo "[build] Starting JATA AFTERCALL build gate (Option I)"
 
+# A Vercel Preview must never inherit production database, payment or storage configuration.
+if [ "${VERCEL_ENV:-}" = "preview" ] && [ -n "${VERCEL_URL:-}" ]; then
+  echo "[build] Validating isolated Preview environment"
+  node scripts/ci/check-preview-environment-isolation.mjs
+fi
+
 # `prisma generate` reads the datasource, and a declared-but-unset `directUrl` is a hard P1012. This
 # defaults DIRECT_URL to DATABASE_URL when unset so no environment has to add a second variable to
 # build; the guard in migrate.sh refuses the one case where that default would be unsafe.
