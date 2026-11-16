@@ -21,14 +21,14 @@ CREATE TABLE IF NOT EXISTS "ErpProSubscription" (
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpProSubscription_businessId_key" ON "ErpProSubscription"("businessId");
 CREATE INDEX IF NOT EXISTS "ErpProSubscription_businessId_status_idx" ON "ErpProSubscription"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "ErpProSubscription_paymentId_idx" ON "ErpProSubscription"("paymentId");
-DO $ BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'ErpProSubscription_businessId_fkey'
   ) THEN
     ALTER TABLE "ErpProSubscription" ADD CONSTRAINT "ErpProSubscription_businessId_fkey"
       FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-END $;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "ErpProEntitlement" (
   "id" TEXT NOT NULL,
@@ -43,14 +43,14 @@ CREATE TABLE IF NOT EXISTS "ErpProEntitlement" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "ErpProEntitlement_businessId_key" ON "ErpProEntitlement"("businessId");
 CREATE INDEX IF NOT EXISTS "ErpProEntitlement_businessId_status_idx" ON "ErpProEntitlement"("businessId", "status");
-DO $ BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'ErpProEntitlement_businessId_fkey'
   ) THEN
     ALTER TABLE "ErpProEntitlement" ADD CONSTRAINT "ErpProEntitlement_businessId_fkey"
       FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-END $;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "MjengoSubscription" (
   "id" TEXT NOT NULL,
@@ -72,14 +72,14 @@ CREATE TABLE IF NOT EXISTS "MjengoSubscription" (
 CREATE UNIQUE INDEX IF NOT EXISTS "MjengoSubscription_businessId_key" ON "MjengoSubscription"("businessId");
 CREATE INDEX IF NOT EXISTS "MjengoSubscription_businessId_status_idx" ON "MjengoSubscription"("businessId", "status");
 CREATE INDEX IF NOT EXISTS "MjengoSubscription_paymentId_idx" ON "MjengoSubscription"("paymentId");
-DO $ BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'MjengoSubscription_businessId_fkey'
   ) THEN
     ALTER TABLE "MjengoSubscription" ADD CONSTRAINT "MjengoSubscription_businessId_fkey"
       FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-END $;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "MjengoEntitlement" (
   "id" TEXT NOT NULL,
@@ -94,14 +94,14 @@ CREATE TABLE IF NOT EXISTS "MjengoEntitlement" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "MjengoEntitlement_businessId_key" ON "MjengoEntitlement"("businessId");
 CREATE INDEX IF NOT EXISTS "MjengoEntitlement_businessId_status_idx" ON "MjengoEntitlement"("businessId", "status");
-DO $ BEGIN
+DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'MjengoEntitlement_businessId_fkey'
   ) THEN
     ALTER TABLE "MjengoEntitlement" ADD CONSTRAINT "MjengoEntitlement_businessId_fkey"
       FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
-END $;
+END $$;
 
 -- Preserve legacy ERP PRO state in the new active ERP PRO tables.
 INSERT INTO "ErpProSubscription" (
