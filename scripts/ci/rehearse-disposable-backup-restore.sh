@@ -17,7 +17,7 @@ COUNT_SQL="${RUNNER_TEMP:-/tmp}/jata-row-counts.sql"
 
 fail() { echo "::error::$1"; exit 1; }
 cleanup() {
-  rm -f "$DUMP_FILE" "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" "$SOURCE_COUNTS" "$RESTORED_COUNTS" "$COUNT_SQL"
+  rm -f "$DUMP_FILE" "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" "$COUNT_SQL"
   psql "$PG_ADMIN_URL" -X -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS \"$RESTORE_DB\" WITH (FORCE)" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -36,13 +36,14 @@ NODE
 command -v pg_dump >/dev/null || fail "pg_dump is unavailable"
 command -v pg_restore >/dev/null || fail "pg_restore is unavailable"
 command -v psql >/dev/null || fail "psql is unavailable"
+PG_SOURCE_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.search="";u.hash="";process.stdout.write(u.toString())')"
 
 echo "PASS: source and admin targets are loopback disposable PostgreSQL"
 pg_dump --version
 pg_restore --version
 
 # Capture complete schema + data, including migration ledger and financial test fixtures.
-pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="$DUMP_FILE"
+pg_dump "$PG_SOURCE_URL" --format=custom --no-owner --no-privileges --file="$DUMP_FILE"
 test -s "$DUMP_FILE" || fail "pg_dump produced an empty backup"
 pg_restore --list "$DUMP_FILE" >/dev/null || fail "backup archive is unreadable"
 echo "PASS: complete custom-format logical backup created and archive list verified"
@@ -55,13 +56,78 @@ pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_URL" "$
 echo "PASS: backup restored into a separate empty database"
 
 # Compare schema definitions after restore.
-pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges --file="$SOURCE_SCHEMA"
+pg_dump "$PG_SOURCE_URL" --schema-only --no-owner --no-privileges --file="$SOURCE_SCHEMA"
 pg_dump "$RESTORE_URL" --schema-only --no-owner --no-privileges --file="$RESTORED_SCHEMA"
+# PostgreSQL 18 emits a random psql \restrict token in each dump; remove only those wrapper lines.
+sed -i '/^\\restrict /d; /^\\unrestrict /d' "$SOURCE_SCHEMA" "$RESTORED_SCHEMA"
 diff -u "$SOURCE_SCHEMA" "$RESTORED_SCHEMA" >/dev/null || fail "restored schema differs from source schema"
 echo "PASS: source and restored schema dumps are byte-identical"
 
 # Generate exact row-count queries for every user table in every non-system schema.
-psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -At -F $'\t' -c "
+psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -F 
+SELECT format('SELECT %L, count(*)::bigint FROM %I.%I;', schemaname, schemaname, tablename)
+FROM pg_tables
+WHERE schemaname NOT IN ('pg_catalog','information_schema')
+ORDER BY schemaname, tablename;
+" > "$COUNT_SQL"
+test -s "$COUNT_SQL" || fail "no user tables found for row-count comparison"
+psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -F 
+psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -F $'\t' -f "$COUNT_SQL" | sort > "$RESTORED_COUNTS"
+diff -u "$SOURCE_COUNTS" "$RESTORED_COUNTS" || fail "one or more restored table row counts differ"
+TABLES="$(wc -l < "$SOURCE_COUNTS" | tr -d ' ')"
+test "$TABLES" -gt 0 || fail "row-count comparison produced no table results"
+echo "PASS: row counts match across all $TABLES user tables"
+
+# The migration ledger must survive exactly, not merely be recreated by migrate deploy.
+HAS_LEDGER="$(psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -c "SELECT to_regclass('public._prisma_migrations') IS NOT NULL")"
+if [ "$HAS_LEDGER" = "t" ]; then
+  SOURCE_LEDGER="$(psql "$PG_SOURCE_URL" -X -v ON_ERROR_STOP=1 -At -c "SELECT count(*)::text || ':' || (count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL))::text FROM public._prisma_migrations")"
+  RESTORED_LEDGER="$(psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -c "SELECT count(*)::text || ':' || (count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL))::text FROM public._prisma_migrations")"
+  [ "$SOURCE_LEDGER" = "$RESTORED_LEDGER" ] || fail "migration ledger differs after restore"
+  echo "PASS: migration ledger rows and completed-state counts match"
+fi
+
+echo "RESULT: PASS — disposable full-database backup/restore, schema and row-count comparison"
+\t' -c "
+SELECT format('SELECT %L, count(*)::bigint FROM %I.%I;', schemaname, schemaname, tablename)
+FROM pg_tables
+WHERE schemaname NOT IN ('pg_catalog','information_schema')
+ORDER BY schemaname, tablename;
+" > "$COUNT_SQL"
+test -s "$COUNT_SQL" || fail "no user tables found for row-count comparison"
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -At -F $'\t' -f "$COUNT_SQL" | sort > "$SOURCE_COUNTS"
+psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -F $'\t' -f "$COUNT_SQL" | sort > "$RESTORED_COUNTS"
+diff -u "$SOURCE_COUNTS" "$RESTORED_COUNTS" || fail "one or more restored table row counts differ"
+TABLES="$(wc -l < "$SOURCE_COUNTS" | tr -d ' ')"
+test "$TABLES" -gt 0 || fail "row-count comparison produced no table results"
+echo "PASS: row counts match across all $TABLES user tables"
+
+# The migration ledger must survive exactly, not merely be recreated by migrate deploy.
+if grep -q '"_prisma_migrations"' "$COUNT_SQL"; then
+  SOURCE_LEDGER="$(psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -At -c 'SELECT count(*) || '':'' || count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL) FROM "_prisma_migrations"')"
+  RESTORED_LEDGER="$(psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -c 'SELECT count(*) || '':'' || count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL) FROM "_prisma_migrations"')"
+  [ "$SOURCE_LEDGER" = "$RESTORED_LEDGER" ] || fail "migration ledger differs after restore"
+  echo "PASS: migration ledger rows and completed-state counts match"
+fi
+
+echo "RESULT: PASS — disposable full-database backup/restore, schema and row-count comparison"
+\t' -f "$COUNT_SQL" | sort > "$SOURCE_COUNTS"
+psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -F $'\t' -f "$COUNT_SQL" | sort > "$RESTORED_COUNTS"
+diff -u "$SOURCE_COUNTS" "$RESTORED_COUNTS" || fail "one or more restored table row counts differ"
+TABLES="$(wc -l < "$SOURCE_COUNTS" | tr -d ' ')"
+test "$TABLES" -gt 0 || fail "row-count comparison produced no table results"
+echo "PASS: row counts match across all $TABLES user tables"
+
+# The migration ledger must survive exactly, not merely be recreated by migrate deploy.
+if grep -q '"_prisma_migrations"' "$COUNT_SQL"; then
+  SOURCE_LEDGER="$(psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -At -c 'SELECT count(*) || '':'' || count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL) FROM "_prisma_migrations"')"
+  RESTORED_LEDGER="$(psql "$RESTORE_URL" -X -v ON_ERROR_STOP=1 -At -c 'SELECT count(*) || '':'' || count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL) FROM "_prisma_migrations"')"
+  [ "$SOURCE_LEDGER" = "$RESTORED_LEDGER" ] || fail "migration ledger differs after restore"
+  echo "PASS: migration ledger rows and completed-state counts match"
+fi
+
+echo "RESULT: PASS — disposable full-database backup/restore, schema and row-count comparison"
+\t' -c "
 SELECT format('SELECT %L, count(*)::bigint FROM %I.%I;', schemaname, schemaname, tablename)
 FROM pg_tables
 WHERE schemaname NOT IN ('pg_catalog','information_schema')
