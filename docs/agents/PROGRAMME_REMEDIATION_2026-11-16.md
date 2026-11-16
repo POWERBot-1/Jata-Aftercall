@@ -42,10 +42,11 @@ This work addresses the owner-dependent blockers without inventing policy or cha
 
 ## 5. Production checks — ADMIN-009 / RELEASE-001
 
+- Read-only Vercel project inspection confirms both `jataaftercall.co.ke` and `www.jataaftercall.co.ke` are attached and verified. Apex DNS metadata reports external HostAfrica nameservers (`ns1.host-ww.net`, `ns2.host-ww.net`), A values `64.29.17.1` and `216.198.79.1`, no conflicts and `misconfigured=false`. The www record reports CNAME `2da49677b2414cfd.vercel-dns-017.com.`, no conflicts and `misconfigured=false`. Neither project domain has a Vercel redirect target configured. Full details: `docs/evidence/programme-remediation-2026-11-16/VERCEL-DOMAIN-CONFIG.md`.
 - The 2026-11-10 remediation report records read-only HTTP checks: apex and www serve the product with matching title/canonical links, and `/control` redirects to sign-in on the apex and Vercel infrastructure hostname.
 - That report also records the limitation: direct TLS inspection from this environment fails with `SSL_ERROR_SYSCALL`; proxy fetches do not replace independent TLS/HSTS/cookie inspection. HOSTAFRICA's authoritative DNS/mail-zone export and delivery confirmation remain an owner/operator dependency.
 - No DNS, domain, Vercel environment, email, Paystack or production setting is changed here.
-- **Still BLOCKED:** exact read-only TLS/HSTS/cookie/redirect inspection from an authorized network position, authoritative HOSTAFRICA DNS/mail evidence, and separately authorized P0 payment/domain actions.
+- **Still BLOCKED:** independent TLS certificate/cipher, HSTS and cookie-attribute inspection; authoritative HOSTAFRICA DNS/mail-zone evidence and SPF/DKIM/DMARC verification; and separately authorized P0 payment/domain actions. Vercel configuration metadata is not a substitute for those checks.
 
 ## Current disposition
 
