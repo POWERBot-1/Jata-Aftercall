@@ -15,7 +15,7 @@ const sizes=[[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
 const baselineMode=process.env.MOTION_BASELINE_CAPTURE==='1';
 const out='motion-family-evidence'; mkdirSync(out,{recursive:true});
 const prisma=new PrismaClient(); const rows=[], steps=[];
-const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. No independent review, baseline recording or full route coverage.'},null,2));
+const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,captureMode:baselineMode?'historical-pre-motion-baseline':'candidate-after',rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. No independent review, baseline recording or full route coverage.'},null,2));
 const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']}); const browserVersion=await browser.version();
 let fixture;
 try {
@@ -67,6 +67,7 @@ try {
  }
 } catch(e){steps.push({stage:'BLOCKED',error:String(e).slice(0,800)});}
 finally{save();await browser.close();await prisma.$disconnect();}
-const summary={sha,browser:browserVersion,expected:families.length*2*6*2,rows:rows.length,observed:rows.filter(r=>r.result==='OBSERVED').length,failures:rows.filter(r=>r.result!=='OBSERVED').length,provisioningErrors:steps.filter(s=>s.stage==='ERROR'||s.stage==='BLOCKED').slice(0,10)};
+const expected=families.length*2*6*2; const successful=rows.filter(r=>r.result===(baselineMode?'CAPTURED':'OBSERVED')).length;
+const summary={sha,browser:browserVersion,captureMode:baselineMode?'historical-pre-motion-baseline':'candidate-after',expected,rows:rows.length,successful,failures:rows.length-successful,provisioningErrors:steps.filter(s=>s.stage==='ERROR'||s.stage==='BLOCKED').slice(0,10)};
 console.log(`::notice title=Generated family evidence::${JSON.stringify(summary)}`);
 if(summary.rows!==summary.expected || summary.failures || summary.provisioningErrors.length) process.exitCode=1;
