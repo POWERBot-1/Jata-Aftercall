@@ -50,7 +50,7 @@ function parseTree(source) {
       const fields = {};
       while (peek() !== "}") {
         const field = take();
-        if (!field.startsWith(":")) throw new Error("expected PostgreSQL node field");
+        if (!field.startsWith(":")) throw new Error(`expected PostgreSQL node field, received ${JSON.stringify(field)} at token ${index - 1}`);
         fields[field.slice(1)] = value();
       }
       take();
