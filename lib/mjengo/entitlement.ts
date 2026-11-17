@@ -187,6 +187,23 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
 }
 
 // MJENGO uses dedicated tables so ERP PRO and MJENGO OS can coexist for one business.
+/**
+ * Whether the business has completed setup (an ERP configuration row exists — the workspace's
+ * journal and settings live there). findUnique resolves `null` for a missing row rather than
+ * throwing, so the result must come from the row itself: the previous `.then(() => true)` reported
+ * every business as configured, which skipped the "set up first" step for brand-new businesses.
+ * A lookup failure is treated as not configured (fail-closed for the lifecycle hint only; it never
+ * grants access — entitlement is derived from settled MJENGO subscription/payment evidence).
+ */
+export async function hasMjengoConfiguration(businessId: string): Promise<boolean> {
+  try {
+    const row = await (prisma as any).erpConfiguration?.findUnique?.({ where: { businessId }, select: { id: true } });
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+
 export async function getMjengoEntitlement(businessId: string): Promise<MjengoEntitlementState> {
   const [subscription, entitlement, plan] = await Promise.all([
     (prisma as any).mjengoSubscription?.findUnique?.({
@@ -210,8 +227,7 @@ export async function getMjengoEntitlement(businessId: string): Promise<MjengoEn
     : null;
   const paidPayment = payment ? { status: payment.status, planKey: MJENGO_PLAN_KEY } : null;
 
-  // Check if business has any ERP configuration as proxy for "configured"
-  const configured = await (prisma as any).erpConfiguration?.findUnique?.({ where: { businessId } }).then(() => true).catch(() => false) ?? false;
+  const configured = await hasMjengoConfiguration(businessId);
 
   return deriveMjengoEntitlement({
     subscription: subscription as any ?? null,
