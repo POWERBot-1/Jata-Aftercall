@@ -1,5 +1,6 @@
 /** Development-only harness of the ACTUAL storefront renderer; production always returns 404. */
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { ExperienceSite } from "@/components/storefront/ExperienceSite";
 import { isRenderPreference } from "@/lib/experience/renderMode";
 import { isTemplateFamily } from "@/lib/experience/templateFamilies";
@@ -10,7 +11,10 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Motion verification fixture", robots: { index: false, follow: false } };
 
 export default async function MotionPreviewHarness({ searchParams }: { searchParams: Promise<{ preference?: string; theme?: string; family?: string; queue?: string }> }) {
-  if (process.env.NODE_ENV === "production") notFound();
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host") || "";
+  const isolatedMotionCapture = process.env.CI === "true" && process.env.MOTION_ISOLATED === "1" && ["localhost:4100", "127.0.0.1:4100"].includes(host);
+  if (process.env.NODE_ENV === "production" && !isolatedMotionCapture) notFound();
   const params = await searchParams;
   const preference = isRenderPreference(params.preference) ? params.preference : "motion";
   if (params.family !== undefined && !isTemplateFamily(params.family)) notFound();
