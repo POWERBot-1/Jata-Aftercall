@@ -17,6 +17,9 @@ const TOKENS: Record<string, PostAuthDestination> = {
 };
 
 export function resolvePostAuthDestination(next: unknown): PostAuthDestination {
+  // A repeated `next` parameter is ambiguous (e.g. `?next=agents&next=https://evil`); refuse it
+  // rather than guessing which value the user meant. A single-element array is unambiguous.
+  if (Array.isArray(next) && next.length !== 1) return "/dashboard";
   const value = Array.isArray(next) ? next[0] : next;
   if (typeof value !== "string") return "/dashboard";
   return Object.prototype.hasOwnProperty.call(TOKENS, value) ? TOKENS[value] : "/dashboard";

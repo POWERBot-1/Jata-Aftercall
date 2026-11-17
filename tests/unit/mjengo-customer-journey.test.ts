@@ -23,7 +23,13 @@ describe("post-authentication destination allowlist", () => {
   it("returns MJENGO OS customers to the MJENGO entry after sign-in", () => {
     expect(resolvePostAuthDestination("mjengo")).toBe("/dashboard/mjengo");
     expect(resolvePostAuthDestination("/dashboard/mjengo")).toBe("/dashboard/mjengo");
-    expect(resolvePostAuthDestination(["mjengo", "control"])).toBe("/dashboard/mjengo");
+    expect(resolvePostAuthDestination(["mjengo"])).toBe("/dashboard/mjengo");
+  });
+
+  it("refuses an ambiguous repeated next parameter", () => {
+    expect(resolvePostAuthDestination(["mjengo", "control"])).toBe("/dashboard");
+    expect(resolvePostAuthDestination(["agents", "https://evil.test"])).toBe("/dashboard");
+    expect(resolvePostAuthDestination([])).toBe("/dashboard");
   });
 
   it("keeps the existing agent and control destinations", () => {
