@@ -64,5 +64,5 @@ The migration policy for this application is **forward-only after commit**. A co
 ## Scope and limitations
 
 - **PASS:** fresh PostgreSQL 18 migration history, ordered ledger, schema/object parity, idempotent second deploy, deliberate failure detection, full logical backup/restore and data-integrity comparison on the exact disposable candidate.
-- **NOT TESTED:** production backup/restore, production RPO/RTO, production cutover, real customer-data recovery, provider or application operations after a production restore. No production database was accessed.
+- **NOT TESTED (still required by ADMIN-014):** a supported upgrade from the previous schema state; rollback where the migration is reversible; an executed forward-recovery rehearsal after a committed/partially applied failure; application compatibility/smoke journeys after restore; production backup/restore, production RPO/RTO, production cutover, real customer-data recovery, and provider-native Neon PITR. No production database was accessed.
 - This evidence closes the candidate's disposable backup/restore and documented non-reversible-migration strategy requirement only. It does not authorize a production migration or release.
