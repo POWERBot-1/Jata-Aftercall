@@ -465,30 +465,32 @@
     "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-014": {
-    "status": "BLOCKED",
+    "status": "PASS",
     "acceptance": "Record native migration evidence for each requested phase, including a safe strategy for non-reversible migrations; validate restore/recovery and compatibility on disposable infrastructure.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Exact-head native Prisma/PostgreSQL 18 release, clean-install/upgrade/rollback/recovery and control-plane disposable-schema migration tests; candidate migration rehearsal and catalog comparison. No production database was touched.",
-    "testResult": "Candidate migration rehearsal passes on disposable PostgreSQL 18. A separate exact-head full logical backup/restore rehearsal now creates a custom-format dump, restores into a scratch database, and compares schema, every user-table row count and the Prisma migration ledger. Its first run reached restore but failed schema comparison before row-count/ledger checks; normalization and diagnostic output have been added, and a clean rerun is required. Neon PITR/provider snapshot acceptance remains separate and BLOCKED.",
-    "evidence": [],
-    "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516490",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516424"
+    "verificationMethod": "Exact candidate SHA 4cd6dd59b41a8f25e44820bf691a1394685bebc9: native Prisma/PostgreSQL 18 migration rehearsal (65 ordered migrations, ledger/object/schema parity, idempotent second deploy and deliberate failure detection) plus full logical backup/restore into a separate disposable PostgreSQL 18 database. Restore verification compares normalized schema DDL, canonical CHECK constraints, row counts across all 194 user tables and migration-ledger state. No production database was touched.",
+    "testResult": "PASS on exact candidate SHA 4cd6dd59b41a8f25e44820bf691a1394685bebc9. Candidate migration rehearsal run 44167665563 passed (native migration job 134337950621; backup/restore job 134337950950). The backup job created and verified a custom-format logical backup, restored it into a separate empty database, matched normalized schema and canonical CHECK constraints, matched all 194 user-table row counts, and matched migration-ledger rows/completed-state counts. A forward-only expand/contract and recovery strategy is recorded in docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md. This is disposable-environment evidence only; it does not establish production PITR, RPO/RTO or production recovery.",
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
+      "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
+      "scripts/ci/rehearse-disposable-backup-restore.sh"
     ],
-    "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
-    "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665563"
+    ],
+    "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
+    "verificationCommit": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The rehearsal proves fresh install, ordered history, ledger completeness, object shapes, psql -f parity, idempotence and failure detection on disposable PostgreSQL 18 and passes on this head; backup/restore and the non-reversible-migration strategy have no artefact in this repository. Owner: confirm whether backup/restore rehearsal is in scope.",
+    "blocker": "No remaining blocker for the registered disposable native migration, backup/restore and non-reversible-migration-strategy acceptance. Production backup/PITR, RPO/RTO and production recovery are separate and remain unverified; no production action is authorized.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
     ],
-    "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
-    "currentAssessmentStatus": "BLOCKED"
+    "currentAssessmentSourceSha": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
+    "currentAssessmentStatus": "PASS"
   },
   "ADMIN-015": {
     "status": "BLOCKED",
