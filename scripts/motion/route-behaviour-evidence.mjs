@@ -199,7 +199,7 @@ try {
  events.push(repeat);save();console.log(`::notice title=Repeated preference transitions::${JSON.stringify({kind:repeat.kind,result:repeat.result,transitions,settled:{mode:settled.mode,reason:settled.reason,running:settled.running}})}`);
  // Real-browser saturation of the actual controller using the dev-only 18-target fixture.
  const queuePage=await browser.newPage();
- await queuePage.setViewport({width:1366,height:3000,deviceScaleFactor:1});
+ await queuePage.setViewport({width:1366,height:5000,deviceScaleFactor:1});
  await queuePage.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
  const queueResponse=await queuePage.goto(new URL('/dev/motion-preview?preference=motion&queue=1',base).href,{waitUntil:'domcontentloaded'});
  await queuePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return s?.dataset.renderMode==='motion'&&t.length===18&&t.filter(e=>e.dataset.motionPlayed==='mini').length>=8;},{polling:10,timeout:12000});
