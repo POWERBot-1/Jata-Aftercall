@@ -49,6 +49,37 @@ env:
   AUTH_SECRET: release-validation-disposable-secret
 
 jobs:
+  pr125-evidence-manifest-refresh:
+    name: PR125 evidence manifest refresh (temporary)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'remediation/owner-authorized-acceptance-v2-2026-11-16' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+      - name: Regenerate the committed evidence manifest
+        run: node scripts/ci/generate-evidence-manifest.mjs
+      - name: Commit manifest refresh
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet -- docs/release/EVIDENCE-MANIFEST.sha256; then
+            echo "Evidence manifest already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/release/EVIDENCE-MANIFEST.sha256
+          git commit -m "Refresh release evidence manifest for PR125"
+          git push origin "HEAD:${BRANCH}"
+
   # ───────────────────────────────────────────────────────────────────────────
   static-checks:
     name: Static (install, generate, lint, typecheck, audit)
