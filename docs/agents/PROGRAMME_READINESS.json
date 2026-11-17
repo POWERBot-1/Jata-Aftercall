@@ -197,7 +197,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Console modules exist for businesses, agents, exceptions and audit, but MRR/ARR, payment, subscription, AI usage, job and incident panels are not implemented and the console withholds PII and financial figures pending owner policy. Owner: approve the PII/financial display policy and confirm the metric set.",
+    "blocker": "The owner-approved financial metric definitions and aggregate-first/masked-PII display policy are recorded in docs/agents/OWNER_AUTHORIZED_PROGRAMME_DECISIONS_2026-11-16.md. The metrics implementation and reconciled read-only data source are still missing. The approved all-DENY Control policy means no financial or PII data may be exposed through Control until access is separately authorized.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
@@ -237,7 +237,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Read-only commissions and agent breakdowns exist; activation, reconciliation, reversals and verified payment require financial authority the register itself records as BLOCKED. Owner: authorize the financial policy and the Paystack verification scope.",
+    "blocker": "Attribution, eligibility, reversal and approval governance are recorded in the owner decision record. A versioned numeric commission rate schedule and payout terms are intentionally not configured; no accrual, payout or financial commitment may be implemented from guessed rates.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -256,7 +256,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No configuration module, no feature-flag or AI kill-switch UI, no service-health monitoring. Not implemented. Owner: confirm scope and priority.",
+    "blocker": "The feature-flag registry, operator kill-switch workflow and health-monitor UI are not implemented. Keep all flags fail-closed and do not enable production behavior; the approved all-DENY Control policy remains in force.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -299,7 +299,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The canonical domain serves the application and /control refuses anonymous visitors, but cookie scope, HTTPS/HSTS headers, the redirect matrix and DNS state can only be verified from an authorized network position, and the register forbids changing DNS, domain records or env vars without separate approval. Owner: authorize or perform that inspection.",
+    "blocker": "Vercel domain-configuration evidence is recorded, but independent public DNS, TLS/HSTS, canonical redirect, cookie-scope and SPF/DKIM/DMARC verification is still incomplete. No DNS, registrar, production domain or mail configuration changes are authorized.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -342,7 +342,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Umbrella acceptance over ADMIN-005 and ADMIN-007 plus a provisioned operator; cannot pass while those are open and while the owner-approved all-DENY matrix leaves the console without an operator. Owner: provision at least one authorized operator.",
+    "blocker": "The owner explicitly approved DENY for all 90 role×capability combinations. The denied Control journey is evidenced; an authorized Control journey cannot pass while that policy remains in force. Do not grant access to make the acceptance test pass.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/control/page.tsx",
@@ -459,7 +459,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Synthetic engineering is done (applications, consent, attribution, notification and scheduler recovery, authenticated browser journey); activation, verified payment, idempotent commission and reversal need an approved commission policy. Owner: approve the agent/commission policy.",
+    "blocker": "Commission governance is adopted, but numeric rates and payout terms remain intentionally unconfigured. Keep accrual and payout disabled until the owner supplies a versioned rate schedule and authorizes the associated financial workflow.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -499,15 +499,19 @@
     "implementationLocation": "browser E2E scripts, actual app routes, screenshot artifacts and release documentation.",
     "verificationMethod": "Exact-head real-Chrome six-viewport screenshot/browser workflow passed for existing product journeys; the recorded tasks cover POS/onboarding/agent/ERP, not `/control`. Artifact inspection and authorized/denied Control, registration, agent, finance and motion coverage at each owner-specified viewport remain outstanding.",
     "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Six-viewport captures exist for the public pages, the signed-in dashboard, the ERP workspace and the /control denial path, but the acceptance requires independent inspection of every image including control, registration, agent dashboard, financial state, motion and template-family journeys; only the premium capture set is retrievable in this environment.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665424",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665678"
     ],
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Six-viewport captures exist for the public pages, the signed-in dashboard, the ERP workspace and the /control denial path, but the acceptance requires independent inspection of every image including control, registration, agent dashboard, financial state, motion and template-family journeys; only the premium capture set is retrievable in this environment.",
+    "blocker": "Partial visual evidence and representative independent review are recorded in docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md. The cinematic CTA and AI preview mobile-header defects have been corrected in source, but latest-head captures are pending; exhaustive image/video review is incomplete. The all-DENY policy also prevents an authorized Control journey.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
