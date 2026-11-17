@@ -1034,14 +1034,15 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §039 (MOTION-015)",
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Requires proof of live browser motion behaviour (concurrency saturation, queueing, re-entry, cancellation) with inspectable evidence from this exact head.",
+    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Requires proof of live browser motion behaviour (concurrency saturation, queueing, re-entry, cancellation) with inspectable evidence from this exact head. Update 2026-11-17 (kept BLOCKED): on exact head 358afc0f52e6a7a6bd24c7bf5ed53a3610f6cf69 the browser queue-stress row now runs and passes in real Chrome 157 (motion-evidence run 44193862679: 17 targets, exactly 8 started and 9 queued, max 8 concurrently animating elements, all 17 completed; repeated preference transitions PASS; 48/48 capture rows observed, 0 failed). The earlier timeout was a fixture/harness mismatch, not a controller defect (docs/audits/WHOLE_PLATFORM_REMEDIATION_2026-11-17.md R-CAP-01). Still open: independent inspection of the uploaded six-view artifacts (artifact download is blocked from the agent sandbox) and the other conditions in this criterion.",
     "evidence": [
       "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
     ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44193862679"
     ],
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",

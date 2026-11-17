@@ -211,3 +211,9 @@ Full traceability matrix: `docs/audits/WHOLE_PLATFORM_REMEDIATION_2026-11-17.md`
 | R-DEP-02 | P0 | picomatch GHSA-fc5q-39xc-vjpf (16 high, dev-only), no upstream patch | — | — | **BLOCKED (upstream)** |
 
 Local full unit suite at `6b45b45`: 404 files / 4,737 tests PASS, 0 FAIL, 343 skipped (DB-only). The 79 unhandled errors are the sandbox's missing Prisma engine (download blocked) and are not CI evidence. `tsc --noEmit` PASS (types from an offline client generation, never generation evidence). ESLint: 0 errors.
+
+**Exact-head CI update — `358afc0` (draft PR #126):**
+- All technical gates PASS. That covers Static/audit, PG18 migrations + idempotent re-deploy + full suite, exact-candidate rehearsal, backup/restore, real-DB journey, POS/ERP PostgreSQL suite, six-viewport capture, motion capture 48/48 with queue stress PASS, full-suite, and the Release gate aggregate.
+- An intermediate head `9c631be` failed the ERP re-run gate. That was the plain-DDL regression, corrected in `ec40f37` (re-runnable migration + shape guard).
+- Red, not code defects: `programme-completeness` (fail-closed by design) and Vercel Preview (isolation guard; branch-scoped Preview env missing — owner action).
+- MOTION-015 stays BLOCKED, with exact-head queue evidence appended. Verdict: **NOT READY**.
