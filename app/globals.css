@@ -5639,3 +5639,26 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Website Studio family acceptance corrections (2026-11-17).
+   Section headings use the already contrast-corrected body token rather than a pale display override. */
+.eb-family-editorial .eb-section .eb-h2,
+.eb-family-editorial .eb-section .eb-h3,
+.eb-family-cardless-immersive .eb-section .eb-h2,
+.eb-family-cardless-immersive .eb-section .eb-h3 {
+  color: var(--eb-text);
+}
+
+/* Long immersive titles must wrap inside the viewport, and reserve the measured mobile action-bar area. */
+.eb-family-cardless-immersive .eb-hero__content { min-width: 0; }
+.eb-family-cardless-immersive .eb-hero .eb-h1 {
+  max-width: 14ch;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+@media (max-width: 899px) {
+  .eb-family-cardless-immersive .eb-hero__content {
+    padding-bottom: calc(var(--eb-actionbar-h, 9.5rem) + env(safe-area-inset-bottom) + 1.25rem);
+  }
+}
