@@ -12,7 +12,7 @@ if(base.protocol!=='http:'||!['localhost','127.0.0.1'].includes(base.hostname)||
 const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(sha!==process.env.EXPECTED_SHA) throw Error('HEAD mismatch');
 const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[],aiRows=[];let browser,originalStudioSubscription=null;
-const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,aiRows,limitations:['No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
+const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,aiRows,limitations:['Queue stress uses a dev-only synthetic 18-target fixture; published-route coverage remains separate','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
 let browserVersion='unavailable';
 try {
  const business=await db.business.findUniqueOrThrow({where:{slug:'marys-beauty-studio'},select:{id:true,slug:true}});
