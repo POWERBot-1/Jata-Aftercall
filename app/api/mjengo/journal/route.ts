@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership } from "@/lib/tenant";
 import { postJournal } from "@/lib/erp/accounting";
 import { verifyMjengoOrigin } from "@/lib/mjengo/csrf";
+import { assertMjengoEntitled, isMjengoDenied } from "@/lib/mjengo/access";
 import { rateLimit } from "@/lib/rate-limit";
 import prisma from "@/lib/db";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,9 @@ export async function POST(req: Request) {
   let body: any; try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
   const businessId = String(body.businessId ?? "").trim();
   try { await assertBusinessOwnership(businessId, session); } catch (e: any) { return reply({ error: e.message }, e.status ?? 403); }
+  // Ownership is not entitlement: ledger posting is a paid MJENGO OS capability.
+  const entitled = await assertMjengoEntitled(businessId);
+  if (isMjengoDenied(entitled)) return reply({ error: entitled.error, code: "MJENGO_ENTITLEMENT_REQUIRED" }, entitled.status);
   if (!body.description || String(body.description).trim().length < 2) return reply({ error: "Describe what this journal is for." }, 400);
   if (!Array.isArray(body.lines) || body.lines.length < 2) return reply({ error: "At least two lines required." }, 400);
   for (const l of body.lines) {
@@ -35,6 +39,8 @@ export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return reply({ error: "Sign in." }, 401);
   try { await assertBusinessOwnership(businessId, session); } catch (e: any) { return reply({ error: e.message }, e.status ?? 403); }
+  const entitled = await assertMjengoEntitled(businessId);
+  if (isMjengoDenied(entitled)) return reply({ error: entitled.error, code: "MJENGO_ENTITLEMENT_REQUIRED" }, entitled.status);
   try {
     const journals: any[] = await (prisma as any).erpJournal.findMany({ where: { businessId, status: { in: ["POSTED", "REVERSED"] } } });
     const lines: any[] = await (prisma as any).erpJournalLine.findMany({ where: { businessId } });

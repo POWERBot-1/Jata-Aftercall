@@ -15,7 +15,24 @@ const state = vi.hoisted(() => ({
   journals: [] as any[],
   lines: [] as any[],
   created: [] as any[],
+  entitled: true,
+  entitlementReads: [] as string[],
 }));
+
+// Entitlement is the second gate after ownership. The derivation itself is covered by the
+// entitlement/settlement suites; here it is a switch so each route's refusal can be asserted.
+vi.mock("@/lib/mjengo/entitlement", async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    getMjengoEntitlement: vi.fn(async (businessId: string) => {
+      state.entitlementReads.push(businessId);
+      return state.entitled
+        ? { entitled: true, status: "ACTIVE", lifecycle: "ACTIVE", planKey: "MJENGO_OS", priceKES: 2000, expiresAt: null, graceUntil: null, reason: "MJENGO OS is live.", nextAction: "none", inGrace: false }
+        : { entitled: false, status: "NONE", lifecycle: "SETUP", planKey: "MJENGO_OS", priceKES: 2000, expiresAt: null, graceUntil: null, reason: "Set up your business first, then add MJENGO OS for KES 2,000/month.", nextAction: "setup", inGrace: false };
+    }),
+  };
+});
 
 vi.mock("@/lib/auth", () => ({
   getSession: vi.fn(async () => state.session),
@@ -82,6 +99,9 @@ beforeEach(() => {
   state.journals = [];
   state.lines = [];
   state.created = [];
+  state.entitled = true;
+  state.entitlementReads = [];
+  delete process.env.MJENGO_OS_DISABLED;
   process.env.DATABASE_URL = "postgresql://stub/stub";
   (globalThis as any).__rateLimitBucketsClear?.();
 });
@@ -270,5 +290,52 @@ describe("mjengo: journal route", () => {
   it("refuses an unauthenticated integrity read", async () => {
     state.session = null;
     expect((await journalGet(new Request(`${origin}/api/mjengo/journal?businessId=bizA`))).status).toBe(401);
+  });
+});
+
+describe("mjengo: entitlement is enforced on direct API calls (ownership is not entitlement)", () => {
+  const journalBody = { businessId: "bizA", description: "Opening float", lines: [{ accountCode: "1000", debitCents: 100 }, { accountCode: "3000", creditCents: 100 }] };
+
+  it("refuses ledger posting for an owner without a live MJENGO OS entitlement", async () => {
+    state.entitled = false;
+    const response = await journalPost(jsonRequest(`${origin}/api/mjengo/journal`, journalBody));
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({ code: "MJENGO_ENTITLEMENT_REQUIRED" });
+    expect(state.created).toEqual([]);
+  });
+
+  it("refuses the ledger integrity read for an unentitled owner", async () => {
+    state.entitled = false;
+    const response = await journalGet(new Request(`${origin}/api/mjengo/journal?businessId=bizA`));
+    expect(response.status).toBe(402);
+  });
+
+  it("refuses MJENGO branding writes for an unentitled owner", async () => {
+    state.entitled = false;
+    const response = await brandingPost(jsonRequest(`${origin}/api/mjengo/branding`, { businessId: "bizA", business_name: "Unpaid Rename" }));
+    expect(response.status).toBe(402);
+    expect(state.updates).toEqual([]);
+  });
+
+  it("checks ownership before entitlement, so a foreign tenant learns nothing about entitlement", async () => {
+    state.entitled = false;
+    const response = await journalPost(jsonRequest(`${origin}/api/mjengo/journal`, { ...journalBody, businessId: "bizB" }));
+    expect(response.status).toBe(403);
+    expect(state.entitlementReads).toEqual([]);
+  });
+
+  it("returns 404 when MJENGO OS is explicitly disabled, without posting", async () => {
+    process.env.MJENGO_OS_DISABLED = "true";
+    try {
+      const response = await journalPost(jsonRequest(`${origin}/api/mjengo/journal`, journalBody));
+      expect(response.status).toBe(404);
+      expect(state.created).toEqual([]);
+    } finally { delete process.env.MJENGO_OS_DISABLED; }
+  });
+
+  it("allows ledger posting for an entitled owner", async () => {
+    const response = await journalPost(jsonRequest(`${origin}/api/mjengo/journal`, journalBody));
+    expect(response.status).toBe(201);
+    expect(state.created).toHaveLength(1);
   });
 });

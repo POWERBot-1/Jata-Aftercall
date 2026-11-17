@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership } from "@/lib/tenant";
 import { sanitizeBrandingText, isSafeBrandingName } from "@/lib/mjengo/sanitize";
 import { verifyMjengoOrigin } from "@/lib/mjengo/csrf";
+import { assertMjengoEntitled, isMjengoDenied } from "@/lib/mjengo/access";
 import { rateLimit } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 const noStore = { "cache-control": "private, no-store" } as const;
@@ -30,6 +31,9 @@ export async function POST(req: Request) {
   let body: any; try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
   const businessId = String(body.businessId ?? "").trim();
   try { await assertBusinessOwnership(businessId, session); } catch (e: any) { return reply({ error: e.message ?? "Not allowed." }, e.status ?? 403); }
+  // MJENGO workspace branding is part of the paid MJENGO OS workspace, not a general owner API.
+  const entitled = await assertMjengoEntitled(businessId);
+  if (isMjengoDenied(entitled)) return reply({ error: entitled.error, code: "MJENGO_ENTITLEMENT_REQUIRED" }, entitled.status);
   const rawName = String(body.business_name ?? "");
   const safeName = sanitizeBrandingText(rawName, 200);
   if (!safeName || safeName.length < 2) return reply({ error: "Business name must be 2-200 characters of plain text." }, 400);
