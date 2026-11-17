@@ -194,3 +194,20 @@ The sole failed check is `programme-completeness` ([41257217130](https://github.
 - Added `docs/audits/REQUIREMENT_TRACEABILITY_43.md`, mapping all 43 canonical instruction IDs to affected surfaces, root cause/gap, tests/evidence and status. The strict manifest was not changed. Re-running `node scripts/admin/check-programme-readiness.mjs` exits 1 with `NOT READY (43)` and every ID `NOT_TESTED`; the fail-closed result is preserved. `node scripts/admin/check-building-instructions.mjs` exits 1 because this clone is shallow and cannot verify first introduction/append-only history.
 - Local checks on the uncommitted worktree: `npx vitest run tests/unit/seeded-account-audit.test.ts` **16/16 PASS**; ESLint on changed TypeScript **PASS**; all 10 workflow YAML files parse; `git diff --check` **PASS**. Direct `npx tsx prisma/seed.ts` invocations with `NODE_ENV=production` and with `VERCEL_ENV=production` returned the expected refusal before dynamically importing or constructing Prisma, with no database URL set. `npm run typecheck` remains blocked by absent generated Prisma Client declarations. No full suite, browser run or current-head CI has been performed for this batch; no commit or push has occurred.
 - Current exact worktree acceptance remains **NOT TESTED**; release is **NOT READY**. No gate was weakened and no production configuration, database, provider, payment, DNS, mail, migration, deployment or merge occurred.
+
+### Whole-platform remediation batch 1 — `arena/a3de1985-jata-aftercall` (2026-11-17)
+
+Full traceability matrix: `docs/audits/WHOLE_PLATFORM_REMEDIATION_2026-11-17.md`. Base: main `09a4aa0`, plus PR #125 `ed3d561`, #117 `eb7d507` and #112 `3214fc5` (merged with a migration-order fix). **Release verdict: NOT READY.** No Production mutation, merge or deploy.
+
+| ID | Pri | Finding | Fix commit | Regression test | Status / evidence |
+|---|---|---|---|---|---|
+| R-OTP-01 | P0 | Concurrent correct OTP reported failure instead of `already` (PG18 CI) | `2fbe9aa` | `agent-phone-verification-race` | IMPLEMENTED · local PASS · PG18 CI pending |
+| R-MAN-01 | P0 | Evidence manifest stale after readiness edit | regenerated last | `verify-evidence-manifest` | IMPLEMENTED · CI pending |
+| R-CAP-01 | P1 | Motion queue capture timed out (17 vs 18 targets, off-screen targets, animations counted instead of elements) | `51d9d37` | capture harness | IMPLEMENTED · local Chromium 3/3 PASS · CI pending |
+| R-WS-01 | P1 | Editorial/cardless headings 1.1:1 on dark themes (regression from `276756e`) | `ab4d905` | `storefront-contrast-and-specificity` | IMPLEMENTED · 240-render local sweep |
+| R-MJ-01/02 | P0/P1 | #115 settlement/storage isolation; migration sorted before applied history | `b0cd8dc` | settlement, storage-isolation, repair-guards | IMPLEMENTED · DB CI pending |
+| R-MJ-03..07 | P0/P1 | MJENGO journey: destination dropped, 403 dead end, always-"configured", ids shown, APIs not entitlement-gated | `713f750`, `6b45b45`, `b75da0a`, `d982863` | customer-journey, configured-lifecycle, branding-and-journal | IMPLEMENTED · local PASS |
+| R-DEP-01 | P0 | 7 moderate advisories | `e08e585` (override removed) | release-validation audit | IMPLEMENTED · full tree 0 moderate · prod 0 |
+| R-DEP-02 | P0 | picomatch GHSA-fc5q-39xc-vjpf (16 high, dev-only), no upstream patch | — | — | **BLOCKED (upstream)** |
+
+Local full unit suite at `6b45b45`: 404 files / 4,737 tests PASS, 0 FAIL, 343 skipped (DB-only). The 79 unhandled errors are the sandbox's missing Prisma engine (download blocked) and are not CI evidence. `tsc --noEmit` PASS (types from an offline client generation, never generation evidence). ESLint: 0 errors.
