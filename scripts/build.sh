@@ -50,7 +50,7 @@ if [ "${VERCEL_ENV:-}" = "preview" ] && [ "${JATA_RUN_STAGING_ACCEPTANCE:-}" = "
   case "${PAYSTACK_PUBLIC_KEY:-}" in pk_test_*) ;; *) echo "[build] Refusing staging acceptance without a Paystack test public key."; exit 1 ;; esac
   case "${PAYSTACK_SECRET_KEY:-}" in sk_test_*) ;; *) echo "[build] Refusing staging acceptance without a Paystack test secret key."; exit 1 ;; esac
   echo "[build] Running the guarded synthetic fixture seed on the isolated Preview database."
-  NODE_ENV=test npm run seed
+  env -u ADMIN_EMAILS NODE_ENV=test npm run seed
 fi
 
 # Step 3: Next.js build
