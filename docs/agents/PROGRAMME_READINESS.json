@@ -755,7 +755,9 @@
     "implementationLocation": "`lib/experience/{motionPolicy,motionRecipes,motionRuntime,renderMode,templateFamilies,workspace,document}.ts`, Studio preview/publish routes, generated-site renderer, templates, tests and documentation. Existing Lite/HTML and `motion` modes must remain functional; do not presume every template is already covered.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "The owner-provided §032 specification defines the supported family and inheritance requirements. Storefront inheritance is covered, but the Website Studio generation, preview and publishing paths have not yet been exercised across the required families on this candidate. Existing sites must not be silently republished. Remains BLOCKED on exact-head Studio route/family evidence and acceptance.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
@@ -764,7 +766,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Storefront inheritance is covered; the Website Studio generation, preview and publishing paths were not exercised on this head and existing sites must not be silently republished. Owner: confirm which generated families must re-inherit and by what regeneration path.",
+    "blocker": "A 530-assertion authenticated Website Studio run and a 480-capture matrix now exercise all 20 supported families across six viewports, draft/published states and normal/reduced motion. The exact-head CTA and AI-header corrections and the new browser assertions must pass on the latest candidate; published AI and complete commerce route coverage remain outstanding.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -776,14 +778,16 @@
     "implementationLocation": "`docs/agents/CONTROL_AND_MOTION_AUDIT.md`, Studio render/preview/publish paths, existing motion helpers and browser test infrastructure. No schema changes for motion without separate authorization.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept NOT_TESTED. docs/agents/CONTROL_AND_MOTION_AUDIT.md holds the inventory and reuse plan; baseline screenshots exist only as artifacts of an earlier commit, are not this head's baseline, and are not retrievable.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
     ],
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "docs/agents/CONTROL_AND_MOTION_AUDIT.md holds the inventory and reuse plan; baseline screenshots exist only as artifacts of an earlier commit, are not this head's baseline, and are not retrievable.",
+    "blocker": "The historical default-storefront baseline is now retrievable: 12 captures across six viewports and normal/reduced motion, with no page errors or horizontal overflow. The audit inventory and reuse plan exist. A same-head before/after performance comparison and the remaining performance/lifecycle evidence are still missing.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "NOT_TESTED"
@@ -795,7 +799,9 @@
     "implementationLocation": "existing `lib/experience/motion*`, `components/storefront/**`, shared interaction components and actual Studio publishing paths; open PRs #41/#42 require overlap review.",
     "verificationMethod": "Compared the full canonical criterion with available targeted tests, browser artifacts and workflows; the full criterion was not exercised, so partial test/code presence is not counted as acceptance.",
     "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept NOT_TESTED. Primitives, unit tests and real-Chrome family coverage pass; proving no static visual regression requires comparing rendered output against a retained baseline, which no reachable channel provides for this head.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813226"
@@ -803,7 +809,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Primitives, unit tests and real-Chrome family coverage pass; proving no static visual regression requires comparing rendered output against a retained baseline, which no reachable channel provides for this head.",
+    "blocker": "The 20-family capture matrix is available and all 480 observations recorded zero horizontal overflow. Independent review found a blank Cinematic hero CTA, now corrected in source with a regression assertion. Latest-head captures must confirm the fix; exhaustive image-by-image review and complete route/state coverage remain outstanding.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "NOT_TESTED"
@@ -835,7 +841,9 @@
     "implementationLocation": "`components/DashboardClient.tsx`, `app/agents/dashboard/page.tsx`, `components/ui/AnalyticsChart.tsx`, `app/globals.css`, `docs/agents/MOTION_PRODUCT_AUDIT.md`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "The current owner-provided §032 specification requires before/after browser recordings and six responsive viewport captures. Existing workflows produce screenshots and observations but not the required authenticated recordings. Remains BLOCKED on recording evidence and independent review; no screenshot-only substitution is claimed.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
@@ -844,7 +852,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Workspace and agent entrances and reduced-motion-gated chart animation exist, but the acceptance requires real authenticated before/after recordings, which no workflow in this repository produces. Owner: accept screenshots as the evidence form or supply a recording channel.",
+    "blocker": "48 WebM recordings now exist across classic, AI preview, AI denied and missing route states, six viewports and normal/reduced motion. They are not matched before/after recordings for every family/surface, and the recording manifest reports manual inspection incomplete. Latest-head recordings and complete state coverage remain required.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -941,7 +949,9 @@
     "implementationLocation": "`app/b/[slug]/ai/page.tsx`, `components/AIFrontDeskCustomerClient.tsx`, `components/storefront/RenderModeProbe.tsx`, `lib/experience/motionRuntime.ts`, `app/globals.css`, `tests/unit/storefront-motion-inheritance.test.ts`, `tests/unit/ai-front-desk-customer-default-state.test.ts`, `docs/agents/MOTION_011_COVERAGE_MATRIX.md`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. AI Front Desk renderer integration and the complete coverage matrix are not verified on this head. Owner: confirm priority.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
@@ -950,7 +960,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "AI Front Desk renderer integration and the complete coverage matrix are not verified on this head. Owner: confirm priority.",
+    "blocker": "AI preview and denied-route browser evidence exists. Independent review found the mobile Conversation/grounding-label overlap and a responsive stacking fix plus regression test are committed. A live authenticated AI renderer journey, authoritative state coverage and latest-head recordings remain unverified.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -1025,7 +1035,9 @@
     "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
     "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Requires proof of live browser motion behaviour (concurrency saturation, queueing, re-entry, cancellation) with inspectable evidence from this exact head.",
-    "evidence": [],
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418443",
@@ -1034,7 +1046,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Requires proof of live browser motion behaviour (concurrency saturation, queueing, re-entry, cancellation) with inspectable evidence from this exact head.",
+    "blocker": "A development-only 18-target fixture and real-Chrome test for the eight-slot reveal queue have been added; exact-head execution is pending. Visibility exit/re-entry, queue interruption recovery, repeated route navigation and cleanup/no-duplicate-observer behavior under saturation still require evidence.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
