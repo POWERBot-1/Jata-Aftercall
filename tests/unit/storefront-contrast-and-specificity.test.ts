@@ -117,16 +117,38 @@ describe("muted text is darkened on the surface it actually paints on", () => {
   });
 });
 
-describe("family section headings meet WCAG AA on white surfaces", () => {
-  const white: Rgb = { r: 255, g: 255, b: 255 };
+describe("family section headings follow the theme surface, not a fixed ink", () => {
+  // Regression: a fixed rgb(26 26 26) heading ink assumed these sections paint on white. They are
+  // transparent and paint on --eb-bg, so on dark themes (Graphite) the heading measured 1.1:1 in a
+  // real browser and was invisible. The heading must use the theme token that themeCss() already
+  // contrast-corrects against --eb-bg.
   it.each([
     ".eb-family-editorial .eb-section:not([style]) .eb-section-head .eb-h2",
     ".eb-family-cardless-immersive .eb-section:not([style]) .eb-section-head .eb-h2",
-  ])("%s has a dark foreground rather than the theme's pale display token", (selector) => {
+  ])("%s uses the contrast-corrected --eb-heading token", (selector) => {
     const body = ruleBody(selector);
-    const colour = parseRgb(body);
-    expect(colour, "section heading must declare an explicit ink colour").not.toBeNull();
-    expect(contrastRatio(colour!, white)).toBeGreaterThanOrEqual(AA_NORMAL);
+    expect(body).toMatch(/color:\s*var\(--eb-heading\)/);
+    expect(parseRgb(body), "no fixed ink colour that ignores dark themes").toBeNull();
+  });
+
+  it("every theme's --eb-heading clears AA against its own --eb-bg, light and dark", async () => {
+    const { EXPERIENCE_THEMES, themeStyleVars } = await import("@/lib/experience/themes");
+    const hex = (v: string): Rgb => {
+      const h = v.trim().replace("#", "");
+      const f = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+      return { r: parseInt(f.slice(0, 2), 16), g: parseInt(f.slice(2, 4), 16), b: parseInt(f.slice(4, 6), 16) };
+    };
+    let dark = 0;
+    let light = 0;
+    for (const theme of EXPERIENCE_THEMES) {
+      const vars = themeStyleVars(theme);
+      const bg = hex(vars["--eb-bg"]);
+      if (relativeLuminance(bg) < 0.2) dark += 1; else light += 1;
+      expect(contrastRatio(hex(vars["--eb-heading"]), bg), theme.key).toBeGreaterThanOrEqual(AA_NORMAL);
+    }
+    // The catalogue genuinely contains both kinds, so a fixed ink colour cannot be correct.
+    expect(dark).toBeGreaterThan(0);
+    expect(light).toBeGreaterThan(0);
   });
 });
 

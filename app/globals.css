@@ -5654,13 +5654,16 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
   }
 }
 
-/* These family sections paint on white, while their theme's display token may be pale.
-   Use stable ink on the un-tinted section surface; preserve dark/tinted sections. */
+/* Un-tinted family sections are transparent and paint on the theme page background
+   (--eb-bg), which is dark for Graphite/Midnight-style themes and light for others. A fixed
+   ink colour is therefore wrong for half the catalogue (it measured 1.1:1 on Graphite).
+   --eb-heading is contrast-corrected against --eb-bg in themeCss(), so use it explicitly at
+   this specificity to win over any pale display-token override; tinted sections keep theirs. */
 .eb-family-editorial .eb-section:not([style]) .eb-section-head .eb-h2 {
-  color: rgb(26 26 26);
+  color: var(--eb-heading);
 }
 .eb-family-cardless-immersive .eb-section:not([style]) .eb-section-head .eb-h2 {
-  color: rgb(26 26 26);
+  color: var(--eb-heading);
 }
 
 /* A cardless hero keeps its title legible over either a media overlay or a plain surface. */
