@@ -28,8 +28,19 @@ describe("independent ERP PRO and MJENGO OS storage", () => {
 
   it("creates four dedicated product tables without deleting or rewriting legacy rows", () => {
     for (const table of ["ErpProSubscription", "ErpProEntitlement", "MjengoSubscription", "MjengoEntitlement"]) {
-      expect(migration).toContain('CREATE TABLE "' + table + '"');
+      // Re-runnable like every ERP migration (scripts/erp/migration-verify.sh re-applies it).
+      expect(migration).toContain('CREATE TABLE IF NOT EXISTS "' + table + '"');
+      // ...but never silently adopts a same-named table of another shape: the shape guard names
+      // every table and aborts the deploy before the backfill.
+      expect(migration).toContain('"' + table + '":[');
     }
+    const guard = migration.indexOf("product isolation: existing table");
+    expect(guard, "shape guard present").toBeGreaterThan(-1);
+    expect(guard, "shape guard runs before any backfill").toBeLessThan(migration.indexOf("INSERT INTO"));
+    expect(migration).toMatch(/RAISE EXCEPTION 'product isolation: existing table "%" lacks column/);
+    expect(migration).toMatch(/RAISE EXCEPTION 'product isolation: existing table "%" has no unique index on "businessId"/);
+    // Foreign keys are added only when absent, so a re-run does not fail on a duplicate constraint.
+    expect(migration).not.toMatch(/^ALTER TABLE/m);
     expect(migration).not.toContain("DROP ");
     expect(migration).not.toContain("TRUNCATE");
     expect(migration).not.toContain("DELETE FROM");
