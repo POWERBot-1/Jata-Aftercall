@@ -15,6 +15,7 @@ import { themeOf } from "@/lib/experience/document";
 import { templateForDocument } from "@/lib/experience/templateFamilies";
 import { ItemCard } from "./ItemCard";
 import { heroImageFor } from "@/lib/experience/media";
+import { primaryCtaLabel } from "@/lib/experience/cta";
 
 export function ExperienceSite({ data: incoming, previewNotice, shell = true, trackViews = true }: { data: StorefrontData; previewNotice?: string | null; shell?: boolean; trackViews?: boolean }) {
   const data = incoming.document.version === 2 ? { ...incoming, theme: themeOf(incoming.document) } : incoming;
@@ -64,7 +65,7 @@ export function ExperienceSite({ data: incoming, previewNotice, shell = true, tr
                 {hero.subtitle ? <p className="eb-lede">{hero.subtitle}</p> : null}
                 <div className="eb-hero__actions">
                   <Link href={commerce ? `/b/${business.slug}/shop` : booking ? `/b/${business.slug}/book` : "#contact"} className="eb-btn">
-                    {hero.cta?.label || profile.cta.primary}
+                    {primaryCtaLabel(hero.cta?.label, profile.cta.primary, commerce ? "shop" : booking ? "book" : "contact")}
                   </Link>
                   {document.settings.whatsapp || document.settings.phone ? (
                     <a
