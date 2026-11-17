@@ -872,7 +872,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The specification this record implements is the owner-provided advanced fintech motion specification. Owner: supply or point to the current revision.",
+    "blocker": "The full owner-provided fintech motion specification is present in docs/ADMIN_BUILDING_INSTRUCTIONS.md §032 (540 lines); no additional owner specification is required. Implementation and verification remain incomplete across the enumerated modules and surfaces; map each requirement to source, test and browser evidence without claiming universal coverage.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -893,7 +893,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Owner-provided specification (register 032, 540 lines). No agent may invent it. Owner: provide the specification.",
+    "blocker": "The complete owner specification is present in docs/ADMIN_BUILDING_INSTRUCTIONS.md §032 (540 lines). The remaining blocker is implementation and exact-head verification against that specification, including all applicable module surfaces, lifecycle, accessibility, reduced-motion and performance requirements; do not request the specification again.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -981,7 +981,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Real-Chrome workflows on disposable PostgreSQL exist; the register requires the coverage matrix across every enumerated template family and route with inspectable evidence. Owner: confirm the enumeration or accept the covered set.",
+    "blocker": "The owner specification enumerates the supported template families and six viewport sizes. The 20-family matrix covers those families, but the complete required route/state matrix across every published, preview, fallback and commerce path is not yet evidenced.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -1002,7 +1002,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Evidence is published into the branch through the visual-evidence channel; the register requires the complete route matrix with inspectable evidence for every path. Owner: confirm the accepted capture set.",
+    "blocker": "The owner specification defines the accepted capture dimensions and states; no additional owner confirmation is needed. The current artifacts cover the 20-family matrix and representative routes, but complete route-by-route evidence and exhaustive independent review remain outstanding.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -1023,7 +1023,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Requires independent visual inspection of the final-head capture; inspection is limited to the published premium capture set and is recorded as such.",
+    "blocker": "Representative independent review is recorded in docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md. Full image-by-image/video review and regenerated final-head captures after the CTA and AI-header fixes are still required.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -1067,7 +1067,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Depends on MOTION-007/008 plus a genuine historical baseline and complete commerce coverage. Owner: provide the specification and baseline.",
+    "blocker": "The owner specification is present in register §032. A historical legacy default-storefront baseline is available, but there is no matched baseline for identical routes/states across the full template and commerce matrix; complete commerce coverage is also outstanding.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
@@ -1089,7 +1089,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Requires a genuine historical baseline for identical routes and states; none is available.",
+    "blocker": "A historical default-storefront baseline exists, but a matched before/after baseline for identical routes, template families and application states is not available. Capture the same route/state matrix on the historical and final candidates before claiming comparison.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
