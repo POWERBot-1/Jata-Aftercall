@@ -881,7 +881,6 @@ jobs:
           retention-days: 14
 
   # ───────────────────────────────────────────────────────────────────────────
-
   release-gate:
     name: Release gate (aggregate)
     if: always()
