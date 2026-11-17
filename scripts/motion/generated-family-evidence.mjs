@@ -15,7 +15,7 @@ const sizes=[[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
 const baselineMode=process.env.MOTION_BASELINE_CAPTURE==='1';
 const out='motion-family-evidence'; mkdirSync(out,{recursive:true});
 const prisma=new PrismaClient(); const rows=[], steps=[];
-const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,captureMode:baselineMode?'historical-pre-motion-baseline':'candidate-after',rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. No independent review, baseline recording or full route coverage.'},null,2));
+const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,captureMode:baselineMode?'historical-pre-motion-baseline':'candidate-after',rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. Manual visual inspection remains separate; queue-stress and previous-build Lite comparison are not covered by this capture.'},null,2));
 const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']}); const browserVersion=await browser.version();
 let fixture;
 try {
@@ -56,9 +56,9 @@ try {
      await p.setViewport({width,height,deviceScaleFactor:1}); await p.emulateMediaFeatures([{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}]);
      const response=await p.goto(new URL(route,base).href,{waitUntil:'domcontentloaded',timeout:45000}); row.status=response?.status()??null;
      await p.waitForFunction(()=>Boolean(document.querySelector('.eb-scope')?.dataset.renderMode),{timeout:10000}).catch(()=>{});
-     row.observation=await p.evaluate(()=>{const r=document.querySelector('.eb-scope'); const ts=[...(r?.querySelectorAll('[data-motion-recipe]')||[])];return {family:r?.dataset.templateFamily,mode:r?.dataset.renderMode,reason:r?.dataset.motionReason,engine:r?.dataset.motionEngine,probes:r?.querySelectorAll('[data-motion-probe]').length,targets:ts.length,played:ts.filter(e=>e.dataset.motionPlayed).length,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
+     row.observation=await p.evaluate(()=>{const r=document.querySelector('.eb-scope'); const ts=[...(r?.querySelectorAll('[data-motion-recipe]')||[])];return {family:r?.dataset.templateFamily,mode:r?.dataset.renderMode,reason:r?.dataset.motionReason,engine:r?.dataset.motionEngine,probes:r?.querySelectorAll('[data-motion-probe]').length,targets:ts.length,played:ts.filter(e=>e.dataset.motionPlayed).length,heroCtaLabel:document.querySelector('.eb-hero__actions .eb-btn')?.textContent?.replace(/\\s+/g,' ').trim() || '',overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
      const name=`${family}-${preview?'draft':'published'}-${width}x${height}-${reduced?'reduced':'normal'}.jpg`; await p.screenshot({path:path.join(out,name),type:'jpeg',quality:45,fullPage:true}); row.screenshot=name;
-     row.result=baselineMode?(row.status===200?'CAPTURED':'FAIL'):(row.status===200 && row.observation.family===family && row.observation.probes===1 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL');
+     row.result=baselineMode?(row.status===200?'CAPTURED':'FAIL'):(row.status===200 && row.observation.family===family && row.observation.probes===1 && row.observation.heroCtaLabel.length>0 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL');
     }catch(e){row.result='ERROR';row.error=String(e).slice(0,400);}
     rows.push(row); save(); if(!preview) await p.close();
     }
