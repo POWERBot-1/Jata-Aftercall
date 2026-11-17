@@ -30,7 +30,9 @@ export function ItemCard({ item, data }: { item: StorefrontItem; data: ItemCardD
   const href = `/b/${data.business.slug}/item/${item.id}`;
   const canAdd = data.profile.capabilities.includes("commerce") && item.kind === "product" && item.price !== null;
   const soldOut = item.kind === "product" && (item.stockStatus === "OUT_OF_STOCK" || item.stockStatus === "DISCONTINUED");
-  const suppliedImage = itemImageFor(item);\n  const illustrativeImage = !suppliedImage ? demoBusinessImageFor(data.business.slug) : null;\n  const imageUrl = suppliedImage || illustrativeImage;
+  const suppliedImage = itemImageFor(item);
+  const illustrativeImage = !suppliedImage ? demoBusinessImageFor(data.business.slug) : null;
+  const imageUrl = suppliedImage || illustrativeImage;
 
   return (
     <article className={`eb-card eb-card--${data.theme.treatment.cardStyle}`}>
