@@ -19,8 +19,17 @@ export default async function MotionPreviewHarness({ searchParams }: { searchPar
   const preference = isRenderPreference(params.preference) ? params.preference : "motion";
   if (params.family !== undefined && !isTemplateFamily(params.family)) notFound();
   const data = params.queue === "1" ? queueStressFixture(preference) : isTemplateFamily(params.family) ? familyFixture(params.family, preference) : motionFixture(preference, params.theme === "none");
+  const queueStress = params.queue === "1";
   return <>
+    {queueStress ? (
+      // Dev-only compact layout so every stress target intersects the viewport at once. Storefront
+      // sections are viewport-relative in height, so without this no viewport can show more than a
+      // handful of targets and the eight-slot bound is never actually contended.
+      <style>{`.motion-queue-stress .eb-scope section,.motion-queue-stress .eb-scope header{min-height:0!important;height:auto!important;padding-top:4px!important;padding-bottom:4px!important;margin:0!important}.motion-queue-stress .eb-scope [data-motion-recipe]{max-height:200px;overflow:hidden}.motion-queue-stress .eb-scope img{max-height:120px!important}`}</style>
+    ) : null}
     <div id="outside-motion-scope" data-motion-recipe="slide">Outside the storefront scope — never animated.</div>
-    <FixtureMount><ExperienceSite data={data} previewNotice="Development verification only — synthetic data, not a live business" /></FixtureMount>
+    <div className={queueStress ? "motion-queue-stress" : undefined} data-queue-stress={queueStress ? "1" : undefined}>
+      <FixtureMount><ExperienceSite data={data} previewNotice="Development verification only — synthetic data, not a live business" /></FixtureMount>
+    </div>
   </>;
 }
