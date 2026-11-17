@@ -465,12 +465,12 @@
     "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-014": {
-    "status": "PASS",
+    "status": "BLOCKED",
     "acceptance": "Record native migration evidence for each requested phase, including a safe strategy for non-reversible migrations; validate restore/recovery and compatibility on disposable infrastructure.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Exact candidate SHA 4cd6dd59b41a8f25e44820bf691a1394685bebc9: native Prisma/PostgreSQL 18 migration rehearsal (65 ordered migrations, ledger/object/schema parity, idempotent second deploy and deliberate failure detection) plus full logical backup/restore into a separate disposable PostgreSQL 18 database. Restore verification compares normalized schema DDL, canonical CHECK constraints, row counts across all 194 user tables and migration-ledger state. No production database was touched.",
-    "testResult": "PASS on exact candidate SHA 4cd6dd59b41a8f25e44820bf691a1394685bebc9. Candidate migration rehearsal run 44167665563 passed (native migration job 134337950621; backup/restore job 134337950950). The backup job created and verified a custom-format logical backup, restored it into a separate empty database, matched normalized schema and canonical CHECK constraints, matched all 194 user-table row counts, and matched migration-ledger rows/completed-state counts. A forward-only expand/contract and recovery strategy is recorded in docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md. This is disposable-environment evidence only; it does not establish production PITR, RPO/RTO or production recovery.",
+    "verificationMethod": "Partial exact-candidate native PostgreSQL 18 evidence only: fresh 65-migration history, ordered migration ledger, schema/object parity, idempotent second deploy, deliberate failure detection, and full logical backup/restore into a separate disposable database with schema/constraint, 194-table row-count and migration-ledger comparisons. The original owner acceptance additionally requires a supported upgrade rehearsal, rollback where supported, executed forward recovery and application compatibility after recovery; those phases have not yet been demonstrated.",
+    "testResult": "PARTIAL PASS on candidate SHA 4cd6dd59b41a8f25e44820bf691a1394685bebc9. Candidate migration rehearsal run 44167665563 passed (native migration job 134337950621; backup/restore job 134337950950). Backup and restore checks passed. Supported upgrade, rollback where supported, forward-recovery execution and post-restore application compatibility remain NOT TESTED. No production database was touched.",
     "evidence": [
       "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
@@ -482,7 +482,7 @@
     "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
     "verificationCommit": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "No remaining blocker for the registered disposable native migration, backup/restore and non-reversible-migration-strategy acceptance. Production backup/PITR, RPO/RTO and production recovery are separate and remain unverified; no production action is authorized.",
+    "blocker": "Supported upgrade rehearsal, rollback where supported, executed forward recovery and application compatibility after restore are not evidenced. Complete each phase with native PostgreSQL 18/Prisma commands and retained output before closing ADMIN-014. Neon provider-native PITR remains a separate owner requirement; no paid plan upgrade or production recovery is authorized.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
@@ -490,7 +490,7 @@
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
     ],
     "currentAssessmentSourceSha": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
-    "currentAssessmentStatus": "PASS"
+    "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-015": {
     "status": "BLOCKED",
