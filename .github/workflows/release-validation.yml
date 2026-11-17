@@ -882,69 +882,6 @@ jobs:
 
   # ───────────────────────────────────────────────────────────────────────────
 
-  pr125-dependency-lock-refresh:
-    name: PR125 dependency lock refresh (temporary)
-    if: github.event_name == 'pull_request' && github.head_ref == 'remediation/owner-authorized-acceptance-v2-2026-11-16'
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.22.3'
-          cache: npm
-      - name: Regenerate the lockfile from approved patched versions
-        run: npm install --package-lock-only --ignore-scripts --no-audit
-      - name: Install the exact regenerated lockfile
-        run: npm ci
-      - name: Lint and typecheck
-        run: |
-          npm run lint
-          npm run typecheck
-      - name: Verify the affected application tests
-        run: npx vitest run tests/unit/experience-media-fallbacks.test.ts tests/unit/autopilot-phase1-hardening.test.ts
-      - name: Require clean production audit and report remaining full-tree findings
-        shell: bash
-        run: |
-          set +e
-          npm audit --omit=dev --json > /tmp/pr125-production-audit.json
-          production_status=$?
-          npm audit --json > /tmp/pr125-full-audit.json
-          full_status=$?
-          set -e
-          PRODUCTION_AUDIT_STATUS="$production_status" FULL_AUDIT_STATUS="$full_status" node - <<'JS'
-          const fs = require('fs');
-          const prod = JSON.parse(fs.readFileSync('/tmp/pr125-production-audit.json', 'utf8'));
-          const full = JSON.parse(fs.readFileSync('/tmp/pr125-full-audit.json', 'utf8'));
-          const pv = prod.metadata?.vulnerabilities;
-          const fv = full.metadata?.vulnerabilities;
-          if (!pv || !fv) throw new Error('BLOCKED: npm audit report missing or malformed');
-          console.log('Production audit:', JSON.stringify(pv));
-          console.log('Full audit:', JSON.stringify(fv));
-          console.log('Remaining full-tree packages:', Object.keys(full.vulnerabilities || {}).sort().join(', '));
-          if (Number(process.env.PRODUCTION_AUDIT_STATUS) !== 0 || pv.total !== 0) {
-            throw new Error('FAIL: production dependency audit still has findings');
-          }
-          if (fv.total !== 0) console.log('BLOCKED: development dependency advisories remain; none are waived or suppressed.');
-          JS
-      - name: Commit only the regenerated lockfile
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo 'No lockfile changes were needed.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package-lock.json
-          git commit -m 'chore(deps): refresh patched dependency lockfile'
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
   release-gate:
     name: Release gate (aggregate)
     if: always()
