@@ -24,7 +24,7 @@ export function ExperienceSite({ data: incoming, previewNotice, shell = true, tr
   const body = document.sections.filter((section) => section.visible && section.type !== "hero" && section.type !== "navigation");
   const commerce = profile.capabilities.includes("commerce");
   const booking = profile.capabilities.includes("booking");
-  const heroImage = heroImageFor({ familyKey: family?.key, heroImage: hero?.imageUrl, brandImage: document.brand.heroImageUrl, items: data.items, services: data.services });
+  const heroImage = heroImageFor({ familyKey: family?.key, businessSlug: business.slug, heroImage: hero?.imageUrl, brandImage: document.brand.heroImageUrl, items: data.items, services: data.services });
   // The owner's chosen crop focal point applies to their brand hero image only.
   const heroFocal = !hero?.imageUrl && document.brand.heroImageUrl
     ? { objectPosition: `${document.brand.heroFocalX ?? 50}% ${document.brand.heroFocalY ?? 45}%` }

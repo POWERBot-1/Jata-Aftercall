@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heroImageFor, itemImageFor } from "@/lib/experience/media";
+import { demoBusinessImageFor, heroImageFor, itemImageFor } from "@/lib/experience/media";
 
 describe("Website Studio family media fallbacks", () => {
   it("prefers an explicit hero photo, then the business brand photo", () => {

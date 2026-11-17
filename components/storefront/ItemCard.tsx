@@ -11,7 +11,7 @@ import type { StorefrontItem } from "@/lib/experience/storefront";
 import type { ItemCardData } from "@/lib/experience/catalogue";
 import { formatDuration, formatKES } from "@/lib/format";
 import { AddToCartButton } from "./CartProvider";
-import { itemImageFor } from "@/lib/experience/media";
+import { demoBusinessImageFor, itemImageFor } from "@/lib/experience/media";
 
 /** Price display that respects quote-based and range pricing (§12). */
 export function ItemPrice({ item, showWas = true }: { item: StorefrontItem; showWas?: boolean }) {
@@ -30,14 +30,14 @@ export function ItemCard({ item, data }: { item: StorefrontItem; data: ItemCardD
   const href = `/b/${data.business.slug}/item/${item.id}`;
   const canAdd = data.profile.capabilities.includes("commerce") && item.kind === "product" && item.price !== null;
   const soldOut = item.kind === "product" && (item.stockStatus === "OUT_OF_STOCK" || item.stockStatus === "DISCONTINUED");
-  const imageUrl = itemImageFor(item);
+  const suppliedImage = itemImageFor(item);\n  const illustrativeImage = !suppliedImage ? demoBusinessImageFor(data.business.slug) : null;\n  const imageUrl = suppliedImage || illustrativeImage;
 
   return (
     <article className={`eb-card eb-card--${data.theme.treatment.cardStyle}`}>
       <Link href={href} className="eb-card__media" aria-label={item.name} tabIndex={-1}>
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={item.name} loading="lazy" decoding="async" />
+          <img src={imageUrl} alt={illustrativeImage ? `Illustrative photograph for ${item.name}` : item.name} loading="lazy" decoding="async" />
         ) : (
           <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--eb-muted)", fontSize: "0.8rem" }}>No photo yet</div>
         )}
