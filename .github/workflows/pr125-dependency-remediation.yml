@@ -40,7 +40,7 @@ jobs:
           npm audit --json > /tmp/audit-full.json
           full_status=$?
           set -e
-          node - <<'JS'
+          PRODUCTION_AUDIT_STATUS="$production_status" node - <<'JS'
           const fs = require('fs');
           const prod = JSON.parse(fs.readFileSync('/tmp/audit-production.json', 'utf8'));
           const full = JSON.parse(fs.readFileSync('/tmp/audit-full.json', 'utf8'));
@@ -55,8 +55,6 @@ jobs:
           }
           if (fv.total !== 0) console.log('BLOCKED: full-tree development advisories remain; no exception or suppression applied.');
           JS
-        env:
-          PRODUCTION_AUDIT_STATUS: ${{ steps.audit.outputs.production_status }}
       - name: Commit regenerated lockfile only after tests and production audit pass
         run: |
           if git diff --quiet -- package-lock.json; then
