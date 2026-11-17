@@ -1121,9 +1121,13 @@
     "acceptance": "each remediation ID has a root-cause trace and appropriate independent evidence; every visual claim has genuine browser evidence; every tenant/payment claim has the relevant isolated integration proof; no finding is VERIFIED from code inspection or a unit test alone where integration/browser proof is required. Use finding statuses PENDING / IN PROGRESS / BLOCKED / IMPLEMENTED / VERIFIED and evidence labels PASS / FAIL / BLOCKED / NOT TESTED; keep these separate. Release remains NOT READY until all mandatory gates pass. Never weaken `programme-completeness` or any security/release gate to obtain green CI.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §043 (RELEASE-001)",
     "implementationLocation": "all routes/components/services/models/integrations enumerated in `docs/audits/`; `docs/audits/REMEDIATION_REGISTER.md`; tests and disposable CI; this instruction file. Primary P0 areas: `lib/url.ts`, `lib/payments/**`, `app/api/paystack/**`, `app/api/checkout/**`, `app/api/media/**`, `lib/storage/**`, tenant/session guards and product journeys. The exact affected paths must be recorded per finding after source tracing, not inferred from roadmap names.",
-    "verificationMethod": "Current PR head d842777bc3e4a3cd15a9f8dec0c15a1210a1764c: Release Validation run 41304813296 passed, including migration/schema reconciliation, seed, typecheck, static checks, failure controls, production build, and reconciled-datamodel application suites (4,222 passed, 0 failed, 0 skipped across 373 files). Full no-database run 41304813357 passed (1,244 suites; 3,972 passed; 301 pending); candidate migration rehearsal 41304813354 passed. The earlier failure on 8a90bb0689e54dff4d4e3d92dae3497fabf4b62c remains unexplained because its artifact/log host returned EOF; it was not reproduced by app-suite runs 41304504330 and 41304813296. No root cause is claimed. programme-completeness still fails with 34 non-PASS records.",
-    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. P1 controls, tenant isolation and authenticated journeys are substantially evidenced in CI; P0 domain/email verification and payments/financial integrity authorization remain open by design. Owner: authorize each P0 action individually.",
-    "evidence": [],
+    "verificationMethod": "Current PR #125 candidate head 6cf2f9344004a62918dfd8a470eacf8317f855d4 remains OPEN/DRAFT. Source changes include shared CTA-label fallback and regression test, responsive AI Front Desk header correction and regression test, 20-family CTA visibility assertion, and a dev-only 18-target real-Chrome queue stress fixture. Exact-head workflows are queued/pending (Release Validation 44178003517; Motion 44178003520; Website Studio 44178003661; Admin integrity 44178003636; Full no-database suite 44178003866; POS/ERP 44178003870; Interactive Business E2E 44178003806; migration rehearsal 44178003533). Latest Vercel Preview deployment dpl_BvwF5fc6KMd8LCnoAwmMW2sc6eMY is ERROR/db_unreachable on the exact head. The isolated Neon staging endpoint is suspended; its start request returns HTTP 423 quota exceeded. No paid plan change or production action was taken. The previous fully completed candidate 4cd6dd59b41a8f25e44820bf691a1394685bebc9 had successful disposable migration, Website Studio, motion, screenshots and authenticated business CI evidence. The owner PR comment records a completed Preview-only Paystack sandbox acceptance on that earlier candidate: two KES 499 test payments, valid/invalid webhook signature handling, duplicate-event idempotency and an active POS entitlement. Dedicated Preview-only Paystack keys are present; their values were not read. One-time fixture-seed and staging-acceptance flags are now false to prevent repeat charges/reseeding.",
+    "testResult": "BLOCKED. Programme register currently contains 23 PASS, 21 BLOCKED and 3 NOT_TESTED (24 non-PASS requirements). Full dependency audit has 16 HIGH package-level findings propagated through four picomatch installations; production-only audit has 0 findings. The full audit remains open pending an upstream patched release; no advisory suppression, unsafe major downgrade or unreviewed fork was applied. The latest exact-head CI is not complete, the latest Preview deployment cannot reach Neon because the Free-tier staging compute is suspended and quota-exhausted, and 24 programme requirements remain non-PASS. No merge or deployment is authorized.",
+    "evidence": [
+      "docs/evidence/programme-remediation-2026-11-17/PICOMATCH-REDOS-SECURITY-REVIEW.md",
+      "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md",
+      "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420",
@@ -1134,12 +1138,17 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813296",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813357",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813354",
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813520"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41304813520",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665373",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665424",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665678",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665563",
+      "https://vercel.com/powerbot-1/jata-aftercall/dpl_BvwF5fc6KMd8LCnoAwmMW2sc6eMY"
     ],
-    "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
-    "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
+    "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/PICOMATCH-REDOS-SECURITY-REVIEW.md; docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md",
+    "verificationCommit": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "P1 controls, tenant isolation and authenticated journeys are substantially evidenced in CI; P0 domain/email verification and payments/financial integrity authorization remain open by design. Owner: authorize each P0 action individually.",
+    "blocker": "Full dependency audit remains HIGH until upstream picomatch fixes are released and validated. Latest exact-head CI is pending; Preview deployment is blocked by suspended/quota-exhausted Neon staging compute (HTTP 423), with no paid upgrade authorized. The programme register has 24 non-PASS requirements, including owner-controlled all-DENY access, intentionally unconfigured commission rates, missing feature-flag/health implementation, incomplete domain/email verification, incomplete migration recovery phases and incomplete motion/visual acceptance. Do not merge or deploy.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/**",
@@ -1152,7 +1161,7 @@
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
       "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md"
     ],
-    "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
+    "currentAssessmentSourceSha": "6cf2f9344004a62918dfd8a470eacf8317f855d4",
     "currentAssessmentStatus": "BLOCKED"
   },
   "RELEASE-002": {
