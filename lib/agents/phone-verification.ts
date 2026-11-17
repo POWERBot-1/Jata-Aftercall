@@ -134,16 +134,22 @@ export async function confirmPhoneChallenge(userId: string, code: string, secret
     const app = await tx.agentApplication.findUnique({ where: { userId }, select: { id: true, status: true, phoneE164: true, phoneVerifiedAt: true } });
     if (!app || app.status !== "PENDING") return "invalid";
     if (app.phoneVerifiedAt) return "already";
+    // Under READ COMMITTED a concurrent confirmation can commit between our application read
+    // and any later statement. Re-read the committed application state before classifying a
+    // consumed/locked challenge, so a concurrent success is reported as "already", never "invalid".
+    const settled = async (): Promise<"already" | "invalid"> => {
+      const current = await tx.agentApplication.findUnique({ where: { userId }, select: { status: true, phoneVerifiedAt: true, verifiedPhoneE164: true } });
+      return current?.status === "PENDING" && current.phoneVerifiedAt && current.verifiedPhoneE164 === app.phoneE164 ? "already" : "invalid";
+    };
     const challenge = await tx.agentPhoneChallenge.findUnique({ where: { applicationId: app.id } });
     const now = new Date();
-    if (!challenge || challenge.phoneE164 !== app.phoneE164 || !challenge.sentAt || challenge.consumedAt || challenge.expiresAt <= now || challenge.attempts >= MAX_ATTEMPTS) return "invalid";
+    if (!challenge || challenge.phoneE164 !== app.phoneE164 || !challenge.sentAt) return "invalid";
+    if (challenge.consumedAt) return settled();
+    if (challenge.expiresAt <= now || challenge.attempts >= MAX_ATTEMPTS) return "invalid";
     // This locks the challenge row and consumes an attempt even when the code is wrong.
     const attempted = await tx.agentPhoneChallenge.updateMany({ where: { id: challenge.id, codeDigest: challenge.codeDigest,
       phoneE164: app.phoneE164, sentAt: { not: null }, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } } });
-    if (attempted.count !== 1) {
-      const current = await tx.agentApplication.findUnique({ where: { userId }, select: { status: true, phoneVerifiedAt: true, verifiedPhoneE164: true } });
-      return current?.status === "PENDING" && current.phoneVerifiedAt && current.verifiedPhoneE164 === app.phoneE164 ? "already" : "invalid";
-    }
+    if (attempted.count !== 1) return settled();
     if (!equalDigest(challenge.codeDigest, digest(secret, app.id, challenge.nonce, code))) return "invalid";
     const changed = await tx.agentApplication.updateMany({ where: { id: app.id, userId, status: "PENDING", phoneE164: app.phoneE164, phoneVerifiedAt: null },
       data: { verifiedPhoneE164: app.phoneE164, phoneVerifiedAt: now } });
