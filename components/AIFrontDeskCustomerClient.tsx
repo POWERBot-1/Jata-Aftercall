@@ -357,9 +357,9 @@ export default function AIFrontDeskCustomerClient({
             className="flex flex-col overflow-hidden rounded-[1.4rem] border border-[color:var(--jata-line)] bg-[color:var(--jata-card)] shadow-[var(--jata-shadow)] lg:col-span-2"
             aria-label="Conversation"
           >
-            <div className="flex items-center justify-between border-b border-[color:var(--jata-line)] px-4 py-3">
-              <h2 className="text-sm font-semibold">Conversation</h2>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--jata-muted)]">
+            <div className="flex min-w-0 flex-col gap-1 border-b border-[color:var(--jata-line)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-sm font-semibold leading-5">Conversation</h2>
+              <span className="min-w-0 break-words text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--jata-muted)] sm:text-right">
                 Answers from saved business data
               </span>
             </div>
