@@ -5641,15 +5641,6 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 }
 
 
-/* Website Studio family acceptance corrections (2026-11-17).
-   Section headings use the already contrast-corrected body token rather than a pale display override. */
-.eb-family-editorial .eb-section .eb-h2,
-.eb-family-editorial .eb-section .eb-h3,
-.eb-family-cardless-immersive .eb-section .eb-h2,
-.eb-family-cardless-immersive .eb-section .eb-h3 {
-  color: var(--eb-text);
-}
-
 /* Long immersive titles must wrap inside the viewport, and reserve the measured mobile action-bar area. */
 .eb-family-cardless-immersive .eb-hero__content { min-width: 0; }
 .eb-family-cardless-immersive .eb-hero .eb-h1 {
@@ -5663,15 +5654,13 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
   }
 }
 
-/* Website Studio generated-family visual acceptance: contrast, real media and mobile clearance. */
-.eb-family-editorial .eb-h1,
-.eb-family-editorial .eb-section .eb-h2,
-.eb-family-editorial .eb-section .eb-h3,
-.eb-family-editorial .eb-section .eb-card__title,
-.eb-family-cardless-immersive .eb-section .eb-h2,
-.eb-family-cardless-immersive .eb-section .eb-h3,
-.eb-family-cardless-immersive .eb-section .eb-card__title {
-  color: var(--eb-text);
+/* These family sections paint on white, while their theme's display token may be pale.
+   Use stable ink on the un-tinted section surface; preserve dark/tinted sections. */
+.eb-family-editorial .eb-section:not([style]) .eb-section-head .eb-h2 {
+  color: rgb(26 26 26);
+}
+.eb-family-cardless-immersive .eb-section:not([style]) .eb-section-head .eb-h2 {
+  color: rgb(26 26 26);
 }
 
 /* A cardless hero keeps its title legible over either a media overlay or a plain surface. */
