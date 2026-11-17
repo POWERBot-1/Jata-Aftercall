@@ -71,10 +71,10 @@ try {
   });
   await waitForServer();
 
-  const demoEmail = "demo@jata.link";
+  const demoEmail = "pr125-staging-owner@jata.link";
   const owner = await prisma.user.findUnique({ where: { email: demoEmail }, select: { id: true, email: true } });
-  const checkoutBusiness = await prisma.business.findUnique({ where: { slug: "nyumbani-kitchen" }, select: { id: true } });
-  const settlementBusiness = await prisma.business.findUnique({ where: { slug: "marys-beauty-studio" }, select: { id: true } });
+  const checkoutBusiness = await prisma.business.findUnique({ where: { slug: "pr125-staging-checkout" }, select: { id: true } });
+  const settlementBusiness = await prisma.business.findUnique({ where: { slug: "pr125-staging-settlement" }, select: { id: true } });
   const posPlan = await prisma.planConfig.findUnique({ where: { key: "BUSINESS_POS" }, select: { id: true, key: true, priceKES: true, durationDays: true } });
   if (!owner || !checkoutBusiness || !settlementBusiness || !posPlan) fail("SYNTHETIC_FIXTURE_MISSING");
   if (posPlan.priceKES !== 499 || posPlan.durationDays !== 30) fail("BUSINESS_POS_PLAN_CONFIGURATION_MISMATCH");
