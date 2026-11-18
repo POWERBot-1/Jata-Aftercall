@@ -217,3 +217,15 @@ Local full unit suite at `6b45b45`: 404 files / 4,737 tests PASS, 0 FAIL, 343 sk
 - An intermediate head `9c631be` failed the ERP re-run gate. That was the plain-DDL regression, corrected in `ec40f37` (re-runnable migration + shape guard).
 - Red, not code defects: `programme-completeness` (fail-closed by design) and Vercel Preview (isolation guard; branch-scoped Preview env missing — owner action).
 - MOTION-015 stays BLOCKED, with exact-head queue evidence appended. Verdict: **NOT READY**.
+
+**Batch 2 — MJENGO real-DB and real-browser evidence (exact head `66d8b08`, draft PR #126):**
+
+| ID | Pri | Finding | Fix commit | Regression test | Status / evidence |
+|---|---|---|---|---|---|
+| R-CI-01 | P1 | programme-completeness red: `NOT READY (24)` (21 BLOCKED, 3 NOT_TESTED) | — (fail-closed by design) | `check-programme-readiness.mjs` | **BLOCKED** (owner/external) |
+| R-MJ-08 | P1 | Refunded workspace offered a second checkout (402) instead of SUSPENDED 403 | `0e666c1` | `tests/prisma/mjengo-journey-postgres.test.ts` (11) | IMPLEMENTED · CI PASS on PG18 |
+| R-MJ-09 | P1 | Hero CTA sent owners to `/dashboard/subscription` and visitors to a bare `/login` | `eedacca`, `66d8b08` | `mjengo-public-cta` | IMPLEMENTED · local PASS |
+| R-MJ-10 | P1 | No authenticated browser evidence for MJENGO | `6f79353`, `1244caf`, `66d8b08` | `mjengo-browser-guard` (14) | IMPLEMENTED · **CI PASS** real Chrome (run 44249281884) |
+| R-MJ-11 | P1 | Dashboard layout's bare `/login` redirect dropped `?next=mjengo` (found in real Chrome, run 44247022065) | `66d8b08` (`app/mjengo` entry + MJENGO-only `proxy.ts`) | `mjengo-entry-route` (6) | IMPLEMENTED · **CI PASS** real Chrome |
+
+CI at `66d8b08`: 21 pass / 2 fail / 1 skipped. Every technical gate passes. Red: programme-completeness (fail-closed) and Vercel Preview (isolation guard, 7 branch-scoped variables missing; owner action). Residual: a stale or forged cookie on a `/dashboard/mjengo` deep link falls back to a bare `/login`, though access is still refused. Details in `WHOLE_PLATFORM_REMEDIATION_2026-11-17.md` §7. Verdict: **NOT READY**.
