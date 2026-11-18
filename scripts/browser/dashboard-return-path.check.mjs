@@ -60,6 +60,17 @@ try {
   const text = () => page.evaluate(() => document.body.innerText);
   const clearCookies = async () => { const c = await page.cookies(); if (c.length) await page.deleteCookie(...c); };
 
+  // app/dashboard/loading.tsx commits the URL while an aria-busy skeleton is still on screen, so a
+  // pathname match alone does not mean the page has rendered. Wait for the skeleton to go and an
+  // <h1> to exist before reading any text (otherwise case E could pass on a skeleton).
+  async function settled(context) {
+    const ok = await page
+      .waitForFunction(() => !document.querySelector('[aria-busy="true"]') && Boolean(document.querySelector("h1")?.textContent?.trim()), { timeout: 30000 })
+      .then(() => true, () => false);
+    if (!ok) throw new Error(`${context}: page never finished rendering at ${page.url()}: ${(await text()).slice(0, 300)}`);
+    return text();
+  }
+
   async function expectLogin(from, next) {
     await page.goto(url(from), { waitUntil: "load" });
     const u = here();
@@ -87,7 +98,8 @@ try {
   await clearCookies();
   await expectLogin(bizPath, bizPath);
   await signIn(a.user.email, bizPath);
-  if (!(await text()).includes(a.business.name)) throw new Error("Returned business page does not show the owner's business");
+  const bodyA = await settled("A");
+  if (!bodyA.includes(a.business.name)) throw new Error(`Returned business page does not show the owner's business: ${bodyA.slice(0, 300)}`);
   console.log(`PASS A no cookie: ${bizPath} → /login?next=${bizPath} → signed in → back on ${bizPath}`);
 
   // B. Revoked session: the cookie is still sent but no longer valid server-side.
@@ -120,10 +132,14 @@ try {
   await clearCookies();
   await expectLogin(bizPath, bizPath);
   await signIn(b.user.email, null);
+  const bodyB = await settled("E");
   const afterB = here();
-  const bodyB = await text();
-  if (afterB.pathname === bizPath && bodyB.includes(a.business.name)) throw new Error("Owner B was shown owner A's business after returning to its path");
-  console.log(`PASS E another tenant's return path (${bizPath}) did not expose owner A's business to owner B (settled at ${afterB.pathname})`);
+  if (bodyB.includes(a.business.name)) throw new Error("Owner B was shown owner A's business after returning to its path");
+  // Positive refusal, not just an absent name: the page must be the not-found page (loadWorkspace
+  // returns null for a non-owner) or B must have been moved off A's path.
+  const refusedE = afterB.pathname !== bizPath || /could not be found|do not have access/i.test(bodyB);
+  if (!refusedE) throw new Error(`Owner B on owner A's path was not refused: ${bodyB.slice(0, 300)}`);
+  console.log(`PASS E another tenant's return path (${bizPath}) was refused for owner B without exposing owner A's business (settled at ${afterB.pathname})`);
 
   // F. (R-RT-02) The owner's AI-page preview survives sign-in (it used an ignored callbackUrl).
   const previewPath = `/b/${a.business.slug}/ai`;
@@ -146,6 +162,24 @@ try {
 } finally {
   if (browser) await browser.close();
   try {
+    // Opening a business page runs ensureDefaultStudioWebsite, which creates Studio rows owned by
+    // the fixture user (StudioWorkspace.ownerUserId is onDelete: Restrict). Remove them first, by
+    // exact fixture ids only, in the same order as studio-authenticated.check.mjs.
+    const websiteIds = (await prisma.studioWebsite.findMany({ where: { businessId: { in: created.businesses } }, select: { id: true } })).map((w) => w.id);
+    if (websiteIds.length) {
+      await prisma.studioWebsiteDraftRevision.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteVersion.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteContent.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsiteMember.deleteMany({ where: { websiteId: { in: websiteIds } } });
+      await prisma.studioWebsite.deleteMany({ where: { id: { in: websiteIds } } });
+    }
+    await prisma.studioWorkspaceBusiness.deleteMany({ where: { businessId: { in: created.businesses } } });
+    const workspaceIds = (await prisma.studioWorkspace.findMany({ where: { ownerUserId: { in: created.users } }, select: { id: true } })).map((w) => w.id);
+    if (workspaceIds.length) {
+      await prisma.studioWorkspaceBusiness.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+      await prisma.studioWorkspaceMember.deleteMany({ where: { workspaceId: { in: workspaceIds } } });
+      await prisma.studioWorkspace.deleteMany({ where: { id: { in: workspaceIds }, ownerUserId: { in: created.users } } });
+    }
     await prisma.business.deleteMany({ where: { id: { in: created.businesses } } });
     await prisma.user.deleteMany({ where: { id: { in: created.users } } });
   } catch (error) {
