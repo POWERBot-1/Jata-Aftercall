@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { canAccessBusiness } from "@/lib/tenant";
+import { canAccessBusiness, canMemberPerform } from "@/lib/tenant";
 import {
   createNotification,
   getNotificationStatus,
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       if (!businessId) {
         return NextResponse.json({ error: "businessId is required to retry a notification." }, { status: 400 });
       }
-      const allowedRetry = await canAccessBusiness(user.id, businessId, user.role);
+      const allowedRetry = await canMemberPerform(user.id, businessId, user.role, "operate");
       if (!allowedRetry) {
         return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
       }
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    const allowed = await canMemberPerform(user.id, businessId, user.role, "operate");
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }

@@ -200,6 +200,22 @@ export async function getBusinessRoleForUser(
 }
 
 /**
+ * Membership AND role check for handlers that hold a user rather than a session (R-TI-03).
+ * `canAccessBusiness` alone admits every member, including a read-only VIEWER, so it is only an
+ * authorization for reads. Fails closed on an unknown role or a failed lookup.
+ */
+export async function canMemberPerform(
+  userId: string,
+  businessId: string,
+  userRole: string | null | undefined,
+  action: RolePermissionLevel,
+): Promise<boolean> {
+  if (!userId || !businessId) return false;
+  const role = await getBusinessRoleForUser(userId, businessId, userRole).catch(() => null);
+  return canBusinessRolePerform(role, action);
+}
+
+/**
  * Throws if business does not belong to session user.
  */
 export async function assertBusinessOwnership(businessId: string, session: SessionPayload) {
@@ -267,10 +283,18 @@ export async function assertSlugOwnershipByBusinessId(businessId: string, sessio
   await assertBusinessOwnership(businessId, session);
 }
 
+/**
+ * Membership + role guard for a tenant request.
+ *
+ * `requiredAction` is REQUIRED (R-TI-03). It used to default to "read", so every write handler that
+ * omitted it let any member — including a read-only VIEWER — rename the business, change its
+ * contact numbers, create or delete products, services and offers, or edit the website draft.
+ * Every caller now states the level it needs; "read" is only correct for handlers that do not write.
+ */
 export async function guardTenantMutation(
   session: SessionPayload | null,
-  businessId?: string | null,
-  requiredAction: RolePermissionLevel = "read",
+  businessId: string | null | undefined,
+  requiredAction: RolePermissionLevel,
 ) {
   if (!session) return { ok: false as const, status: 401, error: SAFE_ERRORS.signIn };
   if (!businessId) return { ok: false as const, status: 400, error: SAFE_ERRORS.chooseBusiness };

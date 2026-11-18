@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
 import { postJournal } from "@/lib/erp/accounting";
 import { verifyMjengoOrigin } from "@/lib/mjengo/csrf";
 import { assertMjengoEntitled, isMjengoDenied } from "@/lib/mjengo/access";
@@ -18,7 +18,10 @@ export async function POST(req: Request) {
   if (!session) return reply({ error: "Sign in." }, 401);
   let body: any; try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
   const businessId = String(body.businessId ?? "").trim();
-  try { await assertBusinessOwnership(businessId, session); } catch (e: any) { return reply({ error: e.message }, e.status ?? 403); }
+  // A manual journal changes the books: MANAGER and above (same level as refunds and overrides).
+  // Membership alone let a read-only VIEWER post ledger entries (R-TI-03).
+  const guard = await guardTenantMutation(session, businessId, "high_risk");
+  if (!guard.ok) return reply({ error: guard.error }, guard.status);
   // Ownership is not entitlement: ledger posting is a paid MJENGO OS capability.
   const entitled = await assertMjengoEntitled(businessId);
   if (isMjengoDenied(entitled)) return reply({ error: entitled.error, code: "MJENGO_ENTITLEMENT_REQUIRED" }, entitled.status);

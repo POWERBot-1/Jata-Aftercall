@@ -61,7 +61,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardTenantMutation(session, businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const title = sanitizeText(String(body?.title || ""), 80);
@@ -96,7 +96,7 @@ export async function PATCH(req: Request) {
 
     const existing = await prisma.service.findUnique({ where: { id }, select: { id: true, businessId: true, imageUrl: true } });
     if (!existing) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, existing.businessId);
+    const guard = await guardTenantMutation(session, existing.businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const data = serviceDataFrom(body);
@@ -130,7 +130,9 @@ export async function DELETE(req: Request) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const svc = await prisma.service.findUnique({ where: { id } });
   if (!svc) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  await assertBusinessOwnership(svc.businessId, session);
+  // Was membership-only and threw uncaught (500) for another tenant (R-TI-02/03).
+  const guard = await guardTenantMutation(session, svc.businessId, "configure");
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   await prisma.service.delete({ where: { id } });
   await logAudit({ actorId: session.userId, action: "SERVICE_DELETED", targetType: "SERVICE", targetId: id });
   return NextResponse.json({ ok: true });

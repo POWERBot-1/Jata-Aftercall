@@ -50,6 +50,12 @@ vi.mock("@/lib/tenant", async (importOriginal) => {
         throw new actual.TenantError("You do not have access to this business.", 403);
       }
     }),
+    // Writes now need a role (R-TI-03): userA owns bizA; everyone else is refused the same way.
+    guardTenantMutation: vi.fn(async (session: any, businessId: string) => {
+      if (!session) return { ok: false, status: 401, error: "Sign in to continue." };
+      if (businessId !== "bizA" || session.userId !== "userA") return { ok: false, status: 403, error: "You do not have access to this business." };
+      return { ok: true };
+    }),
   };
 });
 

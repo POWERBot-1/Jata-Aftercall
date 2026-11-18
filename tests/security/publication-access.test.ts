@@ -12,6 +12,11 @@ vi.mock("@/lib/db", () => {
           return [];
         }),
         findUnique: vi.fn(),
+        // Direct ownership, so a settings-level guard can resolve the OWNER role.
+        findFirst: vi.fn(async ({ where }: any) => {
+          const owned = (where?.ownerId === "userA" && where?.id === "bizA") || (where?.ownerId === "userB" && where?.id === "bizB");
+          return owned ? { id: where.id } : null;
+        }),
       },
       businessMember: {
         findMany: vi.fn(async () => []),
@@ -68,7 +73,7 @@ describe("publication requires verified payment", () => {
 
 describe("tenant mutation guard", () => {
   it("rejects an unauthenticated caller", async () => {
-    await expect(guardTenantMutation(null, "bizA")).resolves.toEqual({
+    await expect(guardTenantMutation(null, "bizA", "read")).resolves.toEqual({
       ok: false,
       status: 401,
       error: SAFE_ERRORS.signIn,
@@ -76,7 +81,7 @@ describe("tenant mutation guard", () => {
   });
 
   it("rejects a cross-tenant PATCH without leaking isolation internals", async () => {
-    const result = await guardTenantMutation(owner as any, "bizB");
+    const result = await guardTenantMutation(owner as any, "bizB", "read");
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.status).toBe(403);
@@ -85,6 +90,6 @@ describe("tenant mutation guard", () => {
   });
 
   it("allows the owner to patch their own business", async () => {
-    await expect(guardTenantMutation(owner as any, "bizA")).resolves.toEqual({ ok: true });
+    await expect(guardTenantMutation(owner as any, "bizA", "manage_settings")).resolves.toEqual({ ok: true });
   });
 });

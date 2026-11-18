@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { canAccessBusiness } from "@/lib/tenant";
+import { canAccessBusiness, canMemberPerform } from "@/lib/tenant";
 import { createPreOrderSummary, resolvePreorderPricing } from "@/lib/preorder";
 import { getExtendedAIConfig } from "@/lib/ai-config";
 import { createNotification } from "@/lib/notification";
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     if (!businessId) {
       return NextResponse.json({ error: "businessId required." }, { status: 400 });
     }
-    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    const allowed = await canMemberPerform(user.id, businessId, user.role, "manage_orders");
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }

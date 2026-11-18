@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership } from "@/lib/tenant";
+import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
 import { sanitizeBrandingText, isSafeBrandingName } from "@/lib/mjengo/sanitize";
 import { verifyMjengoOrigin } from "@/lib/mjengo/csrf";
 import { assertMjengoEntitled, isMjengoDenied } from "@/lib/mjengo/access";
@@ -30,7 +30,9 @@ export async function POST(req: Request) {
   if (!process.env.DATABASE_URL) return reply({ error: "Database unavailable." }, 503);
   let body: any; try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
   const businessId = String(body.businessId ?? "").trim();
-  try { await assertBusinessOwnership(businessId, session); } catch (e: any) { return reply({ error: e.message ?? "Not allowed." }, e.status ?? 403); }
+  // Renaming the business is a settings change: MANAGER and above, never any member (R-TI-03).
+  const guard = await guardTenantMutation(session, businessId, "manage_settings");
+  if (!guard.ok) return reply({ error: guard.error }, guard.status);
   // MJENGO workspace branding is part of the paid MJENGO OS workspace, not a general owner API.
   const entitled = await assertMjengoEntitled(businessId);
   if (isMjengoDenied(entitled)) return reply({ error: entitled.error, code: "MJENGO_ENTITLEMENT_REQUIRED" }, entitled.status);

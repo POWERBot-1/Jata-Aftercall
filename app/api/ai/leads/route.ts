@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { canAccessBusiness } from "@/lib/tenant";
+import { canAccessBusiness, canMemberPerform } from "@/lib/tenant";
 import {
   captureLead,
   isValidLeadClassification,
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
     const user = await getCurrentUser().catch(() => null);
     if (user) {
-      const allowed = await canAccessBusiness(user.id, businessId, user.role);
+      const allowed = await canMemberPerform(user.id, businessId, user.role, "operate");
       if (!allowed) {
         return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
       }

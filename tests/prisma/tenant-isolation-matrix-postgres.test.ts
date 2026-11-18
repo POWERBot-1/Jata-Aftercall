@@ -103,12 +103,29 @@ function routeFiles(dir: string): string[] {
 
 const p = realPrismaConfigured ? sharedPrisma() : (null as any);
 
+/**
+ * Records only an OWNER or ADMIN member (billing, publication, team) or a MANAGER (configuration)
+ * may change. A STAFF member changing any of these is a privilege escalation inside the tenant.
+ */
+const OWNER_LEVEL_TABLES = new Set([
+  "Business(A)", "User(ownerA)", "BusinessMember",
+  "Subscription", "Payment", "PaymentDestination", "PaymentProviderConnection", "MerchantPaymentConfig",
+  "AIPackageEntitlement", "AutopilotEntitlement", "AutopilotSubscription", "ErpEntitlement", "ErpProEntitlement",
+  "ErpProSubscription", "ErpSubscription", "InteractiveBusinessEntitlement", "MjengoEntitlement", "MjengoSubscription",
+  "PosEntitlement", "PosSubscription", "MsgWallet",
+  "BusinessExperience", "ExperienceVersion", "StudioWebsite", "StudioWorkspaceBusiness", "PosPublicationResolution",
+  "AIConfiguration", "AutopilotConfiguration", "ErpConfiguration", "PosConfiguration", "VoiceBusinessPolicy", "VoiceInboundNumber",
+  "PosStaff", "ErpTaxRule", "ErpComplianceProfile",
+]);
+
 describe.skipIf(!realPrismaConfigured)(`real PostgreSQL (${prismaEngineLabel}): two-tenant authorization sweep over every API route`, () => {
   const savedFetch = globalThis.fetch;
   const savedEnv = { ...process.env };
   let a: { owner: any; business: any };
   let b: { owner: any; business: any };
   let staffB: any;
+  let staffA: any;
+  let viewerA: any;
   let productA: any;
   const rows: Row[] = [];
   const importErrors: Array<{ route: string; error: string }> = [];
@@ -192,6 +209,11 @@ describe.skipIf(!realPrismaConfigured)(`real PostgreSQL (${prismaEngineLabel}): 
     productA = await seedProduct(p, a.business.id);
     staffB = await p.user.create({ data: { email: `staff-b-${uid()}@test.invalid`, name: "Staff B", passwordHash: "test-only", role: "CUSTOMER" } });
     await p.businessMember.create({ data: { userId: staffB.id, businessId: b.business.id, role: "STAFF" } });
+    // Inside tenant A: an authorized STAFF member and a read-only VIEWER member (lib/tenant.ts roles).
+    staffA = await p.user.create({ data: { email: `staff-a-${uid()}@test.invalid`, name: "Staff A", passwordHash: "test-only", role: "CUSTOMER" } });
+    await p.businessMember.create({ data: { userId: staffA.id, businessId: a.business.id, role: "STAFF" } });
+    viewerA = await p.user.create({ data: { email: `viewer-a-${uid()}@test.invalid`, name: "Viewer A", passwordHash: "test-only", role: "CUSTOMER" } });
+    await p.businessMember.create({ data: { userId: viewerA.id, businessId: a.business.id, role: "VIEWER" } });
 
     const cols: Array<{ table_name: string }> = await p.$queryRawUnsafe(
       `SELECT DISTINCT table_name::text AS table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'businessId' ORDER BY table_name`,
@@ -207,7 +229,7 @@ describe.skipIf(!realPrismaConfigured)(`real PostgreSQL (${prismaEngineLabel}): 
     writeFileSync(path.join(dir, "tenant-isolation-matrix.json"), JSON.stringify({ engine: prismaEngineLabel, rows, importErrors }, null, 2));
   });
 
-  it("no route serves or changes tenant A's data for anonymous, other-tenant owner or other-tenant staff", async () => {
+  it("no route serves or changes tenant A's data for anonymous, other-tenant owner or other-tenant staff; inside A, viewers cannot write and staff cannot escalate", async () => {
     const files = routeFiles(API).sort();
     expect(files.length).toBeGreaterThan(150);
 
@@ -286,6 +308,57 @@ describe.skipIf(!realPrismaConfigured)(`real PostgreSQL (${prismaEngineLabel}): 
     const crashes = rows.filter((r) => r.principal !== "owner-A" && (typeof r.status !== "number" || (r.status >= 500 && r.status !== 503)));
     expect(crashes, `refusals that crashed instead of answering: ${JSON.stringify(crashes)}`).toEqual([]);
     expect(dataTables, `tenant A data changed by another tenant or an anonymous caller: ${JSON.stringify(dataTables)}`).toEqual([]);
-  }, 900_000);
+
+    // Phase 3 — inside tenant A (R-TI-03). A VIEWER may only read (lib/tenant.ts: read = weight 10),
+    // so no write method may change any of A's data. A STAFF member may operate (orders, leads), but
+    // never touch owner-, billing-, team- or publication-level records (manage_billing / publish /
+    // configure / manage_settings all need MANAGER or above).
+    const insideRows: Row[] = [];
+    const sweepAs = async (principal: string, session: any, methods: readonly string[]) => {
+      for (const file of files) {
+        const route = path.relative(API, path.dirname(file)).split(path.sep).join("/");
+        const mod: any = await import(/* @vite-ignore */ file);
+        for (const method of methods) {
+          if (typeof mod[method] !== "function") continue;
+          mock.session = session;
+          const pre = process.env.TENANT_MATRIX_ATTRIBUTE === "1" && method !== "GET" ? await fingerprint() : null;
+          const status = await call(route, mod[method], method, principal);
+          const row: Row = { route, module: moduleOf(route), method, principal, status };
+          rows.push(row);
+          insideRows.push(row);
+          if (pre) {
+            // Diagnostic only: name the call that changed which table.
+            const post = await fingerprint();
+            const diff = Object.keys(pre).filter((k) => pre[k] !== post[k]);
+            if (diff.length) console.log(`[tenant-matrix] attribute ${principal} ${method} ${route} -> ${status} changed ${JSON.stringify(diff)}`);
+          }
+        }
+      }
+      mock.session = null;
+    };
+    const WRITES = METHODS.filter((m) => m !== "GET");
+
+    const beforeViewer = await fingerprint();
+    await sweepAs("viewer-A", { userId: viewerA.id, role: "CUSTOMER", email: viewerA.email, sessionVersion: 0 }, WRITES);
+    const afterViewer = await fingerprint();
+    const viewerChanged = Object.keys(beforeViewer).filter((k) => beforeViewer[k] !== afterViewer[k] && !/audit|log|event|attempt|ratelimit|security/i.test(k));
+
+    await sweepAs("staff-A", { userId: staffA.id, role: "CUSTOMER", email: staffA.email, sessionVersion: 0 }, ["GET"]);
+    const beforeStaff = await fingerprint();
+    await sweepAs("staff-A", { userId: staffA.id, role: "CUSTOMER", email: staffA.email, sessionVersion: 0 }, WRITES);
+    const afterStaff = await fingerprint();
+    const staffChanged = Object.keys(beforeStaff).filter((k) => beforeStaff[k] !== afterStaff[k]);
+    const staffPrivilegedChanged = staffChanged.filter((k) => OWNER_LEVEL_TABLES.has(k));
+
+    const staffGetOk = insideRows.filter((r) => r.principal === "staff-A" && r.method === "GET" && typeof r.status === "number" && r.status >= 200 && r.status < 300);
+    const staffReadsWhereOwnerReads = okA.filter((ra) => staffGetOk.some((rs) => rs.route === ra.route));
+    const insideCrashes = insideRows.filter((r) => typeof r.status !== "number" || (r.status >= 500 && r.status !== 503));
+    console.log(`[tenant-matrix] inside A: viewer-A writes=${insideRows.filter((r) => r.principal === "viewer-A").length} changedDataTables=${JSON.stringify(viewerChanged)}; staff-A GET 2xx=${staffGetOk.length} (of owner-A's ${okA.length}: ${staffReadsWhereOwnerReads.length}); staff-A writes changed=${JSON.stringify(staffChanged)} ownerLevelChanged=${JSON.stringify(staffPrivilegedChanged)}`);
+    expect(insideCrashes, `inside-tenant refusals that crashed: ${JSON.stringify(insideCrashes)}`).toEqual([]);
+    expect(viewerChanged, `a read-only VIEWER of tenant A changed A's data: ${JSON.stringify(viewerChanged)}`).toEqual([]);
+    expect(staffPrivilegedChanged, `a STAFF member of tenant A changed owner/billing/team/publication records: ${JSON.stringify(staffPrivilegedChanged)}`).toEqual([]);
+    // Authorized staff must actually be served (otherwise every inside denial could be a blanket refusal).
+    expect(staffReadsWhereOwnerReads.length).toBeGreaterThan(10);
+  }, 1_500_000);
 
 });

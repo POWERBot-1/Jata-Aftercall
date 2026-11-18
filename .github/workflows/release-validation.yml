@@ -359,7 +359,7 @@ jobs:
           # Annotations stay readable when runner logs and artifacts are not; the full matrix is kept
           # in the pg18-logs artifact. A missing summary is reported, never treated as a pass.
           cp test-results/tenant-isolation-matrix.json /tmp/step-tenant-isolation-matrix.log 2>/dev/null || true
-          lines=$(grep -E '\[tenant-matrix\] (engine=|owner-A GET|self-scoped|[A-Za-z]+AuditEvent:)' /tmp/step-suite.log | sed 's/^.*\[tenant-matrix\] //' | head -8 || true)
+          lines=$(grep -E '\[tenant-matrix\] (engine=|owner-A GET|self-scoped|inside A:|[A-Za-z]+AuditEvent:)' /tmp/step-suite.log | sed 's/^.*\[tenant-matrix\] //' | head -10 || true)
           if [ -z "$lines" ]; then echo "::warning title=tenant-matrix::no sweep summary in the suite log"; exit 0; fi
           while IFS= read -r line; do echo "::notice title=tenant-matrix::${line:0:900}"; done <<< "$lines"
 
