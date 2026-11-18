@@ -1,6 +1,7 @@
 /**
- * R-MJ-09 — every "Get MJENGO OS" call to action on the public product page enters the journey at
- * /dashboard/mjengo (which owns sign-in with ?next=mjengo and the per-business workspace checkout).
+ * R-MJ-09 / R-MJ-11 — every "Get MJENGO OS" call to action on the public product page enters the
+ * journey at the public /mjengo entry. It sits outside the /dashboard layout, whose bare /login
+ * redirect would otherwise drop the MJENGO destination for a signed-out visitor.
  *
  * Rendered, not grepped: the server component is awaited and rendered to markup with the stored plan
  * mocked, signed in and signed out, so a CTA that depends on the session is caught.
@@ -32,18 +33,18 @@ describe("mjengo public product page: Get MJENGO OS CTAs (R-MJ-09)", () => {
     delete process.env.MJENGO_OS_DISABLED;
   });
 
-  it("signed out: every CTA enters at /dashboard/mjengo (never a bare /login that drops the intent)", async () => {
+  it("signed out: every CTA enters at /mjengo (never /dashboard/mjengo or a bare /login, which drop the intent)", async () => {
     const hrefs = await ctaHrefs();
     expect(hrefs.length).toBeGreaterThanOrEqual(3);
-    expect(new Set(hrefs)).toEqual(new Set(["/dashboard/mjengo"]));
+    expect(new Set(hrefs)).toEqual(new Set(["/mjengo"]));
   });
 
-  it("signed in: every CTA enters at /dashboard/mjengo (never /dashboard/subscription, which does not sell MJENGO OS)", async () => {
+  it("signed in: every CTA enters at /mjengo (never /dashboard/subscription, which does not sell MJENGO OS)", async () => {
     state.session = { userId: "u1", role: "CUSTOMER", email: "owner@test.invalid" };
     const hrefs = await ctaHrefs();
     expect(hrefs.length).toBeGreaterThanOrEqual(3);
     expect(hrefs).not.toContain("/dashboard/subscription");
-    expect(new Set(hrefs)).toEqual(new Set(["/dashboard/mjengo"]));
+    expect(new Set(hrefs)).toEqual(new Set(["/mjengo"]));
   });
 
   it("a refused plan (mispriced) shows no price, hides the hero CTA, and the remaining CTAs still enter the gated journey", async () => {
@@ -54,7 +55,7 @@ describe("mjengo public product page: Get MJENGO OS CTAs (R-MJ-09)", () => {
     expect(html).not.toContain("KES 499");
     const hero = html.slice(html.indexOf('id="mjengo-hero"'), html.indexOf('id="mjengo-problems"'));
     expect(hero).not.toContain("Get MJENGO OS");
-    // /dashboard/mjengo re-applies mjengoCheckoutRefusal before any checkout link is rendered.
-    expect(new Set(await ctaHrefs())).toEqual(new Set(["/dashboard/mjengo"]));
+    // /mjengo → /dashboard/mjengo re-applies mjengoCheckoutRefusal before any checkout link is rendered.
+    expect(new Set(await ctaHrefs())).toEqual(new Set(["/mjengo"]));
   });
 });

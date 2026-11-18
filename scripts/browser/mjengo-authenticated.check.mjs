@@ -75,12 +75,13 @@ try {
   // 1. Public product page → hero CTA.
   await page.goto(new URL("/products/mjengo-os", base).href, { waitUntil: "load" });
   const heroHref = await page.$eval("#mjengo-hero a.mk-btn:not(.mk-btn--ghost)", (a) => a.getAttribute("href"));
-  if (heroHref !== "/dashboard/mjengo") throw new Error(`Hero CTA must enter at /dashboard/mjengo, got ${heroHref}`);
+  if (heroHref !== "/mjengo") throw new Error(`Hero CTA must enter at the public /mjengo entry, got ${heroHref}`);
   if (!(await text()).includes("KES 2,000")) throw new Error("Public page does not show the stored KES 2,000 plan");
   await responsive("public product page");
-  // The CTA is a Next <Link>: a soft navigation to /dashboard/mjengo whose server component then
-  // redirects to /login?next=mjengo. waitForNavigation resolves on the first history change (the
-  // intermediate /dashboard/mjengo URL), so wait for the journey to settle on /login instead.
+  // The CTA is a Next <Link>: a soft navigation to /mjengo whose server component then redirects to
+  // /login?next=mjengo. waitForNavigation resolves on the first history change (the intermediate
+  // URL), so wait for the journey to settle on /login instead. (R-MJ-11: this step previously
+  // settled on a bare /login because the /dashboard layout redirected before the MJENGO page.)
   await page.click("#mjengo-hero a.mk-btn:not(.mk-btn--ghost)");
   const settled = await page.waitForFunction(() => location.pathname === "/login", { timeout: 20000 }).then(() => true, () => false);
   const loginUrl = new URL(page.url());
@@ -88,11 +89,13 @@ try {
     throw new Error(`Signed-out CTA must reach /login?next=mjengo, settled at ${loginUrl.pathname}${loginUrl.search}: ${(await text()).slice(0, 300)}`);
   }
   console.log("PASS public CTA (soft navigation) → /login?next=mjengo (intent preserved)");
-  // The same entry on a hard navigation (shared link, refresh): the server redirect itself.
-  const hard = await page.goto(new URL("/dashboard/mjengo", base).href, { waitUntil: "load" });
-  const hardUrl = new URL(page.url());
-  if (hardUrl.pathname !== "/login" || hardUrl.searchParams.get("next") !== "mjengo") throw new Error(`Hard navigation to /dashboard/mjengo must redirect to /login?next=mjengo, got ${hardUrl.pathname}${hardUrl.search} (HTTP ${hard?.status()})`);
-  console.log("PASS hard navigation /dashboard/mjengo → /login?next=mjengo (server redirect)");
+  // Hard navigations (shared link, refresh): the public entry and a workspace deep link (proxy.ts).
+  for (const entry of ["/mjengo", "/dashboard/mjengo", `/dashboard/mjengo/${owner.business.id}`]) {
+    const hard = await page.goto(new URL(entry, base).href, { waitUntil: "load" });
+    const hardUrl = new URL(page.url());
+    if (hardUrl.pathname !== "/login" || hardUrl.searchParams.get("next") !== "mjengo") throw new Error(`Hard navigation to ${entry} must redirect to /login?next=mjengo, got ${hardUrl.pathname}${hardUrl.search} (HTTP ${hard?.status()})`);
+    console.log(`PASS hard navigation ${entry} → /login?next=mjengo (server redirect)`);
+  }
 
   // 2. Sign in through the real form; the post-auth destination must be the MJENGO entry.
   await page.waitForSelector("#login-email");

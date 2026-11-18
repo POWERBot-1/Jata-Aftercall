@@ -81,13 +81,13 @@ export default async function MjengoOsProductPage() {
     ? `${formatKES(Number(plan.priceKES))} / ${plan.durationDays} days`
     : "Pricing currently unavailable";
 
-  // Every "Get MJENGO OS" CTA enters through /dashboard/mjengo (R-MJ-09). That entry is the single
-  // owner of the journey: signed-out visitors are sent to /login?next=mjengo and return to it after
-  // sign-in; owners land in their business workspace, where an unpaid business is offered the
-  // stored-plan checkout. The previous hero target sent signed-out visitors to a bare
-  // /login (intent lost, landing on /dashboard) and signed-in owners to /dashboard/subscription,
-  // which by design never sells MJENGO OS — a dead end on the page's primary button.
-  const checkoutTarget = "/dashboard/mjengo";
+  // Every "Get MJENGO OS" CTA enters through /mjengo (R-MJ-09, R-MJ-11). That public entry sits
+  // outside the /dashboard layout, so it decides before the layout's bare /login redirect can drop
+  // the intent: signed-out visitors go to /login?next=mjengo and return to MJENGO OS after sign-in;
+  // owners go to /dashboard/mjengo, their business workspace, where an unpaid business is offered
+  // the stored-plan checkout. The previous hero target sent signed-out visitors to a bare /login
+  // and signed-in owners to /dashboard/subscription, which by design never sells MJENGO OS.
+  const checkoutTarget = "/mjengo";
 
   return (
     <MarketingLayout
@@ -162,7 +162,7 @@ export default async function MjengoOsProductPage() {
           {refusal ? <p>{refusal}</p> : null}
         </div>
         <div className="mk-btn-row">
-          <Link href="/dashboard/mjengo" className="mk-btn">Get MJENGO OS</Link>
+          <Link href="/mjengo" className="mk-btn">Get MJENGO OS</Link>
           <Link href="/pricing" className="mk-btn mk-btn--ghost">Compare JATA plans</Link>
         </div>
       </MarketingSection>
@@ -186,7 +186,7 @@ export default async function MjengoOsProductPage() {
           <p>Manage sales, materials, procurement, customers and business records with greater operational visibility.</p>
         </div>
         <div className="mk-btn-row">
-          <Link href="/dashboard/mjengo" className="mk-btn">Get MJENGO OS</Link>
+          <Link href="/mjengo" className="mk-btn">Get MJENGO OS</Link>
           <Link href="/products" className="mk-btn mk-btn--ghost">Explore all JATA products</Link>
         </div>
       </MarketingSection>
