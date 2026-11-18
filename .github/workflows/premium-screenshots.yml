@@ -186,6 +186,28 @@ jobs:
             echo "::error title=Onboarding browser failure::$detail"
           fi
           exit "$result"
+      - name: MJENGO OS authenticated journey in real Chrome (no payment)
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          set +e
+          node scripts/browser/mjengo-authenticated.check.mjs 2>&1 | tee /tmp/mjengo-browser.log
+          result=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### MJENGO OS authenticated journey"
+            echo '```'
+            grep -E '^(PASS|NOT TESTED|cleanup)' /tmp/mjengo-browser.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/mjengo-browser.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=MJENGO browser failure::$detail"
+          fi
+          exit "$result"
       - name: Authenticated agent application at six viewports (no activation)
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
