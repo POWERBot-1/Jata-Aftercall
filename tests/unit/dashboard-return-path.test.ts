@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { DASHBOARD_PATH_HEADER, isSafeDashboardPath, loginPathFor, postAuthNextToken, resolvePostAuthDestination } from "@/lib/post-auth-destination";
+import { DASHBOARD_PATH_HEADER, aiPreviewLoginPath, aiPreviewNextToken, isSafeDashboardPath, loginPathFor, postAuthNextToken, resolvePostAuthDestination } from "@/lib/post-auth-destination";
 
 const HOSTILE = [
   "/dashboard//evil.example", "//evil.example", "https://evil.example/dashboard/pos", "/dashboard/../admin", "/dashboard/pos/../../admin",
@@ -124,6 +124,37 @@ describe("no dashboard route redirects to a bare /login or a parameter login ign
       return /redirect\(\s*["'`]\/login["'`]\s*\)/.test(src) || /\/login\?callbackUrl=/.test(src);
     });
     expect(offenders).toEqual([]);
+  });
+
+  it("no route anywhere in app/ sends people to the ignored callbackUrl parameter", () => {
+    const offenders = files("app").filter((file) => /\/login\?callbackUrl=/.test(readFileSync(file, "utf8")));
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("owner AI-page preview survives sign-in (R-RT-02)", () => {
+  it("round-trips the preview through the login ⇄ register token", () => {
+    const token = aiPreviewNextToken("mama-mboga-23");
+    expect(token).toBe("ai-preview:mama-mboga-23");
+    expect(resolvePostAuthDestination(token)).toBe("/b/mama-mboga-23/ai?preview=true");
+    expect(postAuthNextToken(resolvePostAuthDestination(token))).toBe(token);
+    expect(aiPreviewLoginPath("mama-mboga-23")).toBe("/login?next=ai-preview%3Amama-mboga-23");
+    expect(resolvePostAuthDestination(decodeURIComponent("ai-preview%3Amama-mboga-23"))).toBe("/b/mama-mboga-23/ai?preview=true");
+  });
+
+  it("refuses any slug that is not a valid business slug (falls back to /dashboard)", () => {
+    for (const slug of ["", "ab", "-abc", "abc-", "a--b", "ABC", "a/b", "a.b", "..", "a?x=1", "evil.example", "//evil", "a b", "%2e%2e", "x".repeat(51)]) {
+      expect(resolvePostAuthDestination(`ai-preview:${slug}`), slug).toBe("/dashboard");
+      expect(aiPreviewNextToken(slug), slug).toBeNull();
+    }
+    expect(aiPreviewLoginPath("../admin")).toBe("/login");
+    expect(resolvePostAuthDestination("/b/shop/ai?preview=true")).toBe("/dashboard"); // raw paths are never accepted
+  });
+
+  it("the AI page uses the preview token instead of callbackUrl", () => {
+    const src = readFileSync("app/b/[slug]/ai/page.tsx", "utf8");
+    expect(src).toContain("redirect(aiPreviewLoginPath(business.slug))");
+    expect(src).not.toMatch(/login\?callbackUrl=/);
   });
 });
 

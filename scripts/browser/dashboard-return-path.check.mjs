@@ -125,7 +125,24 @@ try {
   if (afterB.pathname === bizPath && bodyB.includes(a.business.name)) throw new Error("Owner B was shown owner A's business after returning to its path");
   console.log(`PASS E another tenant's return path (${bizPath}) did not expose owner A's business to owner B (settled at ${afterB.pathname})`);
 
-  console.log("PASS real Chrome: workspace return paths preserved for no-cookie, revoked and forged sessions; hostile next refused; cross-tenant return path grants nothing");
+  // F. (R-RT-02) The owner's AI-page preview survives sign-in (it used an ignored callbackUrl).
+  const previewPath = `/b/${a.business.slug}/ai`;
+  const previewToken = `ai-preview:${a.business.slug}`;
+  await clearCookies();
+  await expectLogin(`${previewPath}?preview=true`, previewToken);
+  await signIn(a.user.email, previewPath);
+  if (here().searchParams.get("preview") !== "true") throw new Error(`Owner preview lost ?preview=true: ${page.url()}`);
+  console.log(`PASS F owner AI preview: ${previewPath}?preview=true → /login?next=${previewToken} → signed in → back on the preview`);
+
+  // G. The same link grants another tenant nothing: owner B is sent to the preview URL and refused (404).
+  await clearCookies();
+  await expectLogin(`${previewPath}?preview=true`, previewToken);
+  await signIn(b.user.email, previewPath);
+  const refused = await page.goto(url(`${previewPath}?preview=true`), { waitUntil: "load" });
+  if (refused?.status() !== 404) throw new Error(`Owner B must get 404 on owner A's AI preview, got ${refused?.status()}`);
+  console.log(`PASS G another tenant following ${previewToken} is refused on owner A's preview (404)`);
+
+  console.log("PASS real Chrome: workspace return paths preserved for no-cookie, revoked and forged sessions; hostile next refused; cross-tenant return path grants nothing; owner AI preview preserved and tenant-checked");
 } finally {
   if (browser) await browser.close();
   try {

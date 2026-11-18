@@ -15,7 +15,9 @@
  * applies its own session, ownership and entitlement checks after the redirect.
  */
 export type DashboardPath = `/dashboard/${string}`;
-export type PostAuthDestination = "/dashboard" | "/agents/dashboard" | "/control" | "/dashboard/mjengo" | DashboardPath;
+/** (R-RT-02) An owner's preview of their own AI Front Desk page. The page re-checks ownership. */
+export type AiPreviewPath = `/b/${string}/ai?preview=true`;
+export type PostAuthDestination = "/dashboard" | "/agents/dashboard" | "/control" | "/dashboard/mjengo" | DashboardPath | AiPreviewPath;
 
 const TOKENS: Record<string, PostAuthDestination> = {
   agents: "/agents/dashboard",
@@ -26,6 +28,26 @@ const TOKENS: Record<string, PostAuthDestination> = {
 };
 
 const DASHBOARD_PATH = /^\/dashboard(?:\/[A-Za-z0-9_-]{1,80}){1,6}$/;
+/** Same shape lib/slug.ts validateSlug accepts: 3–50 of [a-z0-9-], no leading/trailing/double hyphen. */
+const BUSINESS_SLUG = /^[a-z0-9](?:-?[a-z0-9]){2,49}$/;
+const AI_PREVIEW_TOKEN_PREFIX = "ai-preview:";
+
+/** The `next` token for an owner's AI page preview, or null when the slug is not a valid slug. */
+export function aiPreviewNextToken(slug: unknown): string | null {
+  return typeof slug === "string" && slug.length <= 50 && BUSINESS_SLUG.test(slug) ? `${AI_PREVIEW_TOKEN_PREFIX}${slug}` : null;
+}
+
+/** `/login?next=…` for an owner's AI page preview (falls back to plain /login for an invalid slug). */
+export function aiPreviewLoginPath(slug: string): string {
+  const token = aiPreviewNextToken(slug);
+  return token ? `/login?next=${encodeURIComponent(token)}` : "/login";
+}
+
+function aiPreviewDestination(value: string): AiPreviewPath | null {
+  if (!value.startsWith(AI_PREVIEW_TOKEN_PREFIX)) return null;
+  const slug = value.slice(AI_PREVIEW_TOKEN_PREFIX.length);
+  return aiPreviewNextToken(slug) ? `/b/${slug}/ai?preview=true` : null;
+}
 
 /** True for a strictly shaped workspace path (see the module comment). */
 export function isSafeDashboardPath(value: unknown): value is DashboardPath {
@@ -39,6 +61,8 @@ export function resolvePostAuthDestination(next: unknown): PostAuthDestination {
   const value = Array.isArray(next) ? next[0] : next;
   if (typeof value !== "string") return "/dashboard";
   if (Object.prototype.hasOwnProperty.call(TOKENS, value)) return TOKENS[value];
+  const aiPreview = aiPreviewDestination(value);
+  if (aiPreview) return aiPreview;
   return isSafeDashboardPath(value) ? value : "/dashboard";
 }
 
@@ -49,7 +73,11 @@ export function postAuthNextToken(destination: PostAuthDestination): string | nu
     case "/control": return "control";
     case "/dashboard/mjengo": return "mjengo";
     case "/dashboard": return null;
-    default: return isSafeDashboardPath(destination) ? destination : null;
+    default: {
+      const preview = /^\/b\/([^/?#]+)\/ai\?preview=true$/.exec(destination);
+      if (preview) return aiPreviewNextToken(preview[1]);
+      return isSafeDashboardPath(destination) ? destination : null;
+    }
   }
 }
 
