@@ -103,6 +103,32 @@ describe("MJENGO OS gate offers a purchase path whenever payment is the next ste
     expect(mjengoDenialStatus(ent)).toBe(403);
   });
 
+  it("R-MJ-08: a real refund (payment REFUNDED, so no PAID evidence) still resolves to SUSPENDED → 403, never a second checkout", () => {
+    // The webhook's refund.processed moves the payment PAID → REFUNDED and suspends both rows, so
+    // getMjengoEntitlement finds no PAID payment. The fixture above (SUSPENDED + PAID) never occurs.
+    for (const entitlement of [{ status: "SUSPENDED" }, { status: "ACTIVE" }, null]) {
+      const ent = deriveMjengoEntitlement({
+        subscription: { status: "SUSPENDED", planKey: "MJENGO_OS", expiresAt: new Date("2026-12-01") },
+        entitlement: entitlement as any,
+        paidPayment: null,
+        now,
+      });
+      expect(ent.entitled).toBe(false);
+      expect(ent.status).toBe("SUSPENDED");
+      expect(ent.nextAction).toBe("none");
+      expect(mjengoDenialStatus(ent)).toBe(403);
+    }
+    // Entitlement-row suspension alone is enough, even if the subscription still says ACTIVE.
+    const rowOnly = deriveMjengoEntitlement({
+      subscription: { status: "ACTIVE", planKey: "MJENGO_OS", expiresAt: new Date("2026-12-01") },
+      entitlement: { status: "SUSPENDED" } as any,
+      paidPayment: null,
+      now,
+    });
+    expect(rowOnly.status).toBe("SUSPENDED");
+    expect(mjengoDenialStatus(rowOnly)).toBe(403);
+  });
+
   it("a Business POS subscription never unlocks MJENGO OS and is routed to MJENGO checkout", () => {
     const ent = deriveMjengoEntitlement({ subscription: { status: "ACTIVE", planKey: "BUSINESS_POS", expiresAt: new Date("2026-12-01") }, now });
     expect(ent.entitled).toBe(false);

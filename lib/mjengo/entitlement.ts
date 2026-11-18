@@ -135,6 +135,19 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
     };
   }
 
+  // Suspension is decided before payment evidence. The webhook suspends MJENGO OS on a full refund,
+  // and that same refund moves the payment PAID → REFUNDED, so a suspended business never has a PAID
+  // payment. Checked after the unpaid branch (as before R-MJ-08), SUSPENDED was unreachable for every
+  // refund: the owner was told to "complete the KES 2,000 payment" and offered a second checkout (402)
+  // instead of the support path (403). See tests/prisma/mjengo-journey-postgres.test.ts.
+  if (String(subscription.status).toUpperCase() === "SUSPENDED" || String(input.entitlement?.status).toUpperCase() === "SUSPENDED") {
+    return {
+      ...base, entitled: false, inGrace: false, status: "SUSPENDED", lifecycle: "SUSPENDED",
+      reason: "MJENGO OS is suspended. Contact JATA support to restore it.",
+      nextAction: "none",
+    };
+  }
+
   const activeStatuses = ["ACTIVE", "EXPIRING", "PAST_DUE"];
   const subscriptionActive = activeStatuses.includes(String(subscription.status ?? "").toUpperCase());
   if (!subscriptionActive && !paid) {
@@ -142,14 +155,6 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
       ...base, entitled: false, inGrace: false, status: "PENDING", lifecycle: "AWAITING_PAYMENT",
       reason: "Complete the KES 2,000 payment to activate MJENGO OS.",
       nextAction: "pay",
-    };
-  }
-
-  if (String(subscription.status).toUpperCase() === "SUSPENDED" || String(input.entitlement?.status).toUpperCase() === "SUSPENDED") {
-    return {
-      ...base, entitled: false, inGrace: false, status: "SUSPENDED", lifecycle: "SUSPENDED",
-      reason: "MJENGO OS is suspended. Contact JATA support to restore it.",
-      nextAction: "none",
     };
   }
 
