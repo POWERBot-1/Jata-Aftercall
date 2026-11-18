@@ -78,10 +78,21 @@ try {
   if (heroHref !== "/dashboard/mjengo") throw new Error(`Hero CTA must enter at /dashboard/mjengo, got ${heroHref}`);
   if (!(await text()).includes("KES 2,000")) throw new Error("Public page does not show the stored KES 2,000 plan");
   await responsive("public product page");
-  await Promise.all([page.waitForNavigation({ waitUntil: "load" }), page.click("#mjengo-hero a.mk-btn:not(.mk-btn--ghost)")]);
+  // The CTA is a Next <Link>: a soft navigation to /dashboard/mjengo whose server component then
+  // redirects to /login?next=mjengo. waitForNavigation resolves on the first history change (the
+  // intermediate /dashboard/mjengo URL), so wait for the journey to settle on /login instead.
+  await page.click("#mjengo-hero a.mk-btn:not(.mk-btn--ghost)");
+  const settled = await page.waitForFunction(() => location.pathname === "/login", { timeout: 20000 }).then(() => true, () => false);
   const loginUrl = new URL(page.url());
-  if (loginUrl.pathname !== "/login" || loginUrl.searchParams.get("next") !== "mjengo") throw new Error(`Signed-out CTA must reach /login?next=mjengo, got ${loginUrl.pathname}${loginUrl.search}`);
-  console.log("PASS public CTA → /login?next=mjengo (intent preserved)");
+  if (!settled || loginUrl.searchParams.get("next") !== "mjengo") {
+    throw new Error(`Signed-out CTA must reach /login?next=mjengo, settled at ${loginUrl.pathname}${loginUrl.search}: ${(await text()).slice(0, 300)}`);
+  }
+  console.log("PASS public CTA (soft navigation) → /login?next=mjengo (intent preserved)");
+  // The same entry on a hard navigation (shared link, refresh): the server redirect itself.
+  const hard = await page.goto(new URL("/dashboard/mjengo", base).href, { waitUntil: "load" });
+  const hardUrl = new URL(page.url());
+  if (hardUrl.pathname !== "/login" || hardUrl.searchParams.get("next") !== "mjengo") throw new Error(`Hard navigation to /dashboard/mjengo must redirect to /login?next=mjengo, got ${hardUrl.pathname}${hardUrl.search} (HTTP ${hard?.status()})`);
+  console.log("PASS hard navigation /dashboard/mjengo → /login?next=mjengo (server redirect)");
 
   // 2. Sign in through the real form; the post-auth destination must be the MJENGO entry.
   await page.waitForSelector("#login-email");
