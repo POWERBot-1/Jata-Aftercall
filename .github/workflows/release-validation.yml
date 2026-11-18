@@ -353,6 +353,16 @@ jobs:
           npx vitest run --exclude "tests/e2e/**" 2>&1 | tee /tmp/step-suite.log
           node scripts/ci/check-test-output.mjs /tmp/step-suite.log
 
+      - name: Publish the two-tenant authorization sweep summary (R-TI-01)
+        if: always()
+        run: |
+          # Annotations stay readable when runner logs and artifacts are not; the full matrix is kept
+          # in the pg18-logs artifact. A missing summary is reported, never treated as a pass.
+          cp test-results/tenant-isolation-matrix.json /tmp/step-tenant-isolation-matrix.log 2>/dev/null || true
+          lines=$(grep -E '\[tenant-matrix\] (engine=|owner-A GET|self-scoped|[A-Za-z]+AuditEvent:)' /tmp/step-suite.log | sed 's/^.*\[tenant-matrix\] //' | head -8 || true)
+          if [ -z "$lines" ]; then echo "::warning title=tenant-matrix::no sweep summary in the suite log"; exit 0; fi
+          while IFS= read -r line; do echo "::notice title=tenant-matrix::${line:0:900}"; done <<< "$lines"
+
       - name: Report diagnostics to the pull request
         # Runner logs live behind a signed redirect that some environments cannot
         # fetch. A failure that cannot be read is a failure that cannot be fixed,

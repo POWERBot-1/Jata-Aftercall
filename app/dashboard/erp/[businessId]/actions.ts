@@ -38,6 +38,7 @@ import {
   recordPurchaseBill,
 } from "@/lib/erp/procurement";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 import {
   createRequisition,
   submitRequisition,
@@ -68,7 +69,7 @@ function back(base: string, path: string, params: Record<string, string>): never
 
 async function access(businessId: string, permission: Parameters<typeof hasErpPermission>[1], options: { entitled?: boolean } = {}) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
   try {
     return await requireErpAccess(businessId, session, { permission, requireEntitled: options.entitled });
   } catch (error) {

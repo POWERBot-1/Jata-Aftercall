@@ -208,6 +208,28 @@ jobs:
             echo "::error title=MJENGO browser failure::$detail"
           fi
           exit "$result"
+      - name: Workspace return paths in real Chrome (no cookie, revoked, forged, hostile next)
+        env:
+          JATA_DISPOSABLE_BROWSER_DB: "1"
+          BASE_URL: http://localhost:4100
+        run: |
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          set -o pipefail
+          set +e
+          node scripts/browser/dashboard-return-path.check.mjs 2>&1 | tee /tmp/return-path-browser.log
+          result=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### Workspace return paths"
+            echo '```'
+            grep -E '^(PASS|NOT TESTED|cleanup)' /tmp/return-path-browser.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$result" -ne 0 ]; then
+            detail=$(tail -30 /tmp/return-path-browser.log | tr '\n' '|' | cut -c1-5000)
+            echo "::error title=Return-path browser failure::$detail"
+          fi
+          exit "$result"
       - name: Authenticated agent application at six viewports (no activation)
         run: |
           export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"

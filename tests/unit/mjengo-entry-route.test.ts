@@ -33,9 +33,8 @@ describe("public MJENGO entry /mjengo (R-MJ-11)", () => {
     expect(await redirectTarget()).toBe("/dashboard/mjengo");
   });
 
-  it("the /dashboard layout still redirects to a bare /login, which is why public CTAs must not target /dashboard/mjengo", async () => {
+  it("public CTAs never target /dashboard/mjengo directly (the entry decides with the real session first)", async () => {
     const { readFileSync } = await import("node:fs");
-    expect(readFileSync("app/dashboard/layout.tsx", "utf8")).toContain('if (!session) redirect("/login");');
     for (const file of ["app/products/mjengo-os/page.tsx", "app/products/[slug]/page.tsx"]) {
       expect(readFileSync(file, "utf8")).not.toMatch(/href[=:]\s*["{]?\s*["`]\/dashboard\/mjengo["`]/);
     }
@@ -43,14 +42,15 @@ describe("public MJENGO entry /mjengo (R-MJ-11)", () => {
 });
 
 describe("signed-out MJENGO deep links keep the destination (R-MJ-11 proxy)", () => {
-  it("no session cookie → /login?next=mjengo for /dashboard/mjengo and its business routes", async () => {
+  it("no session cookie → /login?next=… keeps the MJENGO entry token and exact business routes", async () => {
     const { NextRequest } = await import("next/server");
     const { proxy } = await import("@/proxy");
-    for (const path of ["/dashboard/mjengo", "/dashboard/mjengo/biz_1", "/dashboard/mjengo/biz_1/invoices"]) {
+    // The MJENGO entry keeps its token; deeper routes keep their exact path (R-RT-01).
+    for (const [path, expected] of [["/dashboard/mjengo", "/login?next=mjengo"], ["/dashboard/mjengo/biz_1", "/login?next=/dashboard/mjengo/biz_1"], ["/dashboard/mjengo/biz_1/invoices", "/login?next=/dashboard/mjengo/biz_1/invoices"]]) {
       const res = proxy(new NextRequest(`http://localhost:4100${path}`));
       expect(res.status).toBe(307);
       const to = new URL(res.headers.get("location")!);
-      expect(`${to.pathname}${to.search}`).toBe("/login?next=mjengo");
+      expect(`${to.pathname}${to.search}`).toBe(expected);
       expect(to.origin).toBe("http://localhost:4100");
     }
   });
@@ -64,9 +64,10 @@ describe("signed-out MJENGO deep links keep the destination (R-MJ-11 proxy)", ()
     expect(res.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("matches only MJENGO routes and uses the real session cookie name", async () => {
+  it("matches workspace routes only and uses the real session cookie name", async () => {
     const mod = await import("@/proxy");
-    expect(mod.config.matcher).toEqual(["/dashboard/mjengo", "/dashboard/mjengo/:path*"]);
+    // R-RT-01 widened the matcher from MJENGO only to the whole workspace (see dashboard-return-path tests).
+    expect(mod.config.matcher).toEqual(["/dashboard", "/dashboard/:path*"]);
     const { readFileSync } = await import("node:fs");
     expect(readFileSync("lib/auth.ts", "utf8")).toContain(`const SESSION_COOKIE = "${mod.MJENGO_SESSION_COOKIE}";`);
     expect(readFileSync("proxy.ts", "utf8")).not.toMatch(/from "@\/lib\/(auth|db)"/);

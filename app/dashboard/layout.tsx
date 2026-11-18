@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 import Link from "next/link";
 import prisma from "@/lib/db";
 import { BrandMark } from "@/components/ui/BrandMark";
@@ -26,7 +27,9 @@ export const dynamic = "force-dynamic";
  */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  // Signed out, expired or revoked: keep the requested workspace destination (R-RT-01). proxy.ts sets
+  // the header; loginPathFor() re-validates it and falls back to a bare /login.
+  if (!session) await redirectToDashboardLogin();
 
   // A brand-new account is sent to onboarding. A *member* of someone else's business (staff, or
   // an invited collaborator) is not: they already have a workspace to open, and sending them to

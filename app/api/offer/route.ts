@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
+import { assertBusinessOwnership, guardTenantMutation, TenantError } from "@/lib/tenant";
 import { sanitizeText } from "@/lib/validation";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { safeUrl } from "@/lib/experience/document";
@@ -72,7 +72,13 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const businessId = searchParams.get("businessId");
   if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
-  await assertBusinessOwnership(businessId, session);
+  try {
+    await assertBusinessOwnership(businessId, session);
+  } catch (error) {
+    // R-TI-02: the ownership refusal was thrown uncaught, so another tenant got a 500 instead of a 403.
+    if (error instanceof TenantError) return NextResponse.json({ error: "Forbidden" }, { status: error.status });
+    throw error;
+  }
   await prisma.offer.delete({ where: { businessId } }).catch(() => null);
   return NextResponse.json({ ok: true });
 }
