@@ -2,6 +2,7 @@ import { formatDate } from "@/lib/format";
 import { requireAdminPage } from "@/lib/adminGuard";
 import prisma from "@/lib/db";
 import { AdminPage, AdminStatus, AdminTable } from "@/components/admin/AdminUI";
+import { renewalCounts } from "@/lib/admin/platform-figures";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,16 @@ export default async function AdminSubscriptions() {
     expiresAt: Date | null;
   };
   const [subs, entitlements] = await Promise.all([
-    prisma.subscription.findMany({ orderBy: { expiresAt: "asc" }, include: { business: true, plan: true, user: true } }),
+    // Only displayed fields are read (no password hash or session version reaches the render).
+    prisma.subscription.findMany({
+      orderBy: [{ expiresAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true, businessId: true, status: true, startAt: true, expiresAt: true,
+        business: { select: { name: true } },
+        plan: { select: { name: true } },
+        user: { select: { email: true } },
+      },
+    }),
     // §41.10 #12 — administrative entitlement visibility: the Front Desk tier each business
     // actually holds, read alongside the subscription. One query, no writes.
     prisma.aIPackageEntitlement.findMany({
@@ -23,13 +33,13 @@ export default async function AdminSubscriptions() {
     }) as Promise<FrontDeskEntitlementRow[]>,
   ]);
   const entitlementByBusiness = new Map(entitlements.map((e) => [e.businessId, e]));
-  const expiring = subs.filter((s) => s.expiresAt && s.expiresAt.getTime() - Date.now() < 1000 * 60 * 60 * 24 * 14).length;
+  const { dueSoon, overdue } = renewalCounts(subs);
 
   return (
     <AdminPage
       kicker="Platform admin"
       title="Subscriptions"
-      meta={`${subs.length} ${subs.length === 1 ? "subscription" : "subscriptions"}, soonest expiry first${expiring ? ` — ${expiring} due within 14 days` : ""}.`}
+      meta={`${subs.length} ${subs.length === 1 ? "subscription" : "subscriptions"}, soonest expiry first${dueSoon ? ` — ${dueSoon} live due within 14 days` : ""}${overdue ? ` — ${overdue} still marked live but past expiry` : ""}.`}
     >
       {subs.length === 0 ? (
         <p className="ws-muted">No subscription has been recorded yet.</p>
