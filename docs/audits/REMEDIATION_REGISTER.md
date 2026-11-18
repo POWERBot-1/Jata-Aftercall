@@ -229,3 +229,21 @@ Local full unit suite at `6b45b45`: 404 files / 4,737 tests PASS, 0 FAIL, 343 sk
 | R-MJ-11 | P1 | Dashboard layout's bare `/login` redirect dropped `?next=mjengo` (found in real Chrome, run 44247022065) | `66d8b08` (`app/mjengo` entry + MJENGO-only `proxy.ts`) | `mjengo-entry-route` (6) | IMPLEMENTED · **CI PASS** real Chrome |
 
 CI at `66d8b08`: 21 pass / 2 fail / 1 skipped. Every technical gate passes. Red: programme-completeness (fail-closed) and Vercel Preview (isolation guard, 7 branch-scoped variables missing; owner action). Residual: a stale or forged cookie on a `/dashboard/mjengo` deep link falls back to a bare `/login`, though access is still refused. Details in `WHOLE_PLATFORM_REMEDIATION_2026-11-17.md` §7. Verdict: **NOT READY**.
+
+**Batches 3–4 — return paths, two-tenant authorization, admin reporting (draft PR #126):** full detail in `WHOLE_PLATFORM_REMEDIATION_2026-11-17.md` §8.
+
+| ID | Pri | Finding | Fix commit | Regression test | Status / evidence |
+|---|---|---|---|---|---|
+| R-RT-01 | P1 | Every `/dashboard/*` deep link lost its destination on sign-in (layout bare redirect; ignored `callbackUrl`) | `d36f119` | `dashboard-return-path`, Chrome A–E | **PASS** unit + real Chrome A–E (`275e117`, run 44275702188) |
+| R-RT-02 | P2 | Owner AI-page preview used an ignored `callbackUrl` | `cc33999` | unit, Chrome F/G | **PASS** unit + real Chrome F/G (`275e117`) |
+| R-TI-01 | P0 | No platform-wide two-tenant proof | `d36f119` | `tenant-isolation-matrix-postgres` | **PASS** PG18 native (187 routes, 979 calls) |
+| R-TI-02 | P1 | Offer DELETE 500 cross-tenant | `d36f119` | matrix | **PASS** PG18 |
+| R-TI-03 | P0 | Membership-only writes: VIEWER could rename the business, redirect phone/WhatsApp, create products | `1230e3a` | `role-required-writes`, matrix phase 3 | **PASS** PG18 (run 44271000133) |
+| R-TI-04 | P1 | ERP `bootstrapWorkspaceAction` behind `WORKSPACE_READ` (any member) | `e94f2f3` | `erp-server-action-permissions` (58) | **PASS** unit (mocked session, real role matrix); CI full-suite |
+| R-ADM-01 | P1 | Admin tiles mixed revenue types and currencies; failed reads shown as 0 | `18d471e` | `admin-platform-figures` | IMPLEMENTED · PASS |
+| R-ADM-02 | P1 | Admin figures not reconciled with the DB | `18d471e` | `admin-reporting-reconciliation-postgres` | **PASS** PGlite + PG18 job |
+| R-ADM-03 | P1 | POS `activatedAt` reset on every request; denied requests rewrote A's entitlement row | `1230e3a` | `pos-entitlement-sync`, matrix | **PASS** |
+| R-CI-02 | P1 | Real-Chrome red `d36f119`..`e94f2f3`: stale MJENGO assertion vs R-RT-01, then return-path harness read the loading skeleton; later browser steps skipped | `e94f2f3`, `275e117` | `mjengo-authenticated.check.mjs`, `dashboard-return-path.check.mjs` | **PASS** real Chrome (run 44275702188) |
+
+CI at `275e117`: 21 pass / 1 fail (programme-completeness, fail-closed) / 1 skipped; Vercel `dpl_GMLr1xLGRgoxfTYSAbQ1tRzedhSH` failed on the isolation guard. Blocked: Vercel Preview (branch-scoped variables; owner), Paystack Preview acceptance, R2 durability, Neon native PITR, R-DEP-02 picomatch (upstream), R-CI-01. Verdict: **NOT READY**.
+
