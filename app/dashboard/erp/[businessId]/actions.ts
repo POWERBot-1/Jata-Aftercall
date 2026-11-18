@@ -104,7 +104,11 @@ export async function bootstrapWorkspaceAction(form: FormData) {
   const base = erpBasePath(businessId);
   let error: string | null = null;
   try {
-    const context = await access(businessId, "WORKSPACE_READ");
+    // R-TI-04: bootstrapping creates the ERP configuration (industry pack, feature flags) and
+    // re-creates any default tax rules, templates and channels the owner removed. That is a
+    // settings change, so it needs the same permission as saveBusinessProfileAction, not
+    // WORKSPACE_READ (which every member, including VIEWER, holds).
+    const context = await access(businessId, "MANAGE_SETTINGS");
     await bootstrapErpWorkspace(context.business.id, {
       businessId,
       actorId: context.session.userId,

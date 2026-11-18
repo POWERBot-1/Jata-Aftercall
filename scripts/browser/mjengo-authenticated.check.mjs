@@ -89,12 +89,17 @@ try {
     throw new Error(`Signed-out CTA must reach /login?next=mjengo, settled at ${loginUrl.pathname}${loginUrl.search}: ${(await text()).slice(0, 300)}`);
   }
   console.log("PASS public CTA (soft navigation) → /login?next=mjengo (intent preserved)");
-  // Hard navigations (shared link, refresh): the public entry and a workspace deep link (proxy.ts).
-  for (const entry of ["/mjengo", "/dashboard/mjengo", `/dashboard/mjengo/${owner.business.id}`]) {
+  // Hard navigations (shared link, refresh): the public entries keep the `mjengo` token, and a
+  // workspace deep link keeps its exact validated path (R-RT-01 superseded R-MJ-11's coarser
+  // "every MJENGO path → next=mjengo"; the [businessId] layout still re-checks ownership and
+  // entitlement after sign-in). The token entry runs last so the sign-in below proves that the
+  // `mjengo` entry resolves the single owned business.
+  const deepLink = `/dashboard/mjengo/${owner.business.id}`;
+  for (const [entry, expectedNext] of [["/mjengo", "mjengo"], [deepLink, deepLink], ["/dashboard/mjengo", "mjengo"]]) {
     const hard = await page.goto(new URL(entry, base).href, { waitUntil: "load" });
     const hardUrl = new URL(page.url());
-    if (hardUrl.pathname !== "/login" || hardUrl.searchParams.get("next") !== "mjengo") throw new Error(`Hard navigation to ${entry} must redirect to /login?next=mjengo, got ${hardUrl.pathname}${hardUrl.search} (HTTP ${hard?.status()})`);
-    console.log(`PASS hard navigation ${entry} → /login?next=mjengo (server redirect)`);
+    if (hardUrl.pathname !== "/login" || hardUrl.searchParams.get("next") !== expectedNext) throw new Error(`Hard navigation to ${entry} must redirect to /login?next=${expectedNext}, got ${hardUrl.pathname}${hardUrl.search} (HTTP ${hard?.status()})`);
+    console.log(`PASS hard navigation ${entry} → /login?next=${expectedNext} (server redirect)`);
   }
 
   // 2. Sign in through the real form; the post-auth destination must be the MJENGO entry.
