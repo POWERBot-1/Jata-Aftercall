@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * Platform overview.
  *
  * Every tile is a count or a sum the database actually returned — customers, businesses,
- * publication state, subscriptions, recorded page events and settled revenue. No growth curve is
+ * publication state, subscriptions, recorded page events and PAID-status payment amounts. No growth curve is
  * drawn because the schema keeps events, not a daily roll-up: a chart here would be invented.
  */
 export default async function AdminOverview() {
@@ -71,7 +71,7 @@ export default async function AdminOverview() {
         </div>
         {otherCurrencyRows > 0 ? (
           <p className="ws-muted ws-tiny" data-testid="admin-unreported-payments">
-            {formatNumber(otherCurrencyRows)} settled {otherCurrencyRows === 1 ? "payment is" : "payments are"} in another currency or of an unrecognised kind and {otherCurrencyRows === 1 ? "is" : "are"} not included in either KES figure. No exchange rate is applied.
+            {formatNumber(otherCurrencyRows)} PAID-status {otherCurrencyRows === 1 ? "payment record is" : "payment records are"} in another currency or of an unrecognised kind and {otherCurrencyRows === 1 ? "is" : "are"} not included in either KES figure. No exchange rate is applied.
           </p>
         ) : null}
         <p className="ws-muted ws-tiny">
