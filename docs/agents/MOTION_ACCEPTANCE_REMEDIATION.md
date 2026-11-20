@@ -51,3 +51,14 @@ Artifacts (not independently inspected here):
 - [Partial capture package](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44748472374/artifacts/14635275675)
 
 **Disposition:** the isolated cancellation, repeated-preference, queue-capacity, 20-family capture and bounded route observations have exact-head PASS evidence. The overall motion acceptance remains **BLOCKED** pending encoded before/after recordings, matched historical comparisons, complete generated/published AI and commerce journeys, lifecycle/re-entry/cleanup coverage, and independent visual inspection of all required artifacts. No programme status is promoted by these partial results.
+
+
+## Follow-up exact-head review — 2026-11-20, head `165ef68c2dda52f2d266445690e712b75623f5ec`
+
+[Motion isolated browser evidence run 44749405477](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44749405477) completed successfully on this feature head. It reproduced the 480/480 candidate observations, 42-row route/state matrix with zero assertion errors, real reduced-motion cancellation, six repeated preference transitions, eight-slot queue stress (17 targets, 8 active maximum, 9 initially queued, all 17 completed), and 48/48 route/state observations. The historical capture job again produced 12 legacy storefront viewport/motion states from the owner-named pre-motion revision.
+
+I also inspected the six JPEG previews emitted directly into the exact-head CI job log. The visible sample showed rendered storefront/route content and action areas; I did not see an obvious clipped primary heading or horizontal overflow in those six samples. This is **sample-only visual review**: the six previews are not the full 480-image matrix and do not establish every viewport, family, route or state as visually accepted.
+
+The runner again emitted `MOTION_ENCODER_BLOCKED`: ffmpeg was unavailable, and the workflow explicitly states that no encoded recording evidence is claimed for this head. The later 48/48 observation summary is not treated as a substitute for those required recordings. Uploaded full artifacts remain available from the run but have not been exhaustively inspected here.
+
+**Updated disposition:** exact-head PASS for the bounded browser assertions and sample preview review; overall motion acceptance remains **BLOCKED** for encoded before/after recordings, same-fixture historical comparison across all families/routes/states, complete published AI and commerce interactions, lifecycle/re-entry/cleanup acceptance, and exhaustive independent visual inspection. No broad motion acceptance status is promoted.
