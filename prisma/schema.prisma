@@ -789,10 +789,17 @@ model Subscription {
   startAt    DateTime?
   expiresAt  DateTime?
   graceUntil DateTime?
+  // Immutable-at-settlement commercial snapshot. Null means recurring value is not yet evidenced.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
   @@index([userId])
+  @@index([status, expiresAt])
 }
 
 enum SubscriptionStatus {
@@ -816,6 +823,16 @@ model Payment {
   currency   String        @default("KES")
   status     PaymentStatus @default(PENDING)
   paystackId String?
+  // UNKNOWN is mandatory for legacy/unclassified rows; never infer environment from status.
+  environment PaymentEnvironment @default(UNKNOWN)
+  providerSettledAt DateTime?
+  providerSettlementReference String?
+  providerFeeMinor BigInt?
+  providerTaxMinor BigInt?
+  settledRefundMinor BigInt?
+  settledChargebackMinor BigInt?
+  reconciliationStatus String @default("UNRECONCILED")
+  reconciledAt DateTime?
   raw        String?       @db.Text
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
@@ -832,6 +849,12 @@ model Payment {
   @@index([userId])
   @@index([businessId])
   @@index([orderId])
+}
+
+enum PaymentEnvironment {
+  UNKNOWN
+  TEST
+  LIVE
 }
 
 enum PaymentStatus {
