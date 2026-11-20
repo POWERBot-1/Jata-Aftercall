@@ -9,7 +9,7 @@ import type { SessionPayload } from "./auth";
  */
 export async function requireAdminPage(): Promise<SessionPayload> {
   const access = await getControlIdentity();
-  if (!access.ok) {
+  if (access.ok === false) {
     if (access.status === 401) redirect("/login");
     redirect("/control/policy");
   }
