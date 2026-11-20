@@ -79,9 +79,14 @@ function tableColumns(table: string): Map<string, string> {
       columns.set(match[1], `${match[2]} ${match[3]}`.trim());
     }
   }
-  // Columns added later by an additive migration are part of the table too (§80).
-  for (const add of `${migration}\n${posAdditiveMigration}`.matchAll(new RegExp(`ALTER TABLE "${table}"\\s+ADD COLUMN(?: IF NOT EXISTS)? "([\\w]+)"\\s+([A-Z]+(?:\\(\\d+\\))*)([^;\\n]*)`, "g"))) {
-    columns.set(add[1], `${add[2]} ${add[3]}`.trim());
+  // Columns added later by additive migrations are part of the table too (§80).
+  // One ALTER TABLE may contain several ADD COLUMN clauses; parse every clause in that table statement.
+  const additiveSql = `${migration}\n${posAdditiveMigration}`;
+  const tableStatement = new RegExp(`ALTER TABLE "${table}"([\\s\\S]*?);`, "g");
+  for (const statement of additiveSql.matchAll(tableStatement)) {
+    for (const add of statement[1].matchAll(/ADD COLUMN(?: IF NOT EXISTS)? "([\\w]+)"\\s+([A-Z]+(?:\\(\\d+\\))*)([^,;\\n]*)/g)) {
+      columns.set(add[1], `${add[2]} ${add[3]}`.trim());
+    }
   }
   return columns;
 }
