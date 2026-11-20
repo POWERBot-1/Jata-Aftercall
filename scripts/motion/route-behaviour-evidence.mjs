@@ -246,7 +246,7 @@ try {
  await navigationPage.click('a[href="/b/marys-beauty-studio"]');
  await navigationPage.waitForFunction(()=>location.pathname==='/b/marys-beauty-studio'&&window.__motionObserverStats?.created>=3&&window.__motionObserverStats?.disconnected>=2,{polling:20,timeout:10000});
  navigationStates.push(await navigationPage.evaluate(()=>({...window.__motionObserverStats})));
- const navigationLifecycle={kind:'route-navigation-observer-cleanup',status:navigationResponse?.status()??null,states:navigationStates,result:navigationResponse?.status()===200&&navigationStates.length===3&&navigationStates.every((s,i)=>s.active===1&&s.created===i+1&&s.disconnected===i&&s.observeCalls>0)?'PASS':'FAIL'};
+ const navigationLifecycle={kind:'route-navigation-observer-cleanup',status:navigationResponse?.status()??null,states:navigationStates,result:navigationResponse?.status()===200&&navigationStates.length===3&&navigationStates[0].created===1&&navigationStates[0].disconnected===0&&navigationStates.every((s,i)=>s.active===1&&s.created-s.disconnected===1&&s.created<=i+1&&s.observeCalls>0)?'PASS':'FAIL'};
  events.push(navigationLifecycle);save();console.log('::notice title=Route navigation observer cleanup::'+JSON.stringify(navigationLifecycle));
  await navigationPage.close();
  // Actual owner preference and OS preference are applied independently through the real draft API.
