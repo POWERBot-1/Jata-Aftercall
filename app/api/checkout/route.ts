@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, assertBusinessRole, TenantError } from "@/lib/tenant";
 import { initializeTransaction, toKobo } from "@/lib/paystack";
+import { getPaystackSecretKey } from "@/lib/payments/config";
 import { getBaseUrl } from "@/lib/url";
 import { generatePaymentReference } from "@/lib/paymentReference";
 import { PAYMENT_CURRENCY } from "@/lib/paymentCurrency";
@@ -230,7 +231,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.PAYSTACK_SECRET_KEY) {
+    if (!getPaystackSecretKey()) {
       if (process.env.NODE_ENV === "production") {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
         return fail(
