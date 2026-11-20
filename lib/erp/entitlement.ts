@@ -226,6 +226,12 @@ export async function syncErpEntitlement(businessId: string, client: any = prism
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference ?? null,
+      // Snapshot the server-resolved price only after a provider-verified payment row exists.
+      recurringAmountKES: plan.priceKES,
+      recurringDiscountKES: 0,
+      recurringCurrency: payment.currency ?? "KES",
+      recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: payment.providerSettledAt ?? now,
       cancelledAt: null,
     };
     try {
