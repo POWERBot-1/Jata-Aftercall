@@ -46,15 +46,15 @@ export default async function AdminOverview() {
   ];
   const activity: Array<[string, string, string]> = [
     ["Payments recorded", formatNumber(payments), "All statuses, all time"],
-    ["Subscription revenue (KES)", money ? kes(money.subscriptionRevenueMinor) : UNAVAILABLE, money ? `PAID plan payments only · ${formatNumber(money.subscriptionPayments)} settled` : "The payment query failed; no figure is inferred"],
-    ["Customer payments to businesses (KES)", money ? kes(money.merchantTakingsMinor) : UNAVAILABLE, money ? `PAID orders and deposits · not Jata revenue · ${formatNumber(money.merchantPayments)} settled` : "The payment query failed; no figure is inferred"],
+    ["PAID subscription payment amount (KES)", money ? kes(money.subscriptionRevenueMinor) : UNAVAILABLE, money ? `Payment.status = PAID · ${formatNumber(money.subscriptionPayments)} records` : "The payment query failed; no figure is inferred"],
+    ["PAID customer payments to businesses (KES)", money ? kes(money.merchantTakingsMinor) : UNAVAILABLE, money ? `PAID orders and deposits · not Jata revenue · ${formatNumber(money.merchantPayments)} records` : "The payment query failed; no figure is inferred"],
     ["Page views", eventCount("PAGE_VIEW"), "Recorded by owner pages"],
     ["WhatsApp taps", eventCount("WHATSAPP_CLICK"), "Recorded button taps"],
     ["Calls / directions", analytics ? `${eventCount("CALL_CLICK")} / ${eventCount("DIRECTIONS_CLICK")}` : UNAVAILABLE, "Recorded button taps"],
   ];
 
   return (
-    <AdminPage kicker="Platform admin" title="Admin overview" meta="Counts and sums only. Every figure below is read from the database at request time.">
+    <AdminPage kicker="Platform admin" title="Admin overview" meta="Counts and PAID-status payment amounts only; not a cash-reconciliation or MRR/ARR report.">
       <WorkspacePanel title="Accounts and access" meta="Coverage, not growth">
         <div className="ws-stats ws-stats--5">
           {accounts.map(([label, value, hint]) => (
@@ -75,7 +75,7 @@ export default async function AdminOverview() {
           </p>
         ) : null}
         <p className="ws-muted ws-tiny">
-          There is no daily roll-up in the schema, so no trend line is drawn. An empty figure means nothing has been recorded — not zero demand.
+          These are PAID-status record amounts, not verified net cash collected, MRR or ARR. This view does not classify test/live mode per payment or reconcile provider settlement, refunds, chargebacks, fees or tax. There is no daily roll-up in the schema, so no trend line is drawn. An empty figure means nothing has been recorded — not zero demand.
         </p>
       </WorkspacePanel>
 
