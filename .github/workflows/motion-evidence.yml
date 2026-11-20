@@ -62,12 +62,16 @@ jobs:
             ffmpeg -version | head -1
             exit 0
           fi
-          # GitHub-hosted images may omit the apt package index or block Ubuntu mirrors.
-          # Use the pinned npm-distributed Linux binary as a deterministic fallback.
-          npm install --no-save --ignore-scripts ffmpeg-static
+          # Try the runner's cached apt package index first; do not block on apt-get update.
+          if sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
+            ffmpeg -version | head -1
+            exit 0
+          fi
+          # If the apt index is unavailable, use the npm-distributed static binary.
+          npm install --no-save --ignore-scripts --prefer-offline ffmpeg-static
           ffmpeg_bin="$(node -p "require('ffmpeg-static')")"
           if [ -z "$ffmpeg_bin" ] || [ ! -x "$ffmpeg_bin" ]; then
-            echo "::error title=MOTION_ENCODER_BLOCKED::ffmpeg-static package did not provide an executable binary."
+            echo "::error title=MOTION_ENCODER_BLOCKED::Neither the runner apt package nor ffmpeg-static provided an executable binary."
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/ffmpeg-bin"
