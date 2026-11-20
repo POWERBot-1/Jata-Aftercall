@@ -7,6 +7,7 @@ import { AI_FRONT_DESK_VOICE_KEY, assertFrontDeskTierPricing, FRONT_DESK_TIER_KE
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
 import { VOICE_SELLING_CONDITIONS } from "@/lib/productCatalogue";
 import { MarketingLayout, MarketingSection } from "@/components/marketing/MarketingShell";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -227,6 +228,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       }).catch(() => [])
     : [];
   const voiceReadiness = getVoiceReadiness();
+  const session = await getSession();
   const sections = slug === "ai-front-desk"
     ? product.sections.map((section) => {
         if (section.heading === "Entitlement and price") {
@@ -288,6 +290,36 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
         </MarketingSection>
       ))}
+      {slug === "business-page" ? (
+        <MarketingSection title="Choose your Business Page plan" tone="cream" id="plans">
+          <div className="mk-grid">
+            <article className="mk-card" data-business-page-plan="MONTHLY">
+              <h3>Monthly</h3>
+              <p className="mk-card__price">KES 149 / 30 days</p>
+              <p>Full Business Page access, billed every 30 days.</p>
+              <Link href={session ? "/dashboard/subscription" : "/register"}>
+                {session ? "Choose from my dashboard" : "Create an account to choose Monthly"}
+              </Link>
+            </article>
+            <article className="mk-card" data-business-page-plan="ANNUAL">
+              <h3>Annual</h3>
+              <p className="mk-card__price">KES 999 / 365 days</p>
+              <p>The same Business Page access, paid once for a full year.</p>
+              <Link href={session ? "/dashboard/subscription" : "/register"}>
+                {session ? "Choose from my dashboard" : "Create an account to choose Annual"}
+              </Link>
+            </article>
+          </div>
+          <div className="mk-prose">
+            <p>Both options use the same Business Page, account and Paystack confirmation flow. Your access starts only after the payment is confirmed. Existing customers can sign in and choose either billing period from their subscription dashboard.</p>
+          </div>
+          {!session ? (
+            <div className="mk-btn-row">
+              <Link href="/login" className="mk-btn mk-btn--ghost">Already have an account? Sign in</Link>
+            </div>
+          ) : null}
+        </MarketingSection>
+      ) : null}
       <MarketingSection title="Try it" tone="cream" id="try">
         <div className="mk-btn-row">
           {(product.actions ?? []).map((action) => (
