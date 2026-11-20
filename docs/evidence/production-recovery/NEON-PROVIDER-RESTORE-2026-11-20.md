@@ -49,6 +49,9 @@ A second snapshot request targeting the historical timestamp `2026-11-20T19:45:0
 
 ## Automatic snapshot schedule inspection
 
+Read-only project metadata reports plan `free_v3`, six-hour history retention (`21600` seconds), and a ten-branch limit with three branches currently present. Neon’s published snapshot guidance states automatic daily/weekly/monthly scheduling is available on paid plans; see https://neon.com/blog/three-ways-to-use-your-snapshots. The empty schedule may therefore require a plan change to enable, but no plan upgrade or paid action was taken. The `snapshots limit exceeded` response is separately recorded; its exact quota cause was not exposed by the API.
+
+
 A read-only Neon provider query for the production branch returned an empty automatic snapshot schedule (`schedule: []`). No schedule was configured or changed because that would mutate production provider configuration and could affect usage/cost; separate owner authorization is required.
 
 ## Remaining recovery blockers
