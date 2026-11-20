@@ -76,7 +76,7 @@ try {
    const selector=target.auth?'.jata-ai-motion':'.eb-scope';await p.waitForFunction(s=>document.querySelector(s)?.dataset.renderMode,{timeout:10000},selector).catch(()=>{});
    await p.evaluate(async()=>{for(const e of document.querySelectorAll('[data-motion-recipe]')){e.scrollIntoView({block:'center',behavior:'instant'});await new Promise(r=>setTimeout(r,120));}await new Promise(r=>setTimeout(r,650));});
    const data=await p.evaluate(s=>{const scope=document.querySelector(s);return {mode:scope?.dataset.renderMode,reason:scope?.dataset.motionReason,engine:scope?.dataset.motionEngine,mediaMatches:window.__routeMediaCurrent?.()??null,mediaPreference:window.__routeMediaCurrent?.()===true?'reduce':window.__routeMediaCurrent?.()===false?'no-preference':null,targets:scope?.querySelectorAll('[data-motion-recipe]').length,probes:scope?.querySelectorAll('[data-motion-probe]').length,trace:window.__routeMotionTrace||[],visibleText:document.querySelector('h1')?.textContent};},selector);
-   const name=`${target.name}-${width}x${height}.jpg`;await p.screenshot({path:path.join(out,name),type:'jpeg',quality:50});
+   await p.evaluate(()=>window.scrollTo(0,0));await new Promise(r=>setTimeout(r,180));const name=`${target.name}-${width}x${height}.jpg`;await p.screenshot({path:path.join(out,name),type:'jpeg',quality:50,fullPage:true});
    const row={sha,browser:browserVersion,route:target.route,viewport:`${width}x${height}`,status:response?.status()??null,...data,screenshot:name};rows.push(row);save();
   }
  }
