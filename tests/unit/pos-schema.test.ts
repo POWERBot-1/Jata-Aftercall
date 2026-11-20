@@ -29,6 +29,11 @@ const POS_MIGRATIONS = [
   "20261104000000_pos_repayment_idempotency",
 ];
 const migration = POS_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
+// Financial evidence adds nullable recurring-value snapshots to dedicated product subscriptions.
+// Keep this separate from the POS-only migration contract below: it also changes Payment and
+// shared Subscription, which must not be mistaken for POS-owned schema changes.
+const POS_ADDITIVE_MIGRATIONS = ["20261203000000_financial_evidence_contract"];
+const posAdditiveMigration = POS_ADDITIVE_MIGRATIONS.map((dir) => readFileSync(path.join(root, "prisma/migrations", dir, "migration.sql"), "utf8")).join("\n");
 const storeSource = readFileSync(path.join(root, "lib/pos/store.ts"), "utf8");
 const dbSource = readFileSync(path.join(root, "lib/db.ts"), "utf8");
 
@@ -75,7 +80,7 @@ function tableColumns(table: string): Map<string, string> {
     }
   }
   // Columns added later by an additive migration are part of the table too (§80).
-  for (const add of migration.matchAll(new RegExp(`ALTER TABLE "${table}"\\s+ADD COLUMN(?: IF NOT EXISTS)? "([\\w]+)"\\s+([A-Z]+(?:\\(\\d+\\))*)([^;\\n]*)`, "g"))) {
+  for (const add of `${migration}\n${posAdditiveMigration}`.matchAll(new RegExp(`ALTER TABLE "${table}"\\s+ADD COLUMN(?: IF NOT EXISTS)? "([\\w]+)"\\s+([A-Z]+(?:\\(\\d+\\))*)([^;\\n]*)`, "g"))) {
     columns.set(add[1], `${add[2]} ${add[3]}`.trim());
   }
   return columns;
