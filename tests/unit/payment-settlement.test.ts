@@ -45,10 +45,12 @@ describe("atomic, idempotent payment settlement", () => {
   afterEach(() => vi.useRealTimers());
 
   it("settles payment, subscription, business status and event marker together", async () => {
-    const result = await activateSubscriptionForPayment("pay-a", "event-1", { paystackId: "56", raw: { verified: true } });
+    const result = await activateSubscriptionForPayment("pay-a", "event-1", { paystackId: "56", providerConfirmedAt: "2026-01-01T00:00:00.000Z", raw: { verified: true } });
     expect(result.alreadySettled).toBe(false);
-    expect(state.payment).toMatchObject({ status: "PAID", paystackId: "56" });
-    expect(state.subscription).toMatchObject({ status: "ACTIVE", businessId: "biz-a", userId: "user-a", planId: "plan-a" });
+    expect(state.payment).toMatchObject({ status: "PAID", paystackId: "56", providerSettledAt: new Date("2026-01-01T00:00:00.000Z"), providerSettlementReference: "jata-ref" });
+    expect(state.payment).not.toHaveProperty("providerFeeMinor");
+    expect(state.payment).not.toHaveProperty("providerTaxMinor");
+    expect(state.subscription).toMatchObject({ status: "ACTIVE", businessId: "biz-a", userId: "user-a", planId: "plan-a", recurringAmountKES: 100, recurringDiscountKES: 0, recurringCurrency: "KES", recurringIntervalDays: 30 });
     expect(state.subscription.startAt.toISOString()).toBe("2026-01-01T00:00:00.000Z");
     expect(state.subscription.expiresAt.toISOString()).toBe("2026-01-31T00:00:00.000Z");
     expect(state.processed.has("event-1")).toBe(true);
