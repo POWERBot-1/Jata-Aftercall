@@ -47,3 +47,39 @@ ALTER TABLE "Subscription"
     );
 
 CREATE INDEX "Subscription_status_expiresAt_idx" ON "Subscription"("status", "expiresAt");
+
+-- Dedicated product subscription snapshots. Legacy rows intentionally remain NULL.
+-- Do not count these products in MRR until verified settlement writes all snapshot fields.
+DO $$
+DECLARE
+  table_name TEXT;
+BEGIN
+  FOREACH table_name IN ARRAY ARRAY[
+    'PosSubscription',
+    'AutopilotSubscription',
+    'ErpSubscription',
+    'MjengoSubscription',
+    'ErpProSubscription'
+  ] LOOP
+    EXECUTE format(
+      'ALTER TABLE %I
+         ADD COLUMN "recurringAmountKES" INTEGER,
+         ADD COLUMN "recurringDiscountKES" INTEGER,
+         ADD COLUMN "recurringCurrency" TEXT,
+         ADD COLUMN "recurringIntervalDays" INTEGER,
+         ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3)',
+      table_name
+    );
+    EXECUTE format(
+      'ALTER TABLE %I ADD CONSTRAINT %I CHECK (
+         ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
+         ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
+         ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
+         ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
+         ("recurringCurrency" IS NULL OR "recurringCurrency" ~ ''^[A-Z]{3}$'')
+       )',
+      table_name,
+      table_name || '_recurring_value_nonnegative_check'
+    );
+  END LOOP;
+END $$;
