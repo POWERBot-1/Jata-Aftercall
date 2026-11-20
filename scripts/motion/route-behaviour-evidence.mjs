@@ -213,6 +213,41 @@ try {
  const queueStress={kind:'eight-slot-queue-stress',status:queueResponse?.status()??null,early:queueEarly,complete:queueComplete,result:queueResponse?.status()===200&&queueEarly.targets>8&&queueEarly.visible===queueEarly.targets&&queueEarly.started===8&&queueEarly.queued===queueEarly.targets-8&&queueEarly.active<=8&&queueComplete.targets===queueEarly.targets&&queueComplete.started===queueEarly.targets&&queueComplete.active===0&&queueComplete.maxActive<=8?'PASS':'FAIL'};
  events.push(queueStress);save();console.log('::notice title=Eight-slot motion queue stress::'+JSON.stringify(queueStress));
  await queuePage.close();
+ // Saturated queue interruption: hidden/visible lifecycle must cancel active work and re-observe
+ // only the not-yet-started targets when the document becomes visible again.
+ const lifecyclePage=await browser.newPage();
+ await lifecyclePage.setViewport({width:1366,height:5000,deviceScaleFactor:1});
+ await lifecyclePage.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+ const lifecycleResponse=await lifecyclePage.goto(new URL('/dev/motion-preview?preference=motion&queue=1',base).href,{waitUntil:'domcontentloaded'});
+ await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return s?.dataset.motionEngine==='mini'&&t.length>8&&t.filter(e=>e.dataset.motionPlayed==='mini').length>=8;},{polling:10,timeout:12000});
+ const lifecycleCdp=await lifecyclePage.createCDPSession();
+ let hiddenState=null,visibleState=null,visibilitySupported=true;
+ try{
+  await lifecycleCdp.send('Emulation.setPageVisibilityState',{visibilityState:'hidden'});
+  await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const running=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length;return document.visibilityState==='hidden'&&s?.dataset.renderMode==='lite'&&s?.dataset.motionReason==='background'&&running===0;},{polling:10,timeout:5000});
+  hiddenState=await lifecyclePage.evaluate(()=>({visibility:document.visibilityState,mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length}));
+  await lifecycleCdp.send('Emulation.setPageVisibilityState',{visibilityState:'visible'});
+  await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return document.visibilityState==='visible'&&s?.dataset.renderMode==='motion'&&t.every(e=>e.dataset.motionPlayed==='mini')&&!t.some(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending'));},{polling:10,timeout:15000});
+  visibleState=await lifecyclePage.evaluate(()=>({visibility:document.visibilityState,mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,targets:document.querySelectorAll('.eb-scope [data-motion-recipe]').length,started:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.dataset.motionPlayed==='mini').length,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length}));
+ }catch(error){visibilitySupported=false;visibleState={error:String(error).slice(0,300)};}
+ const lifecycleResult={kind:'visibility-exit-reentry-queue-recovery',status:lifecycleResponse?.status()??null,hiddenState,visibleState,visibilitySupported,result:visibilitySupported&&lifecycleResponse?.status()===200&&hiddenState?.visibility==='hidden'&&hiddenState?.mode==='lite'&&hiddenState?.reason==='background'&&hiddenState?.running===0&&visibleState?.visibility==='visible'&&visibleState?.mode==='motion'&&visibleState?.targets>8&&visibleState?.started===visibleState?.targets&&visibleState?.running===0?'PASS':'FAIL'};
+ events.push(lifecycleResult);save();console.log('::notice title=Visibility exit/re-entry queue recovery::'+JSON.stringify(lifecycleResult));
+ await lifecycleCdp.detach();await lifecyclePage.close();
+ // Repeated SPA navigation must dispose the old motion observer before a new storefront scope mounts.
+ const navigationPage=await browser.newPage();
+ await navigationPage.evaluateOnNewDocument(()=>{const Native=window.IntersectionObserver;const stats={created:0,disconnected:0,active:0,observeCalls:0};window.__motionObserverStats=stats;window.IntersectionObserver=class extends Native{constructor(callback,options){super(callback,options);this.__motionTracked=options?.rootMargin==='0px 0px -4% 0px';this.__motionDisconnected=false;if(this.__motionTracked){stats.created++;stats.active++;}}observe(target){if(this.__motionTracked)stats.observeCalls++;return super.observe(target);}disconnect(){if(this.__motionTracked&&!this.__motionDisconnected){this.__motionDisconnected=true;stats.disconnected++;stats.active--;}return super.disconnect();}};});
+ const navigationResponse=await navigationPage.goto(new URL('/b/marys-beauty-studio',base).href,{waitUntil:'domcontentloaded'});
+ await navigationPage.waitForFunction(()=>window.__motionObserverStats?.created>=1,{polling:20,timeout:10000});
+ const navigationStates=[await navigationPage.evaluate(()=>({...window.__motionObserverStats}))];
+ await navigationPage.click('a[href="/b/marys-beauty-studio/shop"]');
+ await navigationPage.waitForFunction(()=>location.pathname.endsWith('/shop')&&window.__motionObserverStats?.created>=2&&window.__motionObserverStats?.disconnected>=1,{polling:20,timeout:10000});
+ navigationStates.push(await navigationPage.evaluate(()=>({...window.__motionObserverStats})));
+ await navigationPage.click('a[href="/b/marys-beauty-studio"]');
+ await navigationPage.waitForFunction(()=>location.pathname==='/b/marys-beauty-studio'&&window.__motionObserverStats?.created>=3&&window.__motionObserverStats?.disconnected>=2,{polling:20,timeout:10000});
+ navigationStates.push(await navigationPage.evaluate(()=>({...window.__motionObserverStats})));
+ const navigationLifecycle={kind:'route-navigation-observer-cleanup',status:navigationResponse?.status()??null,states:navigationStates,result:navigationResponse?.status()===200&&navigationStates.length===3&&navigationStates.every((s,i)=>s.active===1&&s.created===i+1&&s.disconnected===i&&s.observeCalls>0)?'PASS':'FAIL'};
+ events.push(navigationLifecycle);save();console.log('::notice title=Route navigation observer cleanup::'+JSON.stringify(navigationLifecycle));
+ await navigationPage.close();
  // Actual owner preference and OS preference are applied independently through the real draft API.
  for(const widthHeight of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
   const [width,height]=widthHeight;await owner.bringToFront();await owner.setViewport({width,height,deviceScaleFactor:1});
