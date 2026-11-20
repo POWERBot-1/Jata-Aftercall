@@ -8,11 +8,11 @@ import { getControlIdentity } from "@/lib/control/access";
  */
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(_request: Request) {
   const access = await getControlIdentity();
-  if (!access.ok) {
+  if (access.ok === false) {
     return NextResponse.json(
-      { error: access.code === "UNAUTHENTICATED" ? "Please sign in." : "Owner-authorized team administration is not enabled." , code: access.code },
+      { error: access.code === "UNAUTHENTICATED" ? "Please sign in." : "Owner-authorized team administration is not enabled.", code: access.code },
       { status: access.status },
     );
   }
