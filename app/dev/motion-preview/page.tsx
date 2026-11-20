@@ -29,7 +29,7 @@ export default async function MotionPreviewHarness({ searchParams }: { searchPar
     ) : null}
     <div id="outside-motion-scope" data-motion-recipe="slide">Outside the storefront scope — never animated.</div>
     <div className={queueStress ? "motion-queue-stress" : undefined} data-queue-stress={queueStress ? "1" : undefined}>
-      <FixtureMount><ExperienceSite data={data} previewNotice="Development verification only — synthetic data, not a live business" /></FixtureMount>
+      <FixtureMount><ExperienceSite data={data} previewNotice="Development verification only — synthetic data, not a live business" trackViews={false} /></FixtureMount>
     </div>
   </>;
 }
