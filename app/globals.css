@@ -5639,3 +5639,53 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Long immersive titles must wrap inside the viewport, and reserve the measured mobile action-bar area. */
+.eb-family-cardless-immersive .eb-hero__content { min-width: 0; }
+.eb-family-cardless-immersive .eb-hero .eb-h1 {
+  max-width: 14ch;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+@media (max-width: 899px) {
+  .eb-family-cardless-immersive .eb-hero__content {
+    padding-bottom: calc(var(--eb-actionbar-h, 9.5rem) + env(safe-area-inset-bottom) + 1.25rem);
+  }
+}
+
+/* These family sections paint on white, while their theme's display token may be pale.
+   Use stable ink on the un-tinted section surface; preserve dark/tinted sections. */
+.eb-family-editorial .eb-section:not([style]) .eb-section-head .eb-h2 {
+  color: rgb(26 26 26);
+}
+.eb-family-cardless-immersive .eb-section:not([style]) .eb-section-head .eb-h2 {
+  color: rgb(26 26 26);
+}
+
+/* A cardless hero keeps its title legible over either a media overlay or a plain surface. */
+.eb-family-cardless-immersive .eb-hero--text .eb-h1,
+.eb-family-cardless-immersive .eb-hero--text .eb-lede,
+.eb-family-cardless-immersive .eb-hero--text .eb-eyebrow {
+  color: var(--eb-text);
+}
+.eb-family-cardless-immersive .eb-hero__content {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+.eb-family-cardless-immersive .eb-hero .eb-h1 {
+  max-width: min(14ch, 100%);
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-wrap: balance;
+}
+@media (max-width: 899px) {
+  .eb-family-cardless-immersive .eb-hero__content {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 1.5rem);
+  }
+  .eb-family-cardless-immersive .eb-hero .eb-h1 {
+    font-size: clamp(2rem, 9vw, 3.4rem);
+    line-height: 1.04;
+  }
+}
