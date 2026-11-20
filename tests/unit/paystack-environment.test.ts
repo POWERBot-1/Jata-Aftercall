@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { readPaystackConfig } from "@/lib/payments/config";
+import { getPaystackSecretKey, readPaystackConfig } from "@/lib/payments/config";
 
 const originalSecret = process.env.PAYSTACK_SECRET_KEY;
 const originalPublic = process.env.PAYSTACK_PUBLIC_KEY;
@@ -21,6 +21,20 @@ afterEach(() => {
 });
 
 describe("Paystack payment environment classification", () => {
+  it("selects the test secret for Preview runtime API calls", () => {
+    process.env.VERCEL_ENV = "preview";
+    process.env.PAYSTACK_SECRET_KEY = "sk_live_fixture";
+    process.env.PAYSTACK_TEST_SECRET_KEY = "sk_test_fixture";
+    expect(getPaystackSecretKey()).toBe("sk_test_fixture");
+  });
+
+  it("returns no secret for Preview when only the shared live key exists", () => {
+    process.env.VERCEL_ENV = "preview";
+    process.env.PAYSTACK_SECRET_KEY = "sk_live_fixture";
+    delete process.env.PAYSTACK_TEST_SECRET_KEY;
+    expect(getPaystackSecretKey()).toBe("");
+  });
+
   it("never lets Preview fall back to the shared live credential pair", () => {
     process.env.VERCEL_ENV = "preview";
     process.env.PAYSTACK_SECRET_KEY = "sk_live_fixture";
