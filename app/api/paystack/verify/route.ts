@@ -10,6 +10,7 @@ import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { MJENGO_PLAN_KEY } from "@/lib/mjengo/entitlement";
 import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
 import { verifyOrderPayment } from "@/lib/experience/payments";
+import { getPaystackSecretKey } from "@/lib/payments/config";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -99,7 +100,7 @@ export async function GET(req: Request) {
   if (payment.status !== "PENDING" && !storedSettleable) return NextResponse.json({ status: payment.status, ...posReturn });
 
   const mockRequested = searchParams.get("mock") === "success";
-  if (payment.status === "PENDING" && mockRequested && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
+  if (payment.status === "PENDING" && mockRequested && process.env.NODE_ENV !== "production" && !getPaystackSecretKey()) {
     try {
       const result = await activateSubscriptionForPayment(payment.id, undefined, { raw: { testMock: true }, paystackId: `mock_${payment.reference}` });
       await logAudit({ actorId: payment.userId, action: "PAYMENT_TEST_MOCK_VERIFIED", targetType: "PAYMENT", targetId: payment.id });
