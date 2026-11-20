@@ -23,10 +23,10 @@ export const MERCHANT_TAKINGS_PURPOSES = ["ORDER", "BOOKING_DEPOSIT"] as const;
 export type PaidGroup = { purpose: string | null; currency: string | null; count: number; amountMinor: number };
 
 export type PlatformMoneyFigures = {
-  /** Jata subscription revenue settled by a verified provider confirmation, KES cents. */
+  /** Sum of PAID-status subscription rows, KES minor units; not independently reconciled net cash. */
   subscriptionRevenueMinor: number;
   subscriptionPayments: number;
-  /** Customer payments to businesses (orders, booking deposits), KES cents. Not Jata revenue. */
+  /** PAID-status customer payments to businesses (orders/deposits), KES minor units; not Jata revenue. */
   merchantTakingsMinor: number;
   merchantPayments: number;
   /** PAID rows in another currency: counted, never converted or added. */
@@ -41,7 +41,7 @@ function isOneOf<T extends readonly string[]>(list: T, value: string): value is 
   return (list as readonly string[]).includes(value);
 }
 
-/** Pure classification of `GROUP BY purpose, currency` over PAID payments. */
+/** Pure classification of `GROUP BY purpose, currency` over Payment rows with status PAID. */
 export function classifyPaidPayments(groups: PaidGroup[]): PlatformMoneyFigures {
   const figures: PlatformMoneyFigures = {
     subscriptionRevenueMinor: 0,
@@ -82,7 +82,7 @@ type PaymentGroupByClient = {
   };
 };
 
-/** Reads the PAID groups. Throws when the database cannot answer — callers must show "unavailable". */
+/** Reads PAID-status groups only. This does not establish test/live mode, provider settlement, refunds, fees or tax. Throws on query failure. */
 export async function readPlatformMoneyFigures(client: PaymentGroupByClient): Promise<PlatformMoneyFigures> {
   const rows = await client.payment.groupBy({
     by: ["purpose", "currency"],
