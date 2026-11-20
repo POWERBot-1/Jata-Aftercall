@@ -14,6 +14,7 @@ import prisma from "../db";
 import { getBaseUrl } from "../url";
 import { generatePaymentReference } from "../paymentReference";
 import { PAYMENT_CURRENCY } from "../paymentCurrency";
+import { readPaystackConfig } from "../payments/config";
 import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
@@ -175,6 +176,7 @@ export async function createOrderPaymentRecord(input: InitializeOrderPaymentInpu
       amount: toKobo(amountKES),
       currency: PAYMENT_CURRENCY,
       status: "PENDING",
+      environment: readPaystackConfig().mode === "LIVE" ? "LIVE" : readPaystackConfig().mode === "TEST" ? "TEST" : "UNKNOWN",
       purpose,
       orderId: order?.id || null,
       bookingId: input.bookingId || null,
