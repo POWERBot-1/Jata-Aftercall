@@ -18,7 +18,8 @@
 1. Created manual snapshot `snap-snowy-block-ax3dald2` at 2026-11-20T17:39:09Z.
 2. Restored it with `finalize=false` into isolated branch `recovery-acceptance-20261120` (`br-young-glade-axtyktor`).
 3. Neon reported `restore_status=restored`, `current_state=ready`, and `restored_from=snap-snowy-block-ax3dald2`.
-4. The source production branch remained the default branch. No production branch replacement or restore was performed.
+4. Provider metadata timestamps: snapshot created `2026-11-20T17:39:09Z`; restored branch created `17:39:14Z` and reached `ready` at `17:39:15Z` (six seconds from snapshot creation to ready state). This is the provider branch-restore interval only, not end-to-end application RTO.
+5. The source production branch remained the default branch. No production branch replacement or restore was performed.
 
 ## Integrity comparison
 
@@ -51,7 +52,7 @@ A second snapshot request targeting the historical timestamp `2026-11-20T19:45:0
 - Provider history retention is six hours; the adopted payment/subscription/ledger RPO is 15 minutes. The current setting does not prove that RPO.
 - No automatic snapshot schedule was configured at inspection time.
 - A point-in-time restore from a selected historical timestamp/LSN was not exercised; a timestamped snapshot request was rejected by Neon with `snapshots limit exceeded` (HTTP 422). Provider support/plan quota or retention action is needed before retrying.
-- RTO ≤4 hours has not been measured end-to-end against a documented service restoration and application validation procedure.
+- Provider branch restore reached `ready` six seconds after snapshot creation in this exercise. RTO ≤4 hours has not been measured end-to-end against a documented service restoration, application validation, routing, and business-continuity procedure.
 - No production restore, branch swap, schema migration, or data mutation was performed.
 
 ## Release classification
