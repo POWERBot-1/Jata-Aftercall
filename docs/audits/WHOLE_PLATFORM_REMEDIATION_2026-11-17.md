@@ -162,3 +162,63 @@ Not covered: page components (server-rendered pages are not swept by the route m
 - **programme-completeness**: `NOT READY (24)`, fail-closed by design (R-CI-01). This is separate from `instruction-integrity`, which passes.
 
 **Release verdict: NOT READY.**
+
+
+---
+
+## 9. Owner-gate recheck — 2026-11-20 (PR #126)
+
+This addendum supersedes only the time-sensitive Preview/domain/recovery observations in §8.4; it does not rewrite the historical evidence above.
+
+### 9.1 Exact-head CI and motion evidence
+
+Application-code head `165ef68c2dda52f2d266445690e712b75623f5ec` completed:
+- Release Validation PASS — [44749405346](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44749405346).
+- Candidate migration rehearsal and disposable PostgreSQL 18 logical backup/restore PASS — [44749405508](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44749405508).
+- Full no-database suite PASS — 44749405647.
+- POS/ERP PASS — 44749405372; Website Studio tenant/content PASS — 44749405582; Interactive Business E2E PASS — 44749405497; owner-authority focused verification PASS — 44749405563.
+- Motion isolated browser evidence PASS for bounded assertions — [44749405477](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44749405477): 480/480 family observations, 42 route/state rows with zero assertion errors, reduced-motion cancellation, six preference transitions, eight-slot queue stress (17 targets, maximum concurrency 8, all 17 completed), and 48/48 route observations. Twelve historical legacy storefront states were captured and six embedded JPEG previews were sampled.
+- Motion is still **BLOCKED** overall: the runner logged `MOTION_ENCODER_BLOCKED` (ffmpeg unavailable; no encoded recording evidence claimed), the 12-state historical capture is not a matched all-family/commerce comparison, and full published-AI/commerce, lifecycle/re-entry/cleanup and exhaustive independent visual acceptance remain open. See `docs/agents/MOTION_ACCEPTANCE_REMEDIATION.md`.
+
+The admin integrity workflow continues to pass instruction-integrity and fail programme-completeness: 21 BLOCKED + 3 NOT_TESTED. Do not weaken the gate.
+
+### 9.2 Financial governance and Control
+
+The admin overview previously described PAID-status amounts using the word “settled”. The underlying query groups `Payment` rows with `status = PAID`; it does not itself classify test/live mode per payment or reconcile provider settlement, refunds, chargebacks, fees or tax. The admin page now labels these as **PAID-status payment amounts**, explicitly says they are not verified net cash, MRR or ARR, and states the missing reconciliation dimensions. Changes: `app/admin/page.tsx`, `lib/admin/platform-figures.ts`, `tests/unit/admin-platform-figures.test.ts` (latest finance wording change requires exact-head CI verification).
+
+MRR/ARR and reconciled net cash remain **BLOCKED**. The legacy `Subscription` model has status and a `PlanConfig` relation but no effective subscription amount/discount/currency fields. The `Payment` model has status/purpose/currency/amount but no explicit per-row test/live marker or provider settlement timestamp. The newer transaction/refund records do not yet constitute a verified cross-ledger reconciliation for the management definitions adopted in `docs/agents/OWNER_AUTHORIZED_PROGRAMME_DECISIONS_2026-11-16.md`. Do not calculate MRR, ARR or net cash by guessing missing fields.
+
+The conservative referral attribution/eligibility rules are adopted, but numeric commission rates and payout terms remain NOT CONFIGURED. Accrual and payout stay disabled; the ledger model is storage, not authorization to move money.
+
+Control remains **deny-path PASS / positive access BLOCKED**. The owner-approved 90-cell role/capability matrix remains all DENY and `CONTROL_ROLE_ACCESS_ENABLED=false`. CI verifies the pending-policy denial and absence of unauthorized mutation. No role, grant or positive permission test is to be provisioned without a separate exact owner decision.
+
+### 9.3 Official domain — Vercel project-side evidence
+
+Read-only Vercel project metadata confirms `jataaftercall.co.ke` and `www.jataaftercall.co.ke` are both attached to project `jata-aftercall` and both have `verified=true`. The apex DNS configuration reports HostAfrica nameservers `ns1.host-ww.net` and `ns2.host-ww.net`, A values `216.198.79.1` and `64.29.17.1`, no conflicts and `misconfigured=false`; the A values match the Vercel configuration's top-ranked recommendation. Neither domain has a Vercel redirect configured. The latest production deployment remains READY on main commit `09a4aa059b227f8fbb9dbece6faaa0fd32fe91e7` from 2026-11-12.
+
+This is **PASS for Vercel project attachment/verification metadata only**. Public DNS resolution from independent resolvers, HTTPS/TLS certificate state, HSTS/security headers, canonical redirect behavior, cookie scope, SPF/DKIM/DMARC and live browser behavior were not independently verified. No DNS, mail or Vercel domain configuration was changed.
+
+### 9.4 Preview build failure — current root cause
+
+The Preview deployment for code head `165ef68` is [`dpl_8ig7KWWaobbz1U5r4LYPmFZeRGNY`](https://vercel.com/powerbot-1/jata-aftercall/8ig7KWWaobbz1U5r4LYPmFZeRGNY), state ERROR. Its build events show Preview isolation and the migration target guard both pass, then `prisma migrate deploy` fails with Prisma `P1001` against the isolated Neon Preview host. This supersedes the earlier branch-scoped-variable mismatch recorded in §8.4 for this head.
+
+Read-only Neon metadata shows the host belongs to project `jata-aftercall-staging-pr125`; its Free-plan active-time quota is 3,600 seconds and observed usage is 4,288 seconds, with compute suspended. The project quota reset date is 2026-12-01. This is consistent with the unreachable Preview database. Do not bypass the migration gate or use production as Preview. No quota change, compute start, paid upgrade or credential mutation was made.
+
+### 9.5 Production recovery evidence
+
+Current read-only Neon metadata confirms the production project is Free, PostgreSQL 18, region `aws-us-east-2`, with six-hour history retention. The `production` branch `br-cold-snow-ax606swa` is root/default/primary and reports `protected=false`. Snapshot inventory is empty and automatic snapshot schedule is empty. Its compute was idle/suspended at the inspection timestamp. The actual restorable timestamp range was not returned; provider-native restore has not been rehearsed.
+
+The candidate's disposable PostgreSQL 18 logical backup/restore is PASS, but production RPO ≤ 15 minutes, RTO ≤ 4 hours and Neon PITR/snapshot recovery remain unproven. See `docs/NEON-RECOVERY-READINESS.md`. No production snapshot, restore, branch protection change, plan upgrade or database mutation was performed.
+
+### 9.6 Overall disposition
+
+- picomatch advisory: RESOLVED (withdrawn by GitHub; exact-code-head npm audits clean).
+- Release Validation and the listed disposable/integration CI workflows: PASS on code head `165ef68`.
+- Finance: PAID-status display wording corrected; reconciled management metrics and commission rates remain BLOCKED.
+- Control: denial behavior verified; all-DENY owner policy unchanged.
+- Domain: Vercel attachment/verification metadata PASS; public DNS/TLS/mail verification remains outstanding.
+- Recovery: disposable logical restore PASS; production-provider recovery BLOCKED/NOT TESTED.
+- Motion: bounded browser assertions PASS; full visual/recording acceptance BLOCKED.
+- Programme: 21 BLOCKED + 3 NOT_TESTED; release remains NOT READY.
+
+No merge, deployment, production mutation, provider spend, financial transaction or permission grant is authorized by this addendum.
