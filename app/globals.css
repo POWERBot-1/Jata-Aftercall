@@ -5642,7 +5642,10 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 }
 
 
-/* Long immersive titles must wrap inside the viewport, and reserve the measured mobile action-bar area. */
+/* Reserve the measured mobile contact bar inside the hero itself. The trailing spacer at
+   the end of the document protects the footer; it cannot stop a fixed bar from covering a short
+   first-screen hero. Apply this to every family and hero treatment that renders content directly,
+   including split grids, but only when the shared action bar is actually present. */
 .eb-family-cardless-immersive .eb-hero__content { min-width: 0; }
 .eb-family-cardless-immersive .eb-hero .eb-h1 {
   max-width: 14ch;
@@ -5650,8 +5653,9 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
   text-wrap: balance;
 }
 @media (max-width: 899px) {
-  .eb-family-cardless-immersive .eb-hero__content {
-    padding-bottom: calc(var(--eb-actionbar-h, 9.5rem) + env(safe-area-inset-bottom) + 1.25rem);
+  .eb-scope:has(.eb-actionbar) .eb-hero__content,
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 1.5rem);
   }
 }
 
