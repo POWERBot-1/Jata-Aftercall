@@ -130,6 +130,8 @@ describe("Paystack payment environment classification", () => {
   });
 
   it("does not infer mode from a public key or from an absent secret", () => {
+    delete process.env.VERCEL_ENV;
+    delete process.env.PAYSTACK_TEST_SECRET_KEY;
     delete process.env.PAYSTACK_SECRET_KEY;
     process.env.PAYSTACK_PUBLIC_KEY = "pk_test_fixture";
     expect(readPaystackConfig()).toMatchObject({
