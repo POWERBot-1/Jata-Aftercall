@@ -136,8 +136,8 @@ describe.skipIf(!realPrismaConfigured)("real PostgreSQL: admin reporting reconci
     expect(stats["Active subscriptions"]).toBe(formatNumber(n(t.active)));
     expect(stats["Expiring / expired"]).toBe(formatNumber(n(t.lapsed)));
     expect(stats["Page views"]).toBe(formatNumber(n(t.views)));
-    expect(stats["Subscription revenue (KES)"]).toBe(formatNumber(t.money.subMinor / 100));
-    expect(stats["Customer payments to businesses (KES)"]).toBe(formatNumber(t.money.merchantMinor / 100));
+    expect(stats["PAID subscription payment amount (KES)"]).toBe(formatNumber(t.money.subMinor / 100));
+    expect(stats["PAID customer payments to businesses (KES)"]).toBe(formatNumber(t.money.merchantMinor / 100));
     expect(Object.keys(stats)).not.toContain("Settled revenue (KES)");
   });
 
