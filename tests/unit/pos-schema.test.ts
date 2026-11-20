@@ -84,7 +84,7 @@ function tableColumns(table: string): Map<string, string> {
   const additiveSql = `${migration}\n${posAdditiveMigration}`;
   const tableStatement = new RegExp(`ALTER TABLE "${table}"([\\s\\S]*?);`, "g");
   for (const statement of additiveSql.matchAll(tableStatement)) {
-    for (const add of statement[1].matchAll(/ADD COLUMN(?: IF NOT EXISTS)? "([\\w]+)"\\s+([A-Z]+(?:\\(\\d+\\))*)([^,;\\n]*)/g)) {
+    for (const add of statement[1].matchAll(/ADD COLUMN(?: IF NOT EXISTS)? "([\w]+)"\s+([A-Z]+(?:\(\d+\))*)([^,;\n]*)/g)) {
       columns.set(add[1], `${add[2]} ${add[3]}`.trim());
     }
   }
