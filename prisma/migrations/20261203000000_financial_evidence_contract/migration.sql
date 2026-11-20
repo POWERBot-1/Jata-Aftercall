@@ -50,36 +50,93 @@ CREATE INDEX "Subscription_status_expiresAt_idx" ON "Subscription"("status", "ex
 
 -- Dedicated product subscription snapshots. Legacy rows intentionally remain NULL.
 -- Do not count these products in MRR until verified settlement writes all snapshot fields.
-DO $$
-DECLARE
-  table_name TEXT;
-BEGIN
-  FOREACH table_name IN ARRAY ARRAY[
-    'PosSubscription',
-    'AutopilotSubscription',
-    'ErpSubscription',
-    'MjengoSubscription',
-    'ErpProSubscription'
-  ] LOOP
-    EXECUTE format(
-      'ALTER TABLE %I
-         ADD COLUMN "recurringAmountKES" INTEGER,
-         ADD COLUMN "recurringDiscountKES" INTEGER,
-         ADD COLUMN "recurringCurrency" TEXT,
-         ADD COLUMN "recurringIntervalDays" INTEGER,
-         ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3)',
-      table_name
+-- Explicit per-table DDL keeps the schema contract statically auditable in CI.
+-- Nullable legacy values remain NULL until a verified settlement writes evidence.
+ALTER TABLE "PosSubscription"
+  ADD COLUMN "recurringAmountKES" INTEGER,
+  ADD COLUMN "recurringDiscountKES" INTEGER,
+  ADD COLUMN "recurringCurrency" TEXT,
+  ADD COLUMN "recurringIntervalDays" INTEGER,
+  ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3);
+
+ALTER TABLE "PosSubscription"
+  ADD CONSTRAINT "PosSubscription_recurring_value_nonnegative_check"
+    CHECK (
+      ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
+      ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
+      ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
+      ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
+      ("recurringCurrency" IS NULL OR "recurringCurrency" ~ '^[A-Z]{3}$')
     );
-    EXECUTE format(
-      'ALTER TABLE %I ADD CONSTRAINT %I CHECK (
-         ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
-         ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
-         ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
-         ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
-         ("recurringCurrency" IS NULL OR "recurringCurrency" ~ ''^[A-Z]{3}$'')
-       )',
-      table_name,
-      table_name || '_recurring_value_nonnegative_check'
+
+-- Nullable legacy values remain NULL until a verified settlement writes evidence.
+ALTER TABLE "AutopilotSubscription"
+  ADD COLUMN "recurringAmountKES" INTEGER,
+  ADD COLUMN "recurringDiscountKES" INTEGER,
+  ADD COLUMN "recurringCurrency" TEXT,
+  ADD COLUMN "recurringIntervalDays" INTEGER,
+  ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3);
+
+ALTER TABLE "AutopilotSubscription"
+  ADD CONSTRAINT "AutopilotSubscription_recurring_value_nonnegative_check"
+    CHECK (
+      ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
+      ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
+      ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
+      ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
+      ("recurringCurrency" IS NULL OR "recurringCurrency" ~ '^[A-Z]{3}$')
     );
-  END LOOP;
-END $$;
+
+-- Nullable legacy values remain NULL until a verified settlement writes evidence.
+ALTER TABLE "ErpSubscription"
+  ADD COLUMN "recurringAmountKES" INTEGER,
+  ADD COLUMN "recurringDiscountKES" INTEGER,
+  ADD COLUMN "recurringCurrency" TEXT,
+  ADD COLUMN "recurringIntervalDays" INTEGER,
+  ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3);
+
+ALTER TABLE "ErpSubscription"
+  ADD CONSTRAINT "ErpSubscription_recurring_value_nonnegative_check"
+    CHECK (
+      ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
+      ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
+      ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
+      ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
+      ("recurringCurrency" IS NULL OR "recurringCurrency" ~ '^[A-Z]{3}$')
+    );
+
+-- Nullable legacy values remain NULL until a verified settlement writes evidence.
+ALTER TABLE "MjengoSubscription"
+  ADD COLUMN "recurringAmountKES" INTEGER,
+  ADD COLUMN "recurringDiscountKES" INTEGER,
+  ADD COLUMN "recurringCurrency" TEXT,
+  ADD COLUMN "recurringIntervalDays" INTEGER,
+  ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3);
+
+ALTER TABLE "MjengoSubscription"
+  ADD CONSTRAINT "MjengoSubscription_recurring_value_nonnegative_check"
+    CHECK (
+      ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
+      ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
+      ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
+      ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
+      ("recurringCurrency" IS NULL OR "recurringCurrency" ~ '^[A-Z]{3}$')
+    );
+
+-- Nullable legacy values remain NULL until a verified settlement writes evidence.
+ALTER TABLE "ErpProSubscription"
+  ADD COLUMN "recurringAmountKES" INTEGER,
+  ADD COLUMN "recurringDiscountKES" INTEGER,
+  ADD COLUMN "recurringCurrency" TEXT,
+  ADD COLUMN "recurringIntervalDays" INTEGER,
+  ADD COLUMN "recurringPriceEffectiveAt" TIMESTAMP(3);
+
+ALTER TABLE "ErpProSubscription"
+  ADD CONSTRAINT "ErpProSubscription_recurring_value_nonnegative_check"
+    CHECK (
+      ("recurringAmountKES" IS NULL OR "recurringAmountKES" >= 0) AND
+      ("recurringDiscountKES" IS NULL OR "recurringDiscountKES" >= 0) AND
+      ("recurringIntervalDays" IS NULL OR "recurringIntervalDays" > 0) AND
+      ("recurringAmountKES" IS NULL OR "recurringDiscountKES" IS NULL OR "recurringDiscountKES" <= "recurringAmountKES") AND
+      ("recurringCurrency" IS NULL OR "recurringCurrency" ~ '^[A-Z]{3}$')
+    );
