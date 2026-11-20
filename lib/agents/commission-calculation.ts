@@ -132,6 +132,7 @@ export function evaluateCommission(input: {
   const governance = policy.governance;
   if (
     policy.basis !== "NET" ||
+    !Array.isArray(policy.eligibleEvents) ||
     policy.eligibleEvents.length !== 1 ||
     policy.eligibleEvents[0] !== "NEW_SALE" ||
     governance.attribution.precedence !== "FIRST_TOUCH" ||
