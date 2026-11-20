@@ -31,6 +31,27 @@ describe("Paystack payment environment classification", () => {
     });
   });
 
+  it("rejects a test secret paired with a live public key", () => {
+    process.env.PAYSTACK_SECRET_KEY = "sk_test_fixture";
+    process.env.PAYSTACK_PUBLIC_KEY = "pk_live_fixture";
+    expect(readPaystackConfig()).toMatchObject({
+      mode: "NONE",
+      ready: false,
+      missing: ["PAYSTACK_KEY_MODE_MISMATCH"],
+      webhookConfigured: false,
+    });
+  });
+
+  it("rejects a live secret paired with a test public key", () => {
+    process.env.PAYSTACK_SECRET_KEY = "sk_live_fixture";
+    process.env.PAYSTACK_PUBLIC_KEY = "pk_test_fixture";
+    expect(readPaystackConfig()).toMatchObject({
+      mode: "NONE",
+      ready: false,
+      missing: ["PAYSTACK_KEY_MODE_MISMATCH"],
+    });
+  });
+
   it("does not infer mode from a public key or from an absent secret", () => {
     delete process.env.PAYSTACK_SECRET_KEY;
     process.env.PAYSTACK_PUBLIC_KEY = "pk_test_fixture";
