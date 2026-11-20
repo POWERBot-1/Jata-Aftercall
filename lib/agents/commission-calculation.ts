@@ -176,6 +176,9 @@ export function evaluateCommission(input: {
       payment.verifiedAt < attribution.validFrom || (attribution.validUntil && payment.verifiedAt >= attribution.validUntil)) {
     return { eligible: false, reason: "ATTRIBUTION_NOT_ELIGIBLE" };
   }
+  if (payment.verifiedAt.getTime() - attribution.validFrom.getTime() > 30 * 24 * 60 * 60 * 1000) {
+    return { eligible: false, reason: "ATTRIBUTION_OUTSIDE_WINDOW" };
+  }
   if (eligibleMinor === 0) return { eligible: false, reason: "ZERO_ELIGIBLE_AMOUNT" };
   const rule = policy.rule;
   let commission: bigint;
