@@ -58,6 +58,32 @@ describe("Paystack webhook signature verification", () => {
     }
   });
 
+  it("uses the Preview test key for webhook verification and ignores the shared live key", async () => {
+    const priorSecret = process.env.PAYSTACK_SECRET_KEY;
+    const priorTestSecret = process.env.PAYSTACK_TEST_SECRET_KEY;
+    const priorVercelEnv = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "preview";
+    process.env.PAYSTACK_SECRET_KEY = "sk_live_wrong_environment";
+    process.env.PAYSTACK_TEST_SECRET_KEY = secret;
+    try {
+      const { verifyWebhookSignature: verifyActual } = await import("@/lib/paystack");
+      const body = JSON.stringify({ event: "charge.success", data: { reference: "preview-isolation" } });
+      const testSignature = crypto.createHmac("sha512", secret).update(body).digest("hex");
+      const liveSignature = crypto.createHmac("sha512", "sk_live_wrong_environment").update(body).digest("hex");
+      expect(verifyActual(body, testSignature)).toBe(true);
+      expect(verifyActual(body, liveSignature)).toBe(false);
+      delete process.env.PAYSTACK_TEST_SECRET_KEY;
+      expect(verifyActual(body, liveSignature)).toBe(false);
+    } finally {
+      if (priorSecret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
+      else process.env.PAYSTACK_SECRET_KEY = priorSecret;
+      if (priorTestSecret === undefined) delete process.env.PAYSTACK_TEST_SECRET_KEY;
+      else process.env.PAYSTACK_TEST_SECRET_KEY = priorTestSecret;
+      if (priorVercelEnv === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = priorVercelEnv;
+    }
+  });
+
   it("amount mismatch must be rejected server-side (logic test)", () => {
     const expected = 99900; // 999 KES in kobo
     const paystackAmount = 10000; // wrong amount
