@@ -293,7 +293,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §009 (ADMIN-009)",
   "implementationLocation": "Vercel domains and routing, Next.js routes, auth/cookies. No new domain added or changed.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. The canonical domain serves the application and /control refuses anonymous visitors, but cookie scope, HTTPS/HSTS headers, the redirect matrix and DNS state can only be verified from an authorized network position, and the register forbids changing DNS, domain records or env vars without separate approval. Owner: authorize or perform that inspection.",
+  "testResult": "Read-only Vercel project inspection on 2026-11-16 confirms apex and www custom domains are attached and verified. Vercel configuration metadata reports external apex nameservers ns1.host-ww.net/ns2.host-ww.net, A values 64.29.17.1 and 216.198.79.1, no conflicts and misconfigured=false; www reports CNAME 2da49677b2414cfd.vercel-dns-017.com., no conflicts and misconfigured=false. Neither domain has a Vercel redirect target configured. Direct public-domain fetch through the available inspection path was inaccessible; TLS certificate/ciphers, HSTS, cookie attributes, actual redirect behavior and authoritative HostAfrica DNS/mail-zone records remain unverified. Remains BLOCKED; see docs/evidence/programme-remediation-2026-11-16/VERCEL-DOMAIN-CONFIG.md.",
   "evidence": [],
   "evidenceLinks": [],
   "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
@@ -470,7 +470,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
   "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
   "verificationMethod": "Exact-head native Prisma/PostgreSQL 18 release, clean-install/upgrade/rollback/recovery and control-plane disposable-schema migration tests; candidate migration rehearsal and catalog comparison. No production database was touched.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. The rehearsal proves fresh install, ordered history, ledger completeness, object shapes, psql -f parity, idempotence and failure detection on disposable PostgreSQL 18 and passes on this head; backup/restore and the non-reversible-migration strategy have no artefact in this repository. Owner: confirm whether backup/restore rehearsal is in scope.",
+  "testResult": "Candidate migration rehearsal passes on disposable PostgreSQL 18. A separate exact-head full logical backup/restore rehearsal now creates a custom-format dump, restores into a scratch database, and compares schema, every user-table row count and the Prisma migration ledger. Its first run reached restore but failed schema comparison before row-count/ledger checks; normalization and diagnostic output have been added, and a clean rerun is required. Neon PITR/provider snapshot acceptance remains separate and BLOCKED.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516522",
@@ -748,7 +748,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §012 (MOTION-002)",
   "implementationLocation": "`lib/experience/{motionPolicy,motionRecipes,motionRuntime,renderMode,templateFamilies,workspace,document}.ts`, Studio preview/publish routes, generated-site renderer, templates, tests and documentation. Existing Lite/HTML and `motion` modes must remain functional; do not presume every template is already covered.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Storefront inheritance is covered; the Website Studio generation, preview and publishing paths were not exercised on this head and existing sites must not be silently republished. Owner: confirm which generated families must re-inherit and by what regeneration path.",
+  "testResult": "The owner-provided §032 specification defines the supported family and inheritance requirements. Storefront inheritance is covered, but the Website Studio generation, preview and publishing paths have not yet been exercised across the required families on this candidate. Existing sites must not be silently republished. Remains BLOCKED on exact-head Studio route/family evidence and acceptance.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -828,7 +828,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §029 (MOTION-006)",
   "implementationLocation": "`components/DashboardClient.tsx`, `app/agents/dashboard/page.tsx`, `components/ui/AnalyticsChart.tsx`, `app/globals.css`, `docs/agents/MOTION_PRODUCT_AUDIT.md`.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Workspace and agent entrances and reduced-motion-gated chart animation exist, but the acceptance requires real authenticated before/after recordings, which no workflow in this repository produces. Owner: accept screenshots as the evidence form or supply a recording channel.",
+  "testResult": "The current owner-provided §032 specification requires before/after browser recordings and six responsive viewport captures. Existing workflows produce screenshots and observations but not the required authenticated recordings. Remains BLOCKED on recording evidence and independent review; no screenshot-only substitution is claimed.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -849,7 +849,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §031 (MOTION-007)",
   "implementationLocation": "`lib/experience/motionRuntime.ts`, `tests/unit/storefront-motion.test.ts`, existing shared application motion and Studio pipelines.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. The specification this record implements is the owner-provided advanced fintech motion specification. Owner: supply or point to the current revision.",
+  "testResult": "The complete owner-provided advanced fintech motion specification is available in docs/ADMIN_BUILDING_INSTRUCTIONS.md §032. The earlier missing-specification blocker is resolved. Remains BLOCKED on implementing and evidencing every applicable route, family, viewport, reduced/disabled state, queue/re-entry/cleanup behavior and required before/after recordings.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -869,7 +869,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §032 (MOTION-008)",
   "implementationLocation": "shared motion, existing modules, Website Studio generation/render/publish, tests and browser evidence; exact implementation paths are recorded in later append-only updates.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Owner-provided specification (register 032, 540 lines). No agent may invent it. Owner: provide the specification.",
+  "testResult": "The owner-provided 20-section motion specification is available in docs/ADMIN_BUILDING_INSTRUCTIONS.md §032. No additional external specification is needed. Remains BLOCKED on complete implementation, exact-head browser evidence, before/after recordings and independent acceptance against every criterion.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -955,7 +955,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §036 (MOTION-012)",
   "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/disposable-browser-evidence.mjs`, `docs/agents/PROGRAMME_READINESS.json`.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Real-Chrome workflows on disposable PostgreSQL exist; the register requires the coverage matrix across every enumerated template family and route with inspectable evidence. Owner: confirm the enumeration or accept the covered set.",
+  "testResult": "The owner-provided specification in §032 enumerates the required template families and six viewport sizes. The candidate capture harness covers the 20 generated families, draft/published states and normal/reduced preferences, but historical baseline, complete Studio-route parity, recordings and independent inspection remain outstanding. A historical capture job is being added; no PASS is claimed until it runs.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -976,7 +976,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §037 (MOTION-013)",
   "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/disposable-browser-evidence.mjs`, `docs/agents/MOTION_013_EVIDENCE.md`, `docs/agents/PROGRAMME_READINESS.json`.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Evidence is published into the branch through the visual-evidence channel; the register requires the complete route matrix with inspectable evidence for every path. Owner: confirm the accepted capture set.",
+  "testResult": "The owner-provided specification in §032 supplies the family and viewport acceptance set. Existing exact-head evidence covers candidate generated-family observations, but the historical baseline and independent review are incomplete. A pre-motion capture job is being added against the owner-named source revision; no acceptance is claimed before its artifacts are inspected.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -1039,7 +1039,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §040 (MOTION-016)",
   "implementationLocation": "`.github/workflows/motion-evidence.yml`, `scripts/motion/generated-family-evidence.mjs`, `scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/MOTION_ACCEPTANCE_REMEDIATION.md`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Depends on MOTION-007/008 plus a genuine historical baseline and complete commerce coverage. Owner: provide the specification and baseline.",
+  "testResult": "The owner-provided specification is available in §032 and the owner-named pre-motion source revision is available in §042. These are no longer missing inputs. The complete acceptance remains BLOCKED on reproducible same-fixture historical captures, full commerce/Studio route coverage, before/after recordings, queue/re-entry evidence and independent six-viewport review.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
@@ -1060,7 +1060,7 @@
   "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §041 (MOTION-017)",
   "implementationLocation": "`scripts/motion/route-behaviour-evidence.mjs`, `docs/agents/MOTION_ACCEPTANCE_REMEDIATION.md`, `docs/agents/REQUIREMENT_WORK_ASSIGNMENTS.md`, `docs/agents/PROGRAMME_READINESS.json`.",
   "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-  "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Requires a genuine historical baseline for identical routes and states; none is available.",
+  "testResult": "The owner explicitly named pre-motion source revision a28c1a46101ac90bbf28d374b4986b689196de8d in §042. The source revision is available in repository history; matching historical screenshots/recordings have not yet been reproduced with identical fixture data, routes, browser, viewport and motion preference. A dedicated capture job is being added; remains BLOCKED pending artifacts and independent review.",
   "evidence": [],
   "evidenceLinks": [
    "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418565",
