@@ -1589,6 +1589,12 @@ model PosSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -2728,6 +2734,12 @@ model AutopilotSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -2994,6 +3006,12 @@ model ErpSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -4866,6 +4884,12 @@ model MjengoSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -4904,6 +4928,12 @@ model ErpProSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
