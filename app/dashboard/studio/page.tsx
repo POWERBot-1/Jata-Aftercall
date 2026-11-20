@@ -14,6 +14,7 @@ import { entitlementStatusLabel, experienceStatusLabel } from "@/lib/statusLabel
 import { StatusPill } from "@/components/ui/StatusPill";
 import { WorkspaceEmpty, WorkspaceHero, WorkspacePanel } from "@/components/workspace/WorkspaceUI";
 import { WorkspaceDoor } from "@/components/workspace/WorkspaceDoor";
+import { StudioExperienceLauncher } from "@/components/dashboard/StudioExperienceLauncher";
 import { WORKSPACE_HERO_PHOTO, WORKSPACE_PHOTOS, categoryLabel, photoForCategory } from "@/lib/workspaceImagery";
 import { ArrowRight, ExternalLink, Globe, Image as ImageIcon, Palette, ShoppingBag, Wand2 } from "lucide-react";
 
@@ -21,11 +22,9 @@ export const metadata: Metadata = { title: "Website Studio" };
 export const dynamic = "force-dynamic";
 
 /**
- * Studio index (§15)
- *
- * The door into each business's interactive website. It shows, at a glance, whether the
- * package is paid for, whether the site is live and what still needs the owner's attention —
- * and each entry is a real link into the existing studio editor, not a mock preview.
+ * Studio index: a visual-first entry into each business's existing, permission-checked
+ * website editor. The launcher exposes real routes only; it does not advertise deferred
+ * multi-site quotas, AI generation or rendering modes as shipped capabilities.
  */
 export default async function StudioIndexPage() {
   const session = await getSession();
@@ -68,11 +67,7 @@ export default async function StudioIndexPage() {
       <WorkspaceHero
         compact
         kicker="Website studio"
-        title={
-          <>
-            Build the site your <em>customers</em> actually use.
-          </>
-        }
+        title={<>Build the site your <em>customers</em> actually use.</>}
         subtitle="Sections, catalogue, theme, photos and preview — all in one editor. Your public page keeps working while you edit; customers only see a change once you publish it."
         photo={WORKSPACE_HERO_PHOTO}
         actions={
@@ -80,26 +75,20 @@ export default async function StudioIndexPage() {
             <Link href="/dashboard/subscription" className="ws-btn-amber">
               <Wand2 size={16} aria-hidden="true" /> Check your plan
             </Link>
-            <Link href="/dashboard" className="ws-btn-outline">
-              Back to overview
-            </Link>
+            <Link href="/dashboard" className="ws-btn-outline">Back to overview</Link>
           </>
         }
-        meta={`${businesses.length} ${businesses.length === 1 ? "business" : "businesses"} · ${liveCount} live ${
-          businesses.length === 1 ? "site" : "sites"
-        } · drafts never reach customers`}
+        meta={`${businesses.length} ${businesses.length === 1 ? "business" : "businesses"} · ${liveCount} live ${businesses.length === 1 ? "site" : "sites"} · drafts never reach customers`}
       />
+
+      <StudioExperienceLauncher businessId={businesses[0]?.id ?? null} businessName={businesses[0]?.name} />
 
       {businesses.length === 0 ? (
         <WorkspaceEmpty
           title="No business yet"
           text="Create your business first, then build its interactive website: sections, catalogue, theme and preview."
           photo={WORKSPACE_PHOTOS.professional}
-          actions={
-            <Link href="/onboarding" className="jata-btn jata-btn-primary">
-              Create business
-            </Link>
-          }
+          actions={<Link href="/onboarding" className="jata-btn jata-btn-primary">Create business</Link>}
         />
       ) : (
         <>
@@ -121,12 +110,7 @@ export default async function StudioIndexPage() {
                       <StatusPill tone={business.isPublished ? "success" : "neutral"} icon={<Globe size={11} />}>
                         {business.isPublished ? "Live" : "Draft"}
                       </StatusPill>
-                      {/* The business pill already says Live/Draft. Render the site-state pill only
-                          when it adds information — a hidden site, or a site state that disagrees
-                          with the business record — never as a second identical "Live". */}
-                      {state.label !== (business.isPublished ? "Live" : "Draft") ? (
-                        <StatusPill tone={state.tone}>{state.label}</StatusPill>
-                      ) : null}
+                      {state.label !== (business.isPublished ? "Live" : "Draft") ? <StatusPill tone={state.tone}>{state.label}</StatusPill> : null}
                       <StatusPill tone={entitlement.tone}>Package: {entitlement.label}</StatusPill>
                       {hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
                       {experience ? <StatusPill tone="neutral">Version {experience.publishedVersion}</StatusPill> : null}
