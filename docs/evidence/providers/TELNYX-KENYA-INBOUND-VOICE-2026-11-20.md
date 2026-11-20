@@ -19,7 +19,7 @@ Quinn confirmed the following onboarding path and pricing components in writing:
 - Indicative published components: Voice API/Call Control $0.002/min; Voice AI Agents $0.05/min (includes orchestration, hosted STT and TTS); standalone STT starts at $0.0015/min; global DID pricing starts at $1/month. Kenya DID rental, inbound telephony by destination, media streaming, taxes and surcharges remain unquoted and must be confirmed in the portal order summary. LLM tokens are additional.
 - KYC document review is via the portal order flow and may take a few working days. Telnyx recommends live chat/support for pre-review before any purchase.
 
-The owner requested illustrative 100/300/500 inbound-minute scenarios only (not committed usage), plus exact Kenya inbound and media-streaming rates, billing minimums, additive charge clarification, and a remote Numbering/KYC pre-review. A further email was sent 2026-11-20; no inventory, KYC approval or order is yet confirmed.
+The owner requested illustrative 100/300/500 inbound-minute scenarios only (not committed usage), plus exact Kenya inbound and media-streaming rates, billing minimums, additive charge clarification, and a remote Numbering/KYC pre-review. Quinn replied on 2026-11-20 that Kenya SIP/inbound pricing must be checked in the pricing page or portal; telephony/SIP, Voice API/Call Control, Media Streaming, LLM tokens, taxes and carrier surcharges should be treated as separate/additional line items unless the portal quote says otherwise. Telnyx directed JATA to Mission Control live chat for a Numbering/KYC pre-review and live +254 inventory check before creating an order. The exact Kenya rates, inventory and KYC approval remain unconfirmed.
 
 ## Telnyx written response (2026-11-05)
 
