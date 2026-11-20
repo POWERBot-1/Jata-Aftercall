@@ -230,6 +230,9 @@ export async function activateSubscriptionForPayment(
         data: {
           status: "PAID",
           ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+          ...(verification?.providerConfirmedAt && Number.isFinite(Date.parse(verification.providerConfirmedAt))
+            ? { providerSettledAt: new Date(verification.providerConfirmedAt), providerSettlementReference: payment.reference }
+            : {}),
           ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
         },
       });
@@ -248,10 +251,16 @@ export async function activateSubscriptionForPayment(
       update: {
         userId: payment.userId, planId: plan.id, status: "ACTIVE", startAt, expiresAt,
         graceUntil: new Date(expiresAt.getTime() + 3 * 86400000),
+        recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+        recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+        recurringPriceEffectiveAt: now,
       },
       create: {
         businessId: payment.businessId, userId: payment.userId, planId: plan.id,
         status: "ACTIVE", startAt, expiresAt, graceUntil: new Date(expiresAt.getTime() + 3 * 86400000),
+        recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+        recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+        recurringPriceEffectiveAt: now,
       },
     });
     await tx.business.update({ where: { id: payment.businessId }, data: { status: "ACTIVE" } });
