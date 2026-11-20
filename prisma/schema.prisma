@@ -849,6 +849,7 @@ model Payment {
   @@index([userId])
   @@index([businessId])
   @@index([orderId])
+  @@index([environment, status, providerSettledAt])
 }
 
 enum PaymentEnvironment {
