@@ -469,27 +469,30 @@
     "acceptance": "Record native migration evidence for each requested phase, including a safe strategy for non-reversible migrations; validate restore/recovery and compatibility on disposable infrastructure.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Partial exact-candidate native PostgreSQL 18 evidence only: fresh 65-migration history, ordered migration ledger, schema/object parity, idempotent second deploy, deliberate failure detection, and full logical backup/restore into a separate disposable database with schema/constraint, 194-table row-count and migration-ledger comparisons. The original owner acceptance additionally requires a supported upgrade rehearsal, rollback where supported, executed forward recovery and application compatibility after recovery; those phases have not yet been demonstrated.",
-    "testResult": "PARTIAL PASS on candidate SHA 4cd6dd59b41a8f25e44820bf691a1394685bebc9. Candidate migration rehearsal run 44167665563 passed (native migration job 134337950621; backup/restore job 134337950950). Backup and restore checks passed. Supported upgrade, rollback where supported, forward-recovery execution and post-restore application compatibility remain NOT TESTED. No production database was touched.",
+    "verificationMethod": "Partial exact-candidate native PostgreSQL 18 evidence only: fresh 65-migration history, ordered migration ledger, schema/object parity, idempotent second deploy, deliberate failure detection, and full logical backup/restore into a separate disposable database with schema/constraint, 194-table row-count and migration-ledger comparisons. The original owner acceptance additionally requires a supported upgrade rehearsal, rollback where supported, executed forward recovery and application compatibility after recovery; those phases have not yet been demonstrated. Additional provider-native Neon recovery was executed on 2026-11-20: snapshot snap-snowy-block-ax3dald2 restored to isolated branch br-young-glade-axtyktor in project damp-forest-92941163; Neon reported restored/ready. Production and restored branches matched 195/195 tables/views and sampled User, Business, Payment, Subscription, POS, VoiceCall and Prisma migration row counts. The evidence is a provider snapshot/restore plus schema inventory and critical-table count comparison, not a full row-level checksum.",
+    "testResult": "PARTIAL PASS. Exact PR #130 candidate SHA 6734db01c3db77c9a3e714cc8ddaf11436b1cb8a: disposable PostgreSQL 18 candidate migration rehearsal and full logical backup/restore passed (run 44798319461). In addition, Neon provider-native production snapshot snap-snowy-block-ax3dald2 restored into isolated branch br-young-glade-axtyktor; restored branch reached ready and matched the production table/view inventory (195/195) plus sampled critical-table counts. Production was not replaced or restored. Remaining NOT TESTED/BLOCKED: full row-level checksum across all tables, historical PITR selection, supported upgrade/rollback/forward-recovery phases, scheduled snapshot policy, adopted 15-minute RPO and measured four-hour RTO. No production data mutation occurred.",
     "evidence": [
       "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
-      "scripts/ci/rehearse-disposable-backup-restore.sh"
+      "scripts/ci/rehearse-disposable-backup-restore.sh",
+      "docs/evidence/production-recovery/NEON-PROVIDER-RESTORE-2026-11-20.md"
     ],
     "evidenceLinks": [
-      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665563"
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665563",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319461",
+      "https://github.com/POWERBot-1/Jata-Aftercall/blob/arena/financial-evidence-candidate-2/docs/evidence/production-recovery/NEON-PROVIDER-RESTORE-2026-11-20.md"
     ],
     "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
-    "verificationCommit": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
+    "verificationCommit": "6734db01c3db77c9a3e714cc8ddaf11436b1cb8a",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Supported upgrade rehearsal, rollback where supported, executed forward recovery and application compatibility after restore are not evidenced. Complete each phase with native PostgreSQL 18/Prisma commands and retained output before closing ADMIN-014. Neon provider-native PITR remains a separate owner requirement; no paid plan upgrade or production recovery is authorized.",
+    "blocker": "The provider-native isolated restore and disposable PostgreSQL 18 backup/restore now pass. Still required: full row-level checksum, historical PITR selection, supported upgrade/rollback/forward-recovery phases, a scheduled snapshot policy, proof of the adopted 15-minute RPO and measured four-hour RTO. Keep ADMIN-014 BLOCKED until those phases have evidence.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
     ],
-    "currentAssessmentSourceSha": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
+    "currentAssessmentSourceSha": "6734db01c3db77c9a3e714cc8ddaf11436b1cb8a",
     "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-015": {
@@ -1122,12 +1125,14 @@
     "acceptance": "each remediation ID has a root-cause trace and appropriate independent evidence; every visual claim has genuine browser evidence; every tenant/payment claim has the relevant isolated integration proof; no finding is VERIFIED from code inspection or a unit test alone where integration/browser proof is required. Use finding statuses PENDING / IN PROGRESS / BLOCKED / IMPLEMENTED / VERIFIED and evidence labels PASS / FAIL / BLOCKED / NOT TESTED; keep these separate. Release remains NOT READY until all mandatory gates pass. Never weaken `programme-completeness` or any security/release gate to obtain green CI.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §043 (RELEASE-001)",
     "implementationLocation": "all routes/components/services/models/integrations enumerated in `docs/audits/`; `docs/audits/REMEDIATION_REGISTER.md`; tests and disposable CI; this instruction file. Primary P0 areas: `lib/url.ts`, `lib/payments/**`, `app/api/paystack/**`, `app/api/checkout/**`, `app/api/media/**`, `lib/storage/**`, tenant/session guards and product journeys. The exact affected paths must be recorded per finding after source tracing, not inferred from roadmap names.",
-    "verificationMethod": "Current PR #125 candidate head 6cf2f9344004a62918dfd8a470eacf8317f855d4 remains OPEN/DRAFT. Source changes include shared CTA-label fallback and regression test, responsive AI Front Desk header correction and regression test, 20-family CTA visibility assertion, and a dev-only 18-target real-Chrome queue stress fixture. Exact-head workflows are queued/pending (Release Validation 44178003517; Motion 44178003520; Website Studio 44178003661; Admin integrity 44178003636; Full no-database suite 44178003866; POS/ERP 44178003870; Interactive Business E2E 44178003806; migration rehearsal 44178003533). Latest Vercel Preview deployment dpl_BvwF5fc6KMd8LCnoAwmMW2sc6eMY is ERROR/db_unreachable on the exact head. The isolated Neon staging endpoint is suspended; its start request returns HTTP 423 quota exceeded. No paid plan change or production action was taken. The previous fully completed candidate 4cd6dd59b41a8f25e44820bf691a1394685bebc9 had successful disposable migration, Website Studio, motion, screenshots and authenticated business CI evidence. The owner PR comment records a completed Preview-only Paystack sandbox acceptance on that earlier candidate: two KES 499 test payments, valid/invalid webhook signature handling, duplicate-event idempotency and an active POS entitlement. Dedicated Preview-only Paystack keys are present; their values were not read. One-time fixture-seed and staging-acceptance flags are now false to prevent repeat charges/reseeding. Draft PR #126 (arena/a3de1985-jata-aftercall) batches 3–4 add R-RT-01/02, R-TI-01..04 and R-ADM-01..03 with commits, tests and CI runs in docs/audits/WHOLE_PLATFORM_REMEDIATION_2026-11-17.md §8 and docs/audits/REMEDIATION_REGISTER.md. Two-tenant matrix and role-required writes PASS on PG18 native engine; real-Chrome was red from d36f119 to e94f2f3 (stale MJENGO assertion, then a return-path harness timing defect), so later browser steps were NOT TESTED until 275e117, where real Chrome passed (run 44275702188: MJENGO, return paths A–G, agent application, ERP). Vercel Preview, Paystack Preview acceptance, R2 and Neon native PITR remain BLOCKED. Status stays BLOCKED.",
-    "testResult": "BLOCKED. Programme register currently contains 23 PASS, 21 BLOCKED and 3 NOT_TESTED (24 non-PASS requirements). Correction to the historical dependency finding: GitHub withdrew GHSA-fc5q-39xc-vjpf on 2026-11-18, stating it is not a security issue. On PR #126 exact head 651a40b9a3c96444a6b53b3599227a268f9aea00, npm audit --omit=dev and npm audit both exited 0; Release Validation run 44742454584 records 0 production and 0 full-tree findings. No picomatch override, suppression, downgrade or lockfile workaround was applied. The dependency advisory is RESOLVED, not an open blocker. Release remains BLOCKED by the separate 24 non-PASS programme requirements, Preview/Neon staging unavailability and outstanding owner/external acceptance. No merge or deployment is authorized.",
+    "verificationMethod": "Current PR #130 candidate is OPEN/DRAFT on arena/financial-evidence-candidate-2, exact head 6734db01c3db77c9a3e714cc8ddaf11436b1cb8a. Exact-head evidence: full no-database suite PASS (44798319402); Telnyx Voice Foundation tests PASS (44798319623); owner-authority tests PASS (44798319396); POS/ERP verification PASS (44798319655); candidate PostgreSQL 18 migration rehearsal, D2 controls and disposable logical backup/restore PASS (44798319461); Release Validation PASS (44798319480). Isolated Vercel Preview deployment dpl_6P8uCmhzQdBN3S2QasoaT6mjPgwN reached READY for this exact SHA; preview isolation passed and migrations deployed to the separate Neon jata_staging database. Interactive Business, Website Studio, motion and premium screenshot browser jobs remain in progress. Admin instruction integrity's instruction check passes but programme-completeness fails because the canonical register still has 24 non-PASS requirements. No production deploy or PR merge occurred.",
+    "testResult": "BLOCKED. The canonical register still has 47 requirements: 23 PASS, 21 BLOCKED and 3 NOT_TESTED. The exact-head full no-database suite, owner-authority tests, Telnyx voice foundation tests, POS/ERP verification, candidate PostgreSQL 18 migration rehearsal/backup-restore and Release Validation pass. Exact-head isolated Vercel Preview is READY with preview isolation and migrations deployed against the separate empty jata_staging database. Browser acceptance jobs for Interactive Business, Website Studio, motion and six-viewport screenshots are still running and are not yet accepted. Paystack sandbox lifecycle is NOT TESTED on this head because branch-scoped PAYSTACK_TEST_SECRET_KEY and PAYSTACK_TEST_PUBLIC_KEY are absent from Vercel Preview; the runbook now requires these dedicated test-only keys. No live charge was initiated because no exact amount and explicitly consenting test payer were designated. Telnyx DID inventory, KYC approval and live inbound PSTN call remain NOT TESTED; support follow-up is pending. Neon provider-native restore is evidenced, but scheduled backup policy, full row checksums, PITR, RPO and RTO remain open. No merge, production deployment, production restore, payout, port-in or paid DID activation was performed.",
     "evidence": [
       "docs/evidence/programme-remediation-2026-11-17/PICOMATCH-REDOS-SECURITY-REVIEW.md",
       "docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md",
-      "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md"
+      "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
+      "docs/evidence/production-recovery/NEON-PROVIDER-RESTORE-2026-11-20.md",
+      "docs/evidence/providers/TELNYX-KENYA-INBOUND-VOICE-2026-11-20.md"
     ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418686",
@@ -1146,12 +1151,24 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44167665563",
       "https://vercel.com/powerbot-1/jata-aftercall/dpl_BvwF5fc6KMd8LCnoAwmMW2sc6eMY",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44742454584",
-      "https://github.com/advisories/GHSA-fc5q-39xc-vjpf"
+      "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319402",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319396",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319623",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319655",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319461",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319480",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319437",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319446",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319636",
+      "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44798319551",
+      "https://vercel.com/powerbot-1/jata-aftercall/6P8uCmhzQdBN3S2QasoaT6mjPgwN",
+      "https://github.com/POWERBot-1/Jata-Aftercall/blob/arena/financial-evidence-candidate-2/docs/evidence/providers/TELNYX-KENYA-INBOUND-VOICE-2026-11-20.md"
     ],
     "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/PICOMATCH-REDOS-SECURITY-REVIEW.md; docs/evidence/programme-remediation-2026-11-17/WEBSITE_STUDIO_VISUAL_REVIEW.md",
-    "verificationCommit": "4cd6dd59b41a8f25e44820bf691a1394685bebc9",
+    "verificationCommit": "6734db01c3db77c9a3e714cc8ddaf11436b1cb8a",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The picomatch GHSA-fc5q-39xc-vjpf finding is closed as withdrawn by GitHub on 2026-11-18; exact-head production and full npm audits are both clean (Release Validation run 44742454584). Remaining blockers are the 24 non-PASS programme requirements, Preview deployment blocked by suspended/quota-exhausted Neon staging compute (HTTP 423), and owner/external acceptance including Neon recovery, domain/email verification, financial governance and remaining product/motion acceptance. Do not merge or deploy.",
+    "blocker": "Release remains NOT READY while 24 programme requirements remain non-PASS. Outstanding blockers include Paystack Preview test credentials and full sandbox lifecycle; explicit live test payer/amount authorization; Telnyx Kenya DID availability, KYC and live inbound PSTN acceptance; full motion/Studio/Interactive Business browser evidence and independent visual review; and Neon scheduled backup, historical PITR, full row-level verification, RPO and RTO. Do not merge or deploy production.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "app/control/**",
@@ -1164,7 +1181,7 @@
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
       "docs/agents/OWNER_DECISIONS_AND_ACCEPTANCE.md"
     ],
-    "currentAssessmentSourceSha": "6cf2f9344004a62918dfd8a470eacf8317f855d4",
+    "currentAssessmentSourceSha": "6734db01c3db77c9a3e714cc8ddaf11436b1cb8a",
     "currentAssessmentStatus": "BLOCKED"
   },
   "RELEASE-002": {
