@@ -45,10 +45,11 @@ vi.mock("@/lib/db", () => {
   const db: any = {};
   db.business = {
     findUnique: vi.fn(async ({ where }: any) => state.business && (where.id === state.business.id || where.slug === state.business.slug) ? state.business : null),
-    create: vi.fn(async ({ data }: any) => { state.business = { id: "biz-a", ...data, isPublished: false, status: "PENDING" }; return state.business; }),
+    create: vi.fn(async ({ data }: any) => { state.business = { id: "business-a", createdAt: new Date(), ...data, isPublished: false, status: "PENDING" }; return state.business; }),
     update: vi.fn(async ({ data }: any) => { state.business = { ...state.business, ...data }; return state.business; }),
   };
   db.businessMember = { create: vi.fn(async ({ data }: any) => ({ id: "member-a", ...data })) };
+  db.automationEvent = { create: vi.fn(async ({ data }: any) => data) };
   db.planConfig = { findUnique: vi.fn(async ({ where }: any) => where.id === state.plan.id ? state.plan : null) };
   db.user = { findUnique: vi.fn(async () => ({ email: "owner@example.test" })) };
   db.payment = {
@@ -103,21 +104,21 @@ describe("deterministic customer lifecycle (database and payment provider mocked
     expect(state.business).toMatchObject({ ownerId: "user-a", location: "Nairobi CBD", lat: -1.286389, lng: 36.817223, isPublished: false });
 
     const checkout = await startCheckout(jsonRequest("https://app.test/api/checkout", "POST", {
-      businessId: "biz-a", planId: "plan-month", amount: 1,
+      businessId: "business-a", planId: "plan-month", amount: 1,
     }));
     expect(checkout.status).toBe(200);
     expect(await checkout.json()).toMatchObject({ mock: true, payment: { amount: 14900, status: "PENDING", currency: "KES" } });
-    expect(state.payment).toMatchObject({ businessId: "biz-a", userId: "user-a", planId: "plan-month", amount: 14900 });
+    expect(state.payment).toMatchObject({ businessId: "business-a", userId: "user-a", planId: "plan-month", amount: 14900 });
 
     const verified = await verifyPayment(new Request(`https://app.test/api/paystack/verify?reference=${state.payment.reference}&mock=success`));
     expect(verified.status).toBe(200);
     expect(await verified.json()).toMatchObject({ status: "PAID", subscriptionStatus: "ACTIVE" });
     expect(state.payment.status).toBe("PAID");
-    expect(state.subscription).toMatchObject({ businessId: "biz-a", status: "ACTIVE", planId: "plan-month" });
+    expect(state.subscription).toMatchObject({ businessId: "business-a", status: "ACTIVE", planId: "plan-month" });
     expect(state.subscription.expiresAt.getTime() - state.subscription.startAt.getTime()).toBe(30 * 86400000);
 
     expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("not_found");
-    const published = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    const published = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "business-a", isPublished: true }));
     expect(published.status).toBe(200);
     expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("public");
     expect(getDirectionsUrl(state.business.location, state.business.lat, state.business.lng)).toContain("-1.286389%2C36.817223");
@@ -128,17 +129,17 @@ describe("deterministic customer lifecycle (database and payment provider mocked
     expect(created.status).toBe(201);
 
     // Direct API attempt with no payment at all → rejected server-side, stays a private draft.
-    const unpaid = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    const unpaid = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "business-a", isPublished: true }));
     expect(unpaid.status).toBe(403);
     expect((await unpaid.json()).error).toBe(SAFE_ERRORS.publishPaymentRequired);
     expect(state.business.isPublished).toBe(false);
     expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("not_found");
 
     // Payment started but not verified (PENDING) → still cannot publish.
-    const checkout = await startCheckout(jsonRequest("https://app.test/api/checkout", "POST", { businessId: "biz-a", planId: "plan-month" }));
+    const checkout = await startCheckout(jsonRequest("https://app.test/api/checkout", "POST", { businessId: "business-a", planId: "plan-month" }));
     expect(checkout.status).toBe(200);
     expect(state.payment.status).toBe("PENDING");
-    const stillPending = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    const stillPending = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "business-a", isPublished: true }));
     expect(stillPending.status).toBe(403);
     expect((await stillPending.json()).error).toBe(SAFE_ERRORS.publishPaymentRequired);
     expect(state.business.isPublished).toBe(false);
@@ -146,13 +147,13 @@ describe("deterministic customer lifecycle (database and payment provider mocked
     // Verified payment (PAID + ACTIVE subscription) → publish succeeds.
     const verified = await verifyPayment(new Request(`https://app.test/api/paystack/verify?reference=${state.payment.reference}&mock=success`));
     expect(verified.status).toBe(200);
-    const published = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    const published = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "business-a", isPublished: true }));
     expect(published.status).toBe(200);
     expect(state.business.isPublished).toBe(true);
     expect(publicPageDecision({ business: { isPublished: state.business.isPublished, ownerId: "user-a" }, viewer: null })).toBe("public");
 
     // Unpublishing stays available without payment checks.
-    const unpublished = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: false }));
+    const unpublished = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "business-a", isPublished: false }));
     expect(unpublished.status).toBe(200);
     expect(state.business.isPublished).toBe(false);
   });
@@ -161,9 +162,9 @@ describe("deterministic customer lifecycle (database and payment provider mocked
     const created = await createBusiness(jsonRequest("https://app.test/api/business", "POST", { name: "Sample Cafe", category: "Restaurant" }));
     expect(created.status).toBe(201);
     // Simulate an inconsistent state: subscription-looking row without a verified PAID payment.
-    state.payment = { id: "payment-x", businessId: "biz-a", userId: "user-a", planId: "plan-month", status: "FAILED", reference: "ref-x", amount: 14900, currency: "KES" };
-    state.subscription = { id: "sub-x", businessId: "biz-a", userId: "user-a", planId: "plan-month", status: "ACTIVE", startAt: new Date(), expiresAt: new Date(Date.now() + 30 * 86400000), graceUntil: new Date(Date.now() + 33 * 86400000) };
-    const attempt = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "biz-a", isPublished: true }));
+    state.payment = { id: "payment-x", businessId: "business-a", userId: "user-a", planId: "plan-month", status: "FAILED", reference: "ref-x", amount: 14900, currency: "KES" };
+    state.subscription = { id: "sub-x", businessId: "business-a", userId: "user-a", planId: "plan-month", status: "ACTIVE", startAt: new Date(), expiresAt: new Date(Date.now() + 30 * 86400000), graceUntil: new Date(Date.now() + 33 * 86400000) };
+    const attempt = await updateBusiness(jsonRequest("https://app.test/api/business", "PATCH", { businessId: "business-a", isPublished: true }));
     expect(attempt.status).toBe(403);
     expect((await attempt.json()).error).toBe(SAFE_ERRORS.publishPaymentRequired);
     expect(state.business.isPublished).toBe(false);

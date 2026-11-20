@@ -126,6 +126,8 @@ function createFallbackPrisma(): any {
       upsert: async () => ({ id: "mock" }),
       create: async () => ({ id: "mock" }),
     },
+    // Automation inbox/outbox: empty reads in offline builds, writes fail rather than faking durable delivery.
+    automationEvent: emptyModel(),
     pageTheme: {
       upsert: async () => ({ id: "mock" }),
       findMany: async () => [],

@@ -191,6 +191,9 @@ describe("runtime and schema guards", () => {
       // only — no existing table (including the four stamp-card tables) is altered, read or
       // rewritten, and no column is added to one.
       "20261129000000_loyalty_points_rewards",
+      // Automation event inbox/outbox is a separate additive queue; no financial tables or rows.
+      "20261130000000_automation_event_inbox",
+      "20261201000000_ai_front_desk_handoff_tasks",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

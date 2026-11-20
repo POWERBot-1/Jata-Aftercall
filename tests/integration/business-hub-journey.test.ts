@@ -20,6 +20,22 @@ vi.mock("@/lib/db", async () => {
   (globalThis as any).__hubFake = fake;
   return { default: fake.db };
 });
+// These legacy journey fixtures use short tenant IDs (bizA/bizB), intentionally rejected by the
+// production event-envelope validator. PostgreSQL tests exercise that validator and real atomicity;
+// this route-focused fake only records the transactional insert so the existing journey remains
+// representative without loosening production validation.
+vi.mock("@/lib/automation/events", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/automation/events")>();
+  return {
+    ...actual,
+    enqueueAutomationEvent: async (tx: any, event: any) => {
+      await tx.automationEvent.create({ data: {
+        eventId: event.id, tenantId: event.tenantId, product: event.source, eventType: event.type,
+        direction: "OUTBOUND", status: "PENDING", payload: event,
+      } });
+    },
+  };
+});
 
 vi.mock("@/lib/auth", () => ({
   getSession: vi.fn(async () => mocks.session),
@@ -452,6 +468,10 @@ describe("smart customer hub", () => {
     );
     expect(created.status).toBe(201);
     const record = rows("customerEnquiry")[0];
+    const event = rows("automationEvent").find((row: any) => row.payload.data.enquiryId === record.id);
+    expect(event).toMatchObject({ tenantId: record.businessId, product: "business_page", eventType: "enquiry.created", status: "PENDING" });
+    expect(JSON.stringify(event.payload)).not.toContain("peter@example.com");
+    expect(JSON.stringify(event.payload)).not.toContain("Peter Otieno");
 
     const listed = await listEnquiries(ownerRequest("GET", `${ORIGIN}/api/business/bizA/enquiries`) as Request, {
       params: Promise.resolve({ businessId: "bizA" }),

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   businessCreate: vi.fn(),
   businessUpdate: vi.fn(),
   memberCreate: vi.fn(),
+  eventCreate: vi.fn(),
   audit: vi.fn(),
 }));
 
@@ -27,6 +28,8 @@ vi.mock("@/lib/db", () => ({
   default: {
     business: { findUnique: mocks.businessFind, create: mocks.businessCreate, update: mocks.businessUpdate },
     businessMember: { create: mocks.memberCreate },
+    automationEvent: { create: mocks.eventCreate },
+    $transaction: vi.fn(async (callback: any) => callback({ business: { create: mocks.businessCreate }, automationEvent: { create: mocks.eventCreate } })),
   },
 }));
 vi.mock("@/lib/audit", () => ({ logAudit: mocks.audit }));
@@ -45,7 +48,7 @@ describe("POST /api/business nominated contact number", () => {
     vi.clearAllMocks();
     mocks.session = { userId: "owner-a", role: "CUSTOMER" };
     mocks.businessFind.mockResolvedValue(null);
-    mocks.businessCreate.mockImplementation(async ({ data }: any) => ({ id: "biz-a", ownerId: "owner-a", ...data }));
+    mocks.businessCreate.mockImplementation(async ({ data }: any) => ({ id: "business-a", ownerId: "owner-a", createdAt: new Date(), ...data }));
   });
 
   it("accepts the official demo format 0724317010 and defaults WhatsApp to the same number", async () => {

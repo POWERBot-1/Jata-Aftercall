@@ -265,10 +265,12 @@ export async function updateTask(client: any, input: UpdateTaskInput) {
     if (to === "DONE") {
       data.completedAt = new Date();
       data.completedBy = input.actorId ?? null;
+      if (task.sourceType === "AI_FRONT_DESK_HANDOFF") data.aiHandoffActiveKey = null;
     }
     if (to === "CANCELLED" && !String(input.reason ?? "").trim()) {
       throw Object.assign(new Error("Say why the task is being cancelled."), { status: 400 });
     }
+    if (to === "CANCELLED" && task.sourceType === "AI_FRONT_DESK_HANDOFF") data.aiHandoffActiveKey = null;
   }
 
   if (input.priority !== undefined) data.priority = normalizeTaskPriority(input.priority);
