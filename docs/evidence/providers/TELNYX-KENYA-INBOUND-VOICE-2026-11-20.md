@@ -10,6 +10,14 @@
 - Inbound PSTN call from Safaricom/Airtel to a Telnyx Kenya DID: NOT TESTED.
 - Production inbound AI call: NOT ACCEPTED.
 
+## Public Telnyx Kenya availability and KYC references (checked 2026-11-20)
+
+Telnyx's published 29 October 2024 market-expansion note explicitly lists Kenya as supporting Local, Mobile and Toll-Free numbers; its PSTN replacement/local-calling page also lists +254. This establishes market-level product support, not current inventory or account-level eligibility. References: https://telnyx.com/release-notes/local-calling-apac-emea and https://support-v2.telnyx.com/en/articles/6622229-pstn-replacement-local-calling-with-telnyx.
+
+The current Kenya DID requirements page confirms business identity details (authorised representative name and contact phone, company name), worldwide business address, proof of address dated within three months, business-use requirement, and service-usage description for Local numbers. Reference: https://support-v2.telnyx.com/en/articles/5466736-kenya-did-requirements.
+
+Telnyx's international-number activation guidance states that inbound calling remains inactive until required documents are uploaded and verified, which can take a few working days; if no number is returned in portal search, a direct DID request can be submitted. References: https://support.telnyx.com/en/articles/5469551-international-numbers-required-documents and https://support.telnyx.com/en/articles/3562148-requesting-numbers.
+
 ## Telnyx written response (2026-11-20)
 
 Quinn confirmed the following onboarding path and pricing components in writing:
