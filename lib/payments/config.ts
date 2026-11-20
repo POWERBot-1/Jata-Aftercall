@@ -98,14 +98,23 @@ export type PaystackConnectorConfig = {
   missing: string[];
 };
 
+/** Select the provider credential by deployment, not by the shared legacy env var. */
+export function getPaystackSecretKey(): string {
+  return envValue(envValue("VERCEL_ENV").toLowerCase() === "preview" ? "PAYSTACK_TEST_SECRET_KEY" : "PAYSTACK_SECRET_KEY");
+}
+
+export function getPaystackPublicKey(): string {
+  return envValue(envValue("VERCEL_ENV").toLowerCase() === "preview" ? "PAYSTACK_TEST_PUBLIC_KEY" : "PAYSTACK_PUBLIC_KEY");
+}
+
 export function readPaystackConfig(): PaystackConnectorConfig {
   // Never let a Preview deployment inherit the shared production/live key. Preview has a
   // dedicated test-key namespace; production continues to use the existing production keys.
   const deployment = envValue("VERCEL_ENV").toLowerCase();
   const preview = deployment === "preview";
   const requiredMode: "TEST" | "LIVE" | null = preview ? "TEST" : deployment === "production" ? "LIVE" : null;
-  const secretKey = envValue(preview ? "PAYSTACK_TEST_SECRET_KEY" : "PAYSTACK_SECRET_KEY");
-  const publicKey = envValue(preview ? "PAYSTACK_TEST_PUBLIC_KEY" : "PAYSTACK_PUBLIC_KEY");
+  const secretKey = getPaystackSecretKey();
+  const publicKey = getPaystackPublicKey();
   const secretMode: PaystackConnectorConfig["mode"] = secretKey.startsWith("sk_live_")
     ? "LIVE"
     : secretKey.startsWith("sk_test_")
