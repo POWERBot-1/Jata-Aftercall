@@ -47,6 +47,10 @@ A full read-only comparison was subsequently completed across all 194 base table
 
 A second snapshot request targeting the historical timestamp `2026-11-20T19:45:00Z` was attempted against the production branch to exercise provider-selected point-in-time recovery. Neon rejected the request with HTTP 422 `snapshots limit exceeded`; no additional snapshot or branch was created. The existing manual snapshot remains intact. This is recorded as BLOCKED, not as PITR evidence.
 
+## Automatic snapshot schedule inspection
+
+A read-only Neon provider query for the production branch returned an empty automatic snapshot schedule (`schedule: []`). No schedule was configured or changed because that would mutate production provider configuration and could affect usage/cost; separate owner authorization is required.
+
 ## Remaining recovery blockers
 
 - Provider history retention is six hours; the adopted payment/subscription/ledger RPO is 15 minutes. The current setting does not prove that RPO.
