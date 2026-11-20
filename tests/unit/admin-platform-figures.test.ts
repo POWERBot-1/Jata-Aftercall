@@ -111,10 +111,10 @@ describe("renewalCounts", () => {
 describe("admin overview page", () => {
   beforeEach(() => { db.fail = false; });
 
-  it("shows Jata subscription revenue and customer payments to businesses as separate figures", async () => {
+  it("labels PAID-status payment amounts separately without claiming settlement", async () => {
     const stats = collectStats(await AdminOverview());
-    expect(stats["Subscription revenue (KES)"]).toBe("3,500");
-    expect(stats["Customer payments to businesses (KES)"]).toBe("2,500");
+    expect(stats["PAID subscription payment amount (KES)"]).toBe("3,500");
+    expect(stats["PAID customer payments to businesses (KES)"]).toBe("2,500");
     expect(Object.keys(stats)).not.toContain("Settled revenue (KES)");
     expect(stats["Page views"]).toBe("7");
   });
@@ -122,8 +122,8 @@ describe("admin overview page", () => {
   it("a failed money or analytics read is shown as Unavailable, never as 0", async () => {
     db.fail = true;
     const stats = collectStats(await AdminOverview());
-    expect(stats["Subscription revenue (KES)"]).toBe("Unavailable");
-    expect(stats["Customer payments to businesses (KES)"]).toBe("Unavailable");
+    expect(stats["PAID subscription payment amount (KES)"]).toBe("Unavailable");
+    expect(stats["PAID customer payments to businesses (KES)"]).toBe("Unavailable");
     expect(stats["Page views"]).toBe("Unavailable");
     expect(stats["WhatsApp taps"]).toBe("Unavailable");
   });
