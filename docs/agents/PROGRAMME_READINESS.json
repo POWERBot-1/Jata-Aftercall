@@ -469,8 +469,8 @@
     "acceptance": "Record native migration evidence for each requested phase, including a safe strategy for non-reversible migrations; validate restore/recovery and compatibility on disposable infrastructure.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
-    "verificationMethod": "Partial exact-candidate native PostgreSQL 18 evidence only: fresh 65-migration history, ordered migration ledger, schema/object parity, idempotent second deploy, deliberate failure detection, and full logical backup/restore into a separate disposable database with schema/constraint, 194-table row-count and migration-ledger comparisons. The original owner acceptance additionally requires a supported upgrade rehearsal, rollback where supported, executed forward recovery and application compatibility after recovery; those phases have not yet been demonstrated. Additional provider-native Neon recovery was executed on 2026-11-20: snapshot snap-snowy-block-ax3dald2 restored to isolated branch br-young-glade-axtyktor in project damp-forest-92941163; Neon reported restored/ready. Production and restored branches matched 195/195 tables/views and sampled User, Business, Payment, Subscription, POS, VoiceCall and Prisma migration row counts. The evidence is a provider snapshot/restore plus schema inventory and critical-table count comparison, not a full row-level checksum.",
-    "testResult": "PARTIAL PASS. Exact PR #130 candidate SHA 6734db01c3db77c9a3e714cc8ddaf11436b1cb8a: disposable PostgreSQL 18 candidate migration rehearsal and full logical backup/restore passed (run 44798319461). In addition, Neon provider-native production snapshot snap-snowy-block-ax3dald2 restored into isolated branch br-young-glade-axtyktor; restored branch reached ready and matched the production table/view inventory (195/195) plus sampled critical-table counts. Production was not replaced or restored. Remaining NOT TESTED/BLOCKED: full row-level checksum across all tables, historical PITR selection, supported upgrade/rollback/forward-recovery phases, scheduled snapshot policy, adopted 15-minute RPO and measured four-hour RTO. No production data mutation occurred.",
+    "verificationMethod": "Provider-native Neon snapshot and isolated restore, followed by exact schema/view inventory and full read-only row-count/content-digest comparison across all 194 public base tables on production and restored branches.",
+    "testResult": "PARTIAL PASS. Neon snapshot snap-snowy-block-ax3dald2 restored to isolated branch br-young-glade-axtyktor in production project damp-forest-92941163; provider reports restored/ready. Source and restored branches have 195/195 tables/views, 194/194 base tables, identical view definition digest, and matching row counts plus deterministic sorted per-row content digests across all 194 base tables (1,007 total rows). Production remained untouched. Still NOT TESTED/BLOCKED: historical PITR selection, scheduled snapshot policy, supported upgrade/rollback/forward-recovery phases, adopted 15-minute RPO, and measured four-hour RTO.",
     "evidence": [
       "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
@@ -483,16 +483,16 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/blob/arena/financial-evidence-candidate-2/docs/evidence/production-recovery/NEON-PROVIDER-RESTORE-2026-11-20.md"
     ],
     "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
-    "verificationCommit": "6734db01c3db77c9a3e714cc8ddaf11436b1cb8a",
+    "verificationCommit": "699e31c661944b90f73609aa77fc7ca17e62fa44",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The provider-native isolated restore and disposable PostgreSQL 18 backup/restore now pass. Still required: full row-level checksum, historical PITR selection, supported upgrade/rollback/forward-recovery phases, a scheduled snapshot policy, proof of the adopted 15-minute RPO and measured four-hour RTO. Keep ADMIN-014 BLOCKED until those phases have evidence.",
+    "blocker": "Provider-native snapshot, isolated restore, full 194-table row-count/content-digest parity (1,007 rows) and view-definition parity now pass. ADMIN-014 remains BLOCKED until historical PITR selection, a scheduled snapshot policy, supported upgrade/rollback/forward-recovery phases, the adopted 15-minute RPO and a measured four-hour RTO are evidenced.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
     ],
-    "currentAssessmentSourceSha": "6734db01c3db77c9a3e714cc8ddaf11436b1cb8a",
+    "currentAssessmentSourceSha": "699e31c661944b90f73609aa77fc7ca17e62fa44",
     "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-015": {
