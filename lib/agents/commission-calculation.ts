@@ -126,6 +126,24 @@ export function evaluateCommission(input: {
   const { policy, payment, attribution, eligibleMinor } = input;
   if (!policy || policy.approval !== "APPROVED") return { eligible: false, reason: "POLICY_NOT_APPROVED" };
   if (!completeGovernance(policy.governance)) return { eligible: false, reason: "POLICY_INCOMPLETE" };
+  // Enforce the owner's adopted initial policy boundary even if a future caller supplies a
+  // syntactically complete but broader policy snapshot. This is a calculation guard, not an
+  // accrual writer or approval of any numeric rate.
+  const governance = policy.governance;
+  if (
+    policy.basis !== "NET" ||
+    policy.eligibleEvents.length !== 1 ||
+    policy.eligibleEvents[0] !== "NEW_SALE" ||
+    governance.attribution.precedence !== "FIRST_TOUCH" ||
+    governance.attribution.windowDays !== 30 ||
+    governance.recurrence.newSale !== "FIRST_SETTLED_NON_TEST_PAYMENT" ||
+    governance.recurrence.renewal !== "NOT_COMMISSIONABLE" ||
+    governance.recurrence.upgrade !== "NOT_COMMISSIONABLE" ||
+    governance.amountTreatment.taxTreatment !== "EXCLUDE_SEPARATELY_ITEMIZED_TAX" ||
+    governance.amountTreatment.discountTreatment !== "AFTER_RECURRING_DISCOUNTS" ||
+    governance.amountTreatment.feeTreatment !== "EXCLUDE_PROVIDER_FEES" ||
+    governance.hierarchy.enabled !== false
+  ) return { eligible: false, reason: "POLICY_OUTSIDE_OWNER_BOUNDARY" };
   if (!nonempty(policy.id) || !nonempty(policy.version) || !validDate(policy.effectiveFrom) ||
       (policy.effectiveUntil !== null && (!validDate(policy.effectiveUntil) || policy.effectiveUntil <= policy.effectiveFrom)) ||
       !Array.isArray(policy.eligiblePlanIds) || !Array.isArray(policy.eligibleEvents) || policy.currency !== "KES") {
