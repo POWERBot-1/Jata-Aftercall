@@ -14,8 +14,8 @@ const testOnlyGovernance: CommissionPolicyGovernance = {
 };
 // Explicit placeholders only: they are not JATA policy and must never be persisted or used for accrual.
 const policy: CommissionPolicySnapshot = { id: "policy-test", version: "v1", approval: "APPROVED", effectiveFrom: new Date("2026-01-01Z"), effectiveUntil: null, currency: "KES", eligiblePlanIds: ["plan-1"], eligibleEvents: ["NEW_SALE"], basis: "NET", rule: { kind: "PERCENTAGE", basisPoints: 1250, rounding: "HALF_UP" }, governance: testOnlyGovernance };
-const payment: CommissionPaymentSnapshot = { id: "payment-1", reference: "sandbox-reference", status: "PAID", purpose: "SUBSCRIPTION", paystackId: "sandbox-transaction", currency: "KES", amountMinor: 10000, businessId: "business-1", customerId: "customer-1", planId: "plan-1", verifiedAt: new Date("2026-02-01Z"), event: "NEW_SALE" };
-const attribution: CommissionAttributionSnapshot = { agentId: "agent-1", agentUserId: "agent-user-1", agentStatus: "ACTIVE", businessId: "business-1", customerId: "customer-1", validFrom: new Date("2026-01-10Z"), validUntil: null };
+const payment: CommissionPaymentSnapshot = { id: "payment-1", reference: "sandbox-reference", status: "PAID", purpose: "SUBSCRIPTION", paystackId: "sandbox-transaction", isTestMode: false, isFirstSettledPaymentForSubscription: true, currency: "KES", amountMinor: 10000, businessId: "business-1", customerId: "customer-1", planId: "plan-1", verifiedAt: new Date("2026-02-01Z"), event: "NEW_SALE" };
+const attribution: CommissionAttributionSnapshot = { agentId: "agent-1", agentUserId: "agent-user-1", agentStatus: "ACTIVE", businessId: "business-1", customerId: "customer-1", validFrom: new Date("2026-01-10Z"), validUntil: null, isFirstTouch: true };
 const evaluate = (overrides: Partial<Parameters<typeof evaluateCommission>[0]> = {}) => evaluateCommission({ policy, payment, attribution, eligibleMinor: 8000, ...overrides });
 
 describe("commission policy evaluation (hypothetical fixtures only)", () => {
@@ -40,13 +40,13 @@ describe("commission policy evaluation (hypothetical fixtures only)", () => {
     expect(evaluate({ attribution: { ...attribution, validFrom: new Date("2025-12-31Z") } })).toMatchObject({ reason: "ATTRIBUTION_OUTSIDE_WINDOW" });
   });
   it("does not credit unverified, refunded or non-subscription events", () => {
-    for (const override of [{ status: "PENDING" }, { status: "REFUNDED" }, { paystackId: null }, { purpose: "ORDER" }]) {
+    for (const override of [{ status: "PENDING" }, { status: "REFUNDED" }, { paystackId: null }, { purpose: "ORDER" }, { isTestMode: true }, { isFirstSettledPaymentForSubscription: false }]) {
       expect(evaluate({ payment: { ...payment, ...override } })).toMatchObject({ reason: "PAYMENT_NOT_VERIFIED" });
     }
     expect(evaluate({ payment: { ...payment, event: "RENEWAL" } })).toMatchObject({ reason: "PAYMENT_NOT_ELIGIBLE" });
   });
   it("blocks self-referral, suspended agents, mismatched customers, and expired attribution", () => {
-    for (const override of [{ agentUserId: payment.customerId }, { agentStatus: "SUSPENDED" }, { businessId: "other" }, { customerId: "other" }, { validUntil: payment.verifiedAt }]) {
+    for (const override of [{ agentUserId: payment.customerId }, { agentStatus: "SUSPENDED" }, { businessId: "other" }, { customerId: "other" }, { validUntil: payment.verifiedAt }, { isFirstTouch: false }]) {
       expect(evaluate({ attribution: { ...attribution, ...override } })).toMatchObject({ reason: "ATTRIBUTION_NOT_ELIGIBLE" });
     }
   });
