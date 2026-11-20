@@ -27,6 +27,9 @@ Read-only inspection of source and restored `neondb`:
 | Check | Production | Restored | Result |
 |---|---:|---:|---|
 | Tables and views | 195 | 195 | Match |
+| Base tables row-count + content digest | 194 | 194 | Match |
+| Total rows across base tables | 1,007 | 1,007 | Match |
+| View definitions | 1 | 1 | Match |
 | Database object inventory | — | — | Identical |
 | User rows | 13 | 13 | Match |
 | Business rows | 17 | 17 | Match |
@@ -37,7 +40,7 @@ Read-only inspection of source and restored `neondb`:
 | Voice calls | 0 | 0 | Match |
 | Prisma migration ledger rows | 66 | 66 | Match |
 
-The comparison is a schema-inventory and critical-table row-count check. It is not a full row-by-row checksum of all 195 tables.
+A full read-only comparison was subsequently completed across all 194 base tables. For each table, the exercise compared exact row counts and a deterministic SHA-256-independent MD5 aggregate of sorted per-row MD5 hashes derived from `to_jsonb(row)::text`; all 194 table digests and counts matched, covering 1,007 rows in total. The single non-system view definition digest also matched. The hash is an integrity comparison for this restore exercise, not a cryptographic attestation signed by Neon. The comparison was performed in bounded batches of 24 tables, using read-only SQL on both branches.
 
 ## Remaining recovery blockers
 
@@ -53,7 +56,8 @@ The comparison is a schema-inventory and critical-table row-count check. It is n
 - Isolated provider-native restore: PASS
 - Restored branch readiness: PASS
 - Critical-table count parity and full table/view inventory: PASS
-- Full row-level checksum parity: NOT TESTED
+- Full base-table row-count and content-digest parity (194 tables / 1,007 rows): PASS
+- View-definition parity (1 view): PASS
 - Historical PITR selection: NOT TESTED
 - Scheduled backup policy: BLOCKED
 - Adopted 15-minute RPO: BLOCKED
