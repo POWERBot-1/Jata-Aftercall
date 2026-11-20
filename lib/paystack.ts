@@ -1,6 +1,7 @@
 /** Server-only Paystack integration. Never return or log secret configuration. */
 import crypto from "crypto";
 import prisma from "./db";
+import { getPaystackSecretKey } from "./payments/config";
 import { isProviderTransactionId, isSettleablePaymentStatus, subscriptionWindow } from "./paymentVerification";
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
 import { POS_PLAN_KEY } from "./pos/entitlement";
@@ -15,7 +16,7 @@ import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 function getSecret(): string {
-  const secret = process.env.PAYSTACK_SECRET_KEY;
+  const secret = getPaystackSecretKey();
   if (!secret) throw new Error("PAYSTACK_NOT_CONFIGURED");
   return secret;
 }
@@ -85,8 +86,9 @@ export function verifyWebhookSignature(rawBody: string, signature: string | null
   // Paystack sends a 128-character SHA-512 HMAC as hexadecimal. Buffer.from(hex)
   // silently ignores a trailing non-hex suffix, so validate the complete encoding before
   // decoding; otherwise a valid signature plus junk can be accepted as the valid prefix.
-  if (!signature || !/^[0-9a-f]{128}$/i.test(signature) || !process.env.PAYSTACK_SECRET_KEY) return false;
-  const expected = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(rawBody).digest();
+  const secret = getPaystackSecretKey();
+  if (!signature || !/^[0-9a-f]{128}$/i.test(signature) || !secret) return false;
+  const expected = crypto.createHmac("sha512", secret).update(rawBody).digest();
   const supplied = Buffer.from(signature, "hex");
   return supplied.length === expected.length && crypto.timingSafeEqual(expected, supplied);
 }
