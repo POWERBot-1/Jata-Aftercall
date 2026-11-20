@@ -168,9 +168,10 @@ export function evaluateCommission(input: {
       !payment.isFirstSettledPaymentForSubscription || !isProviderTransactionId(payment.paystackId)) {
     return { eligible: false, reason: "PAYMENT_NOT_VERIFIED" };
   }
-  if (payment.currency !== policy.currency || eligibleMinor > payment.amountMinor ||
-      (policy.basis === "GROSS" && eligibleMinor !== payment.amountMinor) ||
-      (policy.basis !== "GROSS" && policy.basis !== "NET")) return { eligible: false, reason: "BASIS_INVALID" };
+  // The owner-boundary guard above narrows the policy basis to NET before this point.
+  if (payment.currency !== policy.currency || eligibleMinor > payment.amountMinor) {
+    return { eligible: false, reason: "BASIS_INVALID" };
+  }
   if (payment.verifiedAt < policy.effectiveFrom || (policy.effectiveUntil && payment.verifiedAt >= policy.effectiveUntil)) {
     return { eligible: false, reason: "POLICY_NOT_EFFECTIVE" };
   }
