@@ -51,7 +51,10 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
 
   const current = await tx.posSubscription.findUnique({ where: { businessId: payment.businessId } });
 
-  if (payment.status === "PAID" && current?.status === "ACTIVE") {
+  // A PAID payment is idempotent only when this exact payment already activated the current
+  // subscription. An active subscription paid by an earlier payment must not swallow a new
+  // verified payment or a legacy orphan-payment repair.
+  if (payment.status === "PAID" && current?.status === "ACTIVE" && current.paymentId === payment.id) {
     if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
     return { subscription: current, alreadySettled: true, posSubscription: true };
   }
