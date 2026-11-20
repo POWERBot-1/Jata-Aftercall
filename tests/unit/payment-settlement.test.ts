@@ -35,7 +35,7 @@ describe("atomic, idempotent payment settlement", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     state.payment = { id: "pay-a", reference: "jata-ref", status: "PENDING", businessId: "biz-a", userId: "user-a", planId: "plan-a", currency: "KES" };
-    state.plan = { id: "plan-a", key: "MONTH", durationDays: 30 };
+    state.plan = { id: "plan-a", key: "MONTH", priceKES: 499, durationDays: 30 };
     state.subscription = null;
     state.processed = new Set();
     state.upsertCount = 0;
@@ -50,7 +50,7 @@ describe("atomic, idempotent payment settlement", () => {
     expect(state.payment).toMatchObject({ status: "PAID", paystackId: "56", providerSettledAt: new Date("2026-01-01T00:00:00.000Z"), providerSettlementReference: "jata-ref" });
     expect(state.payment).not.toHaveProperty("providerFeeMinor");
     expect(state.payment).not.toHaveProperty("providerTaxMinor");
-    expect(state.subscription).toMatchObject({ status: "ACTIVE", businessId: "biz-a", userId: "user-a", planId: "plan-a", recurringAmountKES: 100, recurringDiscountKES: 0, recurringCurrency: "KES", recurringIntervalDays: 30 });
+    expect(state.subscription).toMatchObject({ status: "ACTIVE", businessId: "biz-a", userId: "user-a", planId: "plan-a", recurringAmountKES: 499, recurringDiscountKES: 0, recurringCurrency: "KES", recurringIntervalDays: 30 });
     expect(state.subscription.startAt.toISOString()).toBe("2026-01-01T00:00:00.000Z");
     expect(state.subscription.expiresAt.toISOString()).toBe("2026-01-31T00:00:00.000Z");
     expect(state.processed.has("event-1")).toBe(true);
