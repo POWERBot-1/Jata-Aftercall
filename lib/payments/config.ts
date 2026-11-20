@@ -99,8 +99,13 @@ export type PaystackConnectorConfig = {
 };
 
 export function readPaystackConfig(): PaystackConnectorConfig {
-  const secretKey = envValue("PAYSTACK_SECRET_KEY");
-  const publicKey = envValue("PAYSTACK_PUBLIC_KEY");
+  // Never let a Preview deployment inherit the shared production/live key. Preview has a
+  // dedicated test-key namespace; production continues to use the existing production keys.
+  const deployment = envValue("VERCEL_ENV").toLowerCase();
+  const preview = deployment === "preview";
+  const requiredMode: "TEST" | "LIVE" | null = preview ? "TEST" : deployment === "production" ? "LIVE" : null;
+  const secretKey = envValue(preview ? "PAYSTACK_TEST_SECRET_KEY" : "PAYSTACK_SECRET_KEY");
+  const publicKey = envValue(preview ? "PAYSTACK_TEST_PUBLIC_KEY" : "PAYSTACK_PUBLIC_KEY");
   const secretMode: PaystackConnectorConfig["mode"] = secretKey.startsWith("sk_live_")
     ? "LIVE"
     : secretKey.startsWith("sk_test_")
@@ -112,10 +117,12 @@ export function readPaystackConfig(): PaystackConnectorConfig {
       ? "TEST"
       : "NONE";
   const keyPairMismatch = Boolean(publicKey) && (secretMode === "NONE" || publicMode !== secretMode);
-  const mode: PaystackConnectorConfig["mode"] = keyPairMismatch ? "NONE" : secretMode;
+  const deploymentMismatch = requiredMode !== null && secretMode !== requiredMode;
+  const mode: PaystackConnectorConfig["mode"] = keyPairMismatch || deploymentMismatch ? "NONE" : secretMode;
   const missing: string[] = [];
-  if (!secretKey) missing.push("PAYSTACK_SECRET_KEY");
-  else if (secretMode === "NONE") missing.push("PAYSTACK_SECRET_KEY_PREFIX");
+  if (!secretKey) missing.push(preview ? "PAYSTACK_TEST_SECRET_KEY" : "PAYSTACK_SECRET_KEY");
+  else if (secretMode === "NONE") missing.push(preview ? "PAYSTACK_TEST_SECRET_KEY_PREFIX" : "PAYSTACK_SECRET_KEY_PREFIX");
+  if (deploymentMismatch && secretKey) missing.push(preview ? "PAYSTACK_TEST_SECRET_KEY_REQUIRED" : "PAYSTACK_LIVE_SECRET_KEY_REQUIRED");
   if (keyPairMismatch) missing.push("PAYSTACK_KEY_MODE_MISMATCH");
   return {
     secretKey,
