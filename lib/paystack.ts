@@ -82,7 +82,10 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
 }
 
 export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
-  if (!signature || !process.env.PAYSTACK_SECRET_KEY) return false;
+  // Paystack sends a 128-character SHA-512 HMAC as hexadecimal. Buffer.from(hex)
+  // silently ignores a trailing non-hex suffix, so validate the complete encoding before
+  // decoding; otherwise a valid signature plus junk can be accepted as the valid prefix.
+  if (!signature || !/^[0-9a-f]{128}$/i.test(signature) || !process.env.PAYSTACK_SECRET_KEY) return false;
   const expected = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(rawBody).digest();
   const supplied = Buffer.from(signature, "hex");
   return supplied.length === expected.length && crypto.timingSafeEqual(expected, supplied);
