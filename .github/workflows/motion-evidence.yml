@@ -62,13 +62,18 @@ jobs:
             ffmpeg -version | head -1
             exit 0
           fi
-          installed=0
-          timeout 240 sudo apt-get update -qq && timeout 240 sudo apt-get install -y -qq ffmpeg && installed=1
-          if [ "$installed" != "1" ] || ! command -v ffmpeg >/dev/null 2>&1; then
-            echo "::error title=MOTION_ENCODER_BLOCKED::ffmpeg is unavailable and could not be installed within the deadline. No recording evidence is claimed for this head."
+          # GitHub-hosted images may omit the apt package index or block Ubuntu mirrors.
+          # Use the pinned npm-distributed Linux binary as a deterministic fallback.
+          npm install --no-save --ignore-scripts ffmpeg-static
+          ffmpeg_bin="$(node -p "require('ffmpeg-static')")"
+          if [ -z "$ffmpeg_bin" ] || [ ! -x "$ffmpeg_bin" ]; then
+            echo "::error title=MOTION_ENCODER_BLOCKED::ffmpeg-static package did not provide an executable binary."
             exit 1
           fi
-          ffmpeg -version | head -1
+          mkdir -p "$RUNNER_TEMP/ffmpeg-bin"
+          ln -sf "$ffmpeg_bin" "$RUNNER_TEMP/ffmpeg-bin/ffmpeg"
+          echo "$RUNNER_TEMP/ffmpeg-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/ffmpeg-bin/ffmpeg" -version | head -1
       - name: Capture real generated Studio family paths
         timeout-minutes: 15
         if: ${{ !cancelled() }}
