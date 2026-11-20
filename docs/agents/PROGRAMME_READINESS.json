@@ -293,15 +293,19 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §009 (ADMIN-009)",
     "implementationLocation": "Vercel domains and routing, Next.js routes, auth/cookies. No new domain added or changed.",
     "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "Read-only Vercel project inspection on 2026-11-16 confirms apex and www custom domains are attached and verified. Vercel configuration metadata reports external apex nameservers ns1.host-ww.net/ns2.host-ww.net, A values 64.29.17.1 and 216.198.79.1, no conflicts and misconfigured=false; www reports CNAME 2da49677b2414cfd.vercel-dns-017.com., no conflicts and misconfigured=false. Neither domain has a Vercel redirect target configured. Direct public-domain fetch through the available inspection path was inaccessible; TLS certificate/ciphers, HSTS, cookie attributes, actual redirect behavior and authoritative HostAfrica DNS/mail-zone records remain unverified. Remains BLOCKED; see docs/evidence/programme-remediation-2026-11-16/VERCEL-DOMAIN-CONFIG.md.",
-    "evidence": [],
-    "evidenceLinks": [],
+    "testResult": "PARTIAL. Read-only Vercel metadata confirms apex and www are attached and verified, but both have no redirect target. Vercel reports external HostAfrica nameservers (ns1.host-ww.net, ns2.host-ww.net), current A values 64.29.17.1 and 216.198.79.1, recommended Vercel IPv4 76.76.21.21, and ipStatus=required-change while misconfigured=false. DNS record listing was denied with HTTP 403 and direct public HTTP/TLS retrieval was inaccessible. No DNS or registrar changes were made.",
+    "evidence": [
+      "docs/evidence/domain/VERCEL-DOMAIN-INSPECTION-2026-11-20.md"
+    ],
+    "evidenceLinks": [
+      "https://github.com/POWERBot-1/Jata-Aftercall/blob/arena/financial-evidence-candidate-2/docs/evidence/domain/VERCEL-DOMAIN-INSPECTION-2026-11-20.md"
+    ],
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
-    "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
+    "verificationCommit": "fc1eee5e364b92c3a934126017c2207e2233bfb6",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Vercel domain-configuration evidence is recorded, but independent public DNS, TLS/HSTS, canonical redirect, cookie-scope and SPF/DKIM/DMARC verification is still incomplete. No DNS, registrar, production domain or mail configuration changes are authorized.",
+    "blocker": "Vercel project metadata verifies apex and www attachment but neither has a canonical redirect. Vercel reports external HostAfrica nameservers, A values 64.29.17.1 / 216.198.79.1 and ipStatus=required-change against recommended Vercel 76.76.21.21; domain-record listing was denied (HTTP 403), and public HTTP/TLS retrieval was inaccessible. Authoritative DNS, certificate, HSTS, cookie and SPF/DKIM/DMARC checks remain NOT TESTED. No DNS or registrar change is authorized.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
-    "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
+    "currentAssessmentSourceSha": "fc1eee5e364b92c3a934126017c2207e2233bfb6",
     "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-010": {
