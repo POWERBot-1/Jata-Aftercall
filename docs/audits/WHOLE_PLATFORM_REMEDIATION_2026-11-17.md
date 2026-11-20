@@ -22,7 +22,7 @@ Status vocabulary follows RELEASE-001. Finding status is PENDING / IN PROGRESS /
 | R-MJ-06 | P1 | Journey (d): multi-business picker showed raw ids | Rendered ids only | Tenant-scoped `findMany` of the owner's businesses; names shown (`713f750`) | `mjengo-customer-journey` source check | Local PASS | IMPLEMENTED |
 | R-MJ-07 | P0 | Journey (e): journal/branding APIs checked ownership only, not entitlement | Ownership was treated as entitlement | `assertMjengoEntitled` after the ownership check on journal POST/GET and branding POST (`b75da0a`) | `mjengo-branding-and-journal` (+6) | Local PASS | IMPLEMENTED |
 | R-DEP-01 | P0 | Audit: 7 moderate + 11 high (main) | `next` advisory; old typescript-eslint pinned minimatch <11 through a forced override | next 16.4.6 (from #125); typescript-eslint 8.73.0 → minimatch 11.0.9 natively; forced `minimatch@>=7 <11` override **removed** (`e08e585`) | `npm audit` in release-validation | Full tree: **0 moderate, 16 high**. `--omit=dev`: **0** | IMPLEMENTED |
-| R-DEP-02 | P0 | 16 high remain: GHSA-fc5q-39xc-vjpf picomatch ≤4.0.7 ReDoS | No upstream patch (`first_patched: null`; latest 4.0.7; upstream fix PRs #238/#246 unmerged). Dev/build-only paths | No unsafe override, downgrade or suppression | Release-validation reports the full audit; the production gate is `--omit=dev` | BLOCKED (upstream) | BLOCKED |
+| R-DEP-02 | P0 | Historical 16 high findings attributed to GHSA-fc5q-39xc-vjpf picomatch ≤4.0.7 | GitHub withdrew the advisory on 2026-11-18, stating it is not a security issue. Exact-head lockfile contains picomatch 2.3.2 and 4.0.7 only as dev dependencies; no forced picomatch override. | Release Validation run 44742454584: `npm audit --omit=dev` exit 0; `npm audit` exit 0; summarizer reports 0 production and 0 full-tree findings. | No suppression, override, downgrade or lockfile workaround. | RESOLVED — advisory withdrawn; audits clean |
 | R-CI-01 | P1 | `programme-completeness` red on every head | 21 programme requirements BLOCKED (owner/external) and 3 NOT_TESTED (MOTION-003/004/005) | None, by design: the gate fails closed and is not weakened | `node scripts/admin/check-programme-readiness.mjs` → `NOT READY (24)`, exit 1 | Same result locally and in CI at `4da71bc`, `6f79353`, `1244caf` and `66d8b08` (§7) | BLOCKED |
 | R-MJ-08 | P1 | **New, found by the real-DB journey test:** a refunded MJENGO workspace got 402 and a second checkout, not SUSPENDED 403 | `deriveMjengoEntitlement` evaluated the unpaid branch before SUSPENDED. A full refund moves the payment PAID → REFUNDED and suspends both MJENGO rows, so no PAID evidence remained and SUSPENDED was unreachable | SUSPENDED is decided before payment evidence in `lib/mjengo/entitlement.ts` (`0e666c1`) | `tests/prisma/mjengo-journey-postgres.test.ts` (11; real checkout route + real HMAC webhook; only Paystack HTTP, DB handle and session mocked) — 10/11 before the fix; `mjengo-customer-journey` (+1) | Local PGlite 11/11. **CI PASS** on PostgreSQL 18 ("Migrations + schema on PostgreSQL 18"; `check-test-output.mjs` rejects skipped tests, so a pass proves it executed) at `6f79353`, `1244caf`, `66d8b08` | IMPLEMENTED |
 | R-MJ-09 | P1 | Public "Get MJENGO OS" hero CTA sent signed-in owners to `/dashboard/subscription` (which never sells MJENGO OS) and signed-out visitors to a bare `/login` | CTA target hard-coded per auth state | Every CTA uses one entry (`eedacca`; target moved to `/mjengo` by R-MJ-11 in `66d8b08`) | `tests/unit/mjengo-public-cta.test.tsx` (rendered markup, signed in/out/refused plan) | Local PASS. Incomplete in a real browser until R-MJ-11 | IMPLEMENTED |
@@ -49,8 +49,8 @@ Artifacts were uploaded but could not be downloaded into the agent sandbox (stor
 
 ## 2. Security and dependency audit (deliverable 4)
 
-- Production dependency audit (`npm audit --omit=dev`): **0 vulnerabilities** on the merged tree with this batch's lockfile.
-- Full tree: **16 high**. All are the single advisory GHSA-fc5q-39xc-vjpf (picomatch), reached only through build/dev tooling. There is no patched version, so the finding is **BLOCKED (upstream)** and is not suppressed. Owner action: none until upstream releases. Re-audit when picomatch > 4.0.7 or 2.3.3 is published.
+- Production dependency audit (`npm audit --omit=dev`): **0 vulnerabilities** on PR #126 exact head `651a40b9a3c96444a6b53b3599227a268f9aea00`.
+- Full tree audit (`npm audit`): **0 vulnerabilities** on the same exact head. GitHub withdrew GHSA-fc5q-39xc-vjpf on 2026-11-18, explicitly stating that it is not a security issue. The lockfile retains transitive picomatch 2.3.2 and 4.0.7 only under `dev: true`; no direct production dependency or unsafe override was introduced. Release Validation run `44742454584`, job `136309375507`, records both audit commands exiting 0 and the summarizer reporting zero findings. No suppression, downgrade, arbitrary override or lockfile workaround was used.
 - Open-redirect hardening: post-auth destinations accept exact tokens only. Arbitrary URLs, protocol-relative URLs, traversal, query-suffixed values, `__proto__`/`constructor`, and repeated parameters all resolve to `/dashboard`.
 - Not done in this batch (still P0 and open): the full two-tenant authorization matrix on PostgreSQL, the Paystack Preview sandbox suite (signature, idempotency, concurrency, out-of-order, refund, subscription, POS entitlement, reconciliation), and ledger idempotency proof. PR #125 recorded a sandbox journey PASS; the remaining cases are NOT TESTED.
 
@@ -81,7 +81,7 @@ PG18/Neon staging migration of this head; backup/restore rehearsal against RPO �
 
 ## 6. External blockers and owner actions (deliverable 11)
 
-1. picomatch upstream patch (GHSA-fc5q-39xc-vjpf): wait or replace the parent tooling. No override.
+1. picomatch GHSA-fc5q-39xc-vjpf: **closed as withdrawn by GitHub on 2026-11-18**; exact-head production and full npm audits both return zero findings. No override or replacement tooling required.
 2. Production Paystack key mode: owner to confirm the live key through read-only inspection.
 3. DNS/TLS/mail for `jataaftercall.co.ke`: owner to obtain authoritative records from the registrar or host.
 4. Commission policy: owner to supply numeric rates and payout terms before accrual or payout is enabled.
@@ -158,7 +158,7 @@ Not covered: page components (server-rendered pages are not swept by the route m
 - **Paystack Preview sandbox acceptance**: BLOCKED behind Preview (`JATA_RUN_STAGING_ACCEPTANCE=false`). Real-PostgreSQL tests with the provider mocked cover signatures, amount checks, replay, concurrency, refunds, cross-tenant, settlement and abandoned checkout. Provider-backed evidence exists only from PR #125.
 - **Neon native PITR**: NOT TESTED / BLOCKED. Logical backup and restore into a disposable PG18 passes in CI; that is not provider PITR.
 - **R2 durability**: BLOCKED. Preview credentials are not readable from this environment and Preview does not build.
-- **R-DEP-02 picomatch** GHSA-fc5q-39xc-vjpf (high 7.5, ReDoS, `<=4.0.7`): no upstream patch; dev-only (`npm audit --omit=dev` = 0); low exploitability; no suppression. BLOCKED (upstream).
+- **R-DEP-02 picomatch** GHSA-fc5q-39xc-vjpf: GitHub withdrew the advisory on 2026-11-18, stating it is not a security issue. The exact-head full and production npm audits both pass with zero findings. RESOLVED; no suppression or dependency override.
 - **programme-completeness**: `NOT READY (24)`, fail-closed by design (R-CI-01). This is separate from `instruction-integrity`, which passes.
 
 **Release verdict: NOT READY.**
