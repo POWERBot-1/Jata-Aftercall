@@ -227,11 +227,11 @@ export async function syncErpEntitlement(businessId: string, client: any = prism
       paymentId: payment.id,
       paymentReference: payment.reference ?? null,
       // Snapshot the server-resolved price only after a provider-verified payment row exists.
-      recurringAmountKES: plan.priceKES,
-      recurringDiscountKES: 0,
-      recurringCurrency: payment.currency ?? "KES",
-      recurringIntervalDays: plan.durationDays,
-      recurringPriceEffectiveAt: payment.providerSettledAt ?? now,
+      recurringAmountKES: payment.providerSettledAt ? plan.priceKES : null,
+      recurringDiscountKES: payment.providerSettledAt ? 0 : null,
+      recurringCurrency: payment.providerSettledAt ? (payment.currency ?? "KES") : null,
+      recurringIntervalDays: payment.providerSettledAt ? plan.durationDays : null,
+      recurringPriceEffectiveAt: payment.providerSettledAt ?? null,
       cancelledAt: null,
     };
     try {
