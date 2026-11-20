@@ -40,6 +40,10 @@ export type CommissionPaymentSnapshot = {
   status: string;
   purpose: string;
   paystackId: string | null;
+  /** Must be derived from authenticated provider mode, never browser input. */
+  isTestMode: boolean;
+  /** Must be derived from authoritative subscription/payment history. */
+  isFirstSettledPaymentForSubscription: boolean;
   currency: string;
   amountMinor: number;
   businessId: string | null;
@@ -55,8 +59,11 @@ export type CommissionAttributionSnapshot = {
   agentStatus: string;
   businessId: string;
   customerId: string;
+  /** Timestamp of the first valid recorded referral interaction. */
   validFrom: Date;
-  validUntil: Date | null; // exclusive; renewal retention must be explicitly approved
+  validUntil: Date | null; // exclusive
+  /** Must be derived from the persisted attribution history. */
+  isFirstTouch: boolean;; renewal retention must be explicitly approved
 };
 
 export type CommissionEvaluation =
@@ -113,9 +120,10 @@ function completeGovernance(value: unknown): value is CommissionPolicyGovernance
 }
 
 /**
- * `eligibleMinor` is the approved gross/net base already derived from verified evidence. NET
- * treatment of taxes, fees, discounts and refunds has not been defined by the owner. Until it is,
- * callers must not invent a value or call this function for production commission creation.
+ * `eligibleMinor` is the owner-defined net base after recurring discounts and excluding separately
+ * itemized tax and provider fees. This pure evaluator cannot prove the provenance of that amount;
+ * callers must derive it from authoritative server-side payment and refund records. No numeric rate
+ * schedule is approved and this evaluator is not a production accrual writer.
  */
 export function evaluateCommission(input: {
   policy: CommissionPolicySnapshot | null;
@@ -152,10 +160,12 @@ export function evaluateCommission(input: {
   }
   if (!nonempty(payment.id) || !nonempty(payment.reference) || !nonempty(payment.customerId) ||
       !nonempty(payment.businessId) || !nonempty(payment.planId) || !validDate(payment.verifiedAt) ||
-      !validMinor(payment.amountMinor) || payment.amountMinor === 0 || !validMinor(eligibleMinor)) {
+      !validMinor(payment.amountMinor) || payment.amountMinor === 0 || !validMinor(eligibleMinor) ||
+      typeof payment.isTestMode !== "boolean" || typeof payment.isFirstSettledPaymentForSubscription !== "boolean") {
     return { eligible: false, reason: "PAYMENT_INVALID" };
   }
-  if (payment.status !== "PAID" || payment.purpose !== "SUBSCRIPTION" || !isProviderTransactionId(payment.paystackId)) {
+  if (payment.status !== "PAID" || payment.purpose !== "SUBSCRIPTION" || payment.isTestMode ||
+      !payment.isFirstSettledPaymentForSubscription || !isProviderTransactionId(payment.paystackId)) {
     return { eligible: false, reason: "PAYMENT_NOT_VERIFIED" };
   }
   if (payment.currency !== policy.currency || eligibleMinor > payment.amountMinor ||
@@ -168,11 +178,12 @@ export function evaluateCommission(input: {
     return { eligible: false, reason: "PAYMENT_NOT_ELIGIBLE" };
   }
   if (!attribution || !nonempty(attribution.agentId) || !nonempty(attribution.agentUserId) ||
-      !validDate(attribution.validFrom) || (attribution.validUntil !== null &&
+      !validDate(attribution.validFrom) || typeof attribution.isFirstTouch !== "boolean" ||
+      (attribution.validUntil !== null &&
         (!validDate(attribution.validUntil) || attribution.validUntil <= attribution.validFrom))) {
     return { eligible: false, reason: "ATTRIBUTION_INVALID" };
   }
-  if (attribution.agentStatus !== "ACTIVE" || attribution.agentUserId === payment.customerId ||
+  if (!attribution.isFirstTouch || attribution.agentStatus !== "ACTIVE" || attribution.agentUserId === payment.customerId ||
       attribution.businessId !== payment.businessId || attribution.customerId !== payment.customerId ||
       payment.verifiedAt < attribution.validFrom || (attribution.validUntil && payment.verifiedAt >= attribution.validUntil)) {
     return { eligible: false, reason: "ATTRIBUTION_NOT_ELIGIBLE" };
