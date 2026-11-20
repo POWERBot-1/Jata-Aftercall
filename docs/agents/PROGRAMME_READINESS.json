@@ -470,7 +470,7 @@
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §017 (ADMIN-014)",
     "implementationLocation": "`prisma/migrations/20261126000000_control_plane_foundation/migration.sql`, `tests/prisma/control-plane-foundation-postgres.test.ts`, `docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md`.",
     "verificationMethod": "Provider-native Neon snapshot and isolated restore, followed by exact schema/view inventory and full read-only row-count/content-digest comparison across all 194 public base tables on production and restored branches.",
-    "testResult": "PARTIAL PASS. Neon snapshot snap-snowy-block-ax3dald2 restored to isolated branch br-young-glade-axtyktor in production project damp-forest-92941163; provider reports restored/ready. Source and restored branches have 195/195 tables/views, 194/194 base tables, identical view definition digest, and matching row counts plus deterministic sorted per-row content digests across all 194 base tables (1,007 total rows). Production remained untouched. Still NOT TESTED/BLOCKED: historical PITR selection, scheduled snapshot policy, supported upgrade/rollback/forward-recovery phases, adopted 15-minute RPO, and measured four-hour RTO.",
+    "testResult": "PARTIAL PASS. Neon snapshot snap-snowy-block-ax3dald2 restored to isolated branch br-young-glade-axtyktor in production project damp-forest-92941163; provider reports restored/ready. Source and restored branches have 195/195 tables/views, 194/194 base tables, identical view definition digest, and matching row counts plus deterministic sorted per-row content digests across all 194 base tables (1,007 total rows). Production remained untouched. Still NOT TESTED/BLOCKED: historical PITR selection, scheduled snapshot policy, supported upgrade/rollback/forward-recovery phases, adopted 15-minute RPO, and measured four-hour RTO. A timestamped historical snapshot request at 2026-11-20T19:45:00Z was rejected by Neon with HTTP 422 `snapshots limit exceeded`; no further snapshot or branch was created.",
     "evidence": [
       "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md",
@@ -483,16 +483,16 @@
       "https://github.com/POWERBot-1/Jata-Aftercall/blob/arena/financial-evidence-candidate-2/docs/evidence/production-recovery/NEON-PROVIDER-RESTORE-2026-11-20.md"
     ],
     "assessmentReference": "docs/evidence/programme-remediation-2026-11-17/POSTGRESQL18-MIGRATION-BACKUP-RESTORE.md",
-    "verificationCommit": "699e31c661944b90f73609aa77fc7ca17e62fa44",
+    "verificationCommit": "f3b784632624c5dd5910c1951c7eeb7b3f44a181",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "Provider-native snapshot, isolated restore, full 194-table row-count/content-digest parity (1,007 rows) and view-definition parity now pass. ADMIN-014 remains BLOCKED until historical PITR selection, a scheduled snapshot policy, supported upgrade/rollback/forward-recovery phases, the adopted 15-minute RPO and a measured four-hour RTO are evidenced.",
+    "blocker": "Provider-native snapshot, isolated restore, full 194-table row-count/content-digest parity (1,007 rows) and view-definition parity now pass. A historical timestamped snapshot/PITR request was attempted but Neon returned HTTP 422 `snapshots limit exceeded`; no second snapshot was created. ADMIN-014 remains BLOCKED pending provider quota/retention resolution, successful historical PITR, scheduled snapshot policy, supported upgrade/rollback/forward-recovery phases, adopted 15-minute RPO and measured four-hour RTO.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "implementationEvidence": [
       "prisma/migrations/20261126000000_control_plane_foundation/migration.sql",
       "tests/prisma/control-plane-foundation-postgres.test.ts",
       "docs/agents/CONTROL_PLANE_MIGRATION_RECOVERY.md"
     ],
-    "currentAssessmentSourceSha": "699e31c661944b90f73609aa77fc7ca17e62fa44",
+    "currentAssessmentSourceSha": "f3b784632624c5dd5910c1951c7eeb7b3f44a181",
     "currentAssessmentStatus": "BLOCKED"
   },
   "ADMIN-015": {
