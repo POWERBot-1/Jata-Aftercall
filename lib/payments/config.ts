@@ -101,16 +101,21 @@ export type PaystackConnectorConfig = {
 export function readPaystackConfig(): PaystackConnectorConfig {
   const secretKey = envValue("PAYSTACK_SECRET_KEY");
   const publicKey = envValue("PAYSTACK_PUBLIC_KEY");
-  const mode: PaystackConnectorConfig["mode"] = !secretKey ? "NONE" : secretKey.startsWith("sk_live_") ? "LIVE" : "TEST";
+  const mode: PaystackConnectorConfig["mode"] = secretKey.startsWith("sk_live_")
+    ? "LIVE"
+    : secretKey.startsWith("sk_test_")
+      ? "TEST"
+      : "NONE";
   const missing: string[] = [];
   if (!secretKey) missing.push("PAYSTACK_SECRET_KEY");
+  else if (mode === "NONE") missing.push("PAYSTACK_SECRET_KEY_PREFIX");
   return {
     secretKey,
     publicKey,
     mode,
     // Paystack signs every event with the same secret; no separate webhook secret exists.
     webhookConfigured: Boolean(secretKey),
-    ready: Boolean(secretKey),
+    ready: mode !== "NONE",
     missing,
   };
 }
