@@ -115,6 +115,9 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference,
+      recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+      recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: now,
       cancelledAt: null,
     },
     create: {
@@ -128,6 +131,9 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference,
+      recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+      recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: now,
     },
   });
 
