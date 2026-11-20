@@ -68,7 +68,7 @@ jobs:
             exit 0
           fi
           # If the apt index is unavailable, use the npm-distributed static binary.
-          npm install --no-save --ignore-scripts --prefer-offline ffmpeg-static
+          npm install --no-save --prefer-offline ffmpeg-static
           ffmpeg_bin="$(node -p "require('ffmpeg-static')")"
           if [ -z "$ffmpeg_bin" ] || [ ! -x "$ffmpeg_bin" ]; then
             echo "::error title=MOTION_ENCODER_BLOCKED::Neither the runner apt package nor ffmpeg-static provided an executable binary."
