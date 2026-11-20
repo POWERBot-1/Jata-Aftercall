@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  result: { ok: false as const, status: 403 as const, code: "POLICY_PENDING" },
+  result: { ok: false as const, status: 403 as const, code: "POLICY_PENDING" } as any,
 }));
 vi.mock("@/lib/control/access", () => ({ getControlIdentity: vi.fn(async () => state.result) }));
 import { POST } from "@/app/api/admin/team-access/route";
