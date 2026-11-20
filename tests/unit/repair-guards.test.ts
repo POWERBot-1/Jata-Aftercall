@@ -195,6 +195,7 @@ describe("runtime and schema guards", () => {
       // tables without deleting or rewriting any existing ERP, MJENGO, or POS records. Timestamped
       // after every released migration so fresh-database order equals production application order.
       "20261202000000_mjengo_isolated_entitlements",
+      "20261203000000_financial_evidence_contract",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
