@@ -63,7 +63,7 @@ export type CommissionAttributionSnapshot = {
   validFrom: Date;
   validUntil: Date | null; // exclusive
   /** Must be derived from the persisted attribution history. */
-  isFirstTouch: boolean;; renewal retention must be explicitly approved
+  isFirstTouch: boolean;
 };
 
 export type CommissionEvaluation =
