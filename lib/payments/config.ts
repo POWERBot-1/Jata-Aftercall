@@ -125,7 +125,7 @@ export function readPaystackConfig(): PaystackConnectorConfig {
     : publicKey.startsWith("pk_test_")
       ? "TEST"
       : "NONE";
-  const keyPairMismatch = Boolean(publicKey) && (secretMode === "NONE" || publicMode !== secretMode);
+  const keyPairMismatch = Boolean(secretKey && publicKey) && (secretMode === "NONE" || publicMode !== secretMode);
   const deploymentMismatch = requiredMode !== null && secretMode !== requiredMode;
   const mode: PaystackConnectorConfig["mode"] = keyPairMismatch || deploymentMismatch ? "NONE" : secretMode;
   const missing: string[] = [];
