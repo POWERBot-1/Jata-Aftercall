@@ -4,8 +4,6 @@
  * This module reports provenance and identity exceptions only. It never repairs subscriptions,
  * changes payment status, grants entitlements, or interprets provider settlement as payment proof.
  */
-import prisma from "@/lib/db";
-
 export type SubscriptionPaymentEvidence = {
   subscriptionId: string;
   businessId: string;
@@ -107,56 +105,3 @@ export function summarizeSubscriptionPaymentLifecycle(
   };
 }
 
-/**
- * Fetches bounded pages from the application database. This is a SELECT-only inventory;
- * callers must still use an isolated/read-only database for acceptance testing.
- */
-export async function loadSubscriptionPaymentLifecycleReport() {
-  const pageSize = 500;
-  const evidence: SubscriptionPaymentEvidence[] = [];
-  let cursor: string | undefined;
-
-  for (;;) {
-    const page = await prisma.subscription.findMany({
-      take: pageSize,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      orderBy: { id: "asc" },
-      select: {
-        id: true,
-        businessId: true,
-        userId: true,
-        planId: true,
-        status: true,
-        paymentId: true,
-        paymentReference: true,
-        payment: {
-          select: {
-            id: true,
-            reference: true,
-            businessId: true,
-            userId: true,
-            planId: true,
-            purpose: true,
-            status: true,
-          },
-        },
-      },
-    });
-
-    evidence.push(...page.map((row) => ({
-      subscriptionId: row.id,
-      businessId: row.businessId,
-      userId: row.userId,
-      planId: row.planId,
-      status: row.status,
-      paymentId: row.paymentId,
-      paymentReference: row.paymentReference,
-      payment: row.payment,
-    })));
-
-    if (page.length < pageSize) break;
-    cursor = page[page.length - 1].id;
-  }
-
-  return summarizeSubscriptionPaymentLifecycle(evidence);
-}
