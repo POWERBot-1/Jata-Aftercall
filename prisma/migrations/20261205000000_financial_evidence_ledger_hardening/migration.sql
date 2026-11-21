@@ -23,7 +23,7 @@ BEGIN
       'financial evidence migration requires review: existing snapshot sourceEndpoint is not /settlement';
   END IF;
 END;
-$;
+$$;
 
 ALTER TABLE "ProviderSettlementSnapshot"
   DROP CONSTRAINT "ProviderSettlementSnapshot_source_check";
@@ -47,7 +47,7 @@ BEGIN
       'financial evidence migration requires review: transaction evidence rows need source page provenance before NOT NULL can be enforced';
   END IF;
 END;
-$;
+$$;
 
 ALTER TABLE "ProviderSettlementTransactionEvidence"
   ALTER COLUMN "sourcePage" SET NOT NULL,
@@ -70,7 +70,7 @@ BEGIN
       'financial evidence migration requires review: existing bank import batches need an authoritative importer identity';
   END IF;
 END;
-$;
+$$;
 
 ALTER TABLE "BankStatementImportBatch"
   ALTER COLUMN "importedByActorId" SET NOT NULL;
