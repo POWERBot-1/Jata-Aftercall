@@ -306,12 +306,22 @@ export async function finishLifecycleExecutionRun(input: {
   const cursor = input.cursor === undefined ? undefined : JSON.parse(safeJson(input.cursor));
   const now = new Date();
   return prisma.$transaction(async (tx: Tx) => {
+    const run = await tx.productLifecycleExecutionRun.findUnique({
+      where: { id: input.runId }, select: { id: true, status: true },
+    });
+    if (!run || run.status !== "RUNNING") return { updated: false };
+    if (input.status === "COMPLETED") {
+      const pending = await tx.productLifecycleExecutionTask.count({
+        where: { runId: input.runId, state: { in: ["READY", "CLAIMED", "RETRY"] } },
+      });
+      if (pending > 0) return { updated: false, pending };
+    }
     const changed = await tx.productLifecycleExecutionRun.updateMany({
       where: { id: input.runId, status: "RUNNING" },
       data: { status: input.status, summary, cursor, finishedAt: now, leaseToken: null, leaseUntil: null },
     });
     return { updated: changed.count === 1 };
-  });
+  }, { isolationLevel: "ReadCommitted", timeout: 10_000 });
 }
 
 /** UUID helper is exported for callers that need an opaque run key. */
