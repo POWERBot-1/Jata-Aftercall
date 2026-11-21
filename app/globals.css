@@ -1009,6 +1009,15 @@ button:focus-visible {
   padding: clamp(3rem, 9vw, 6rem) 1.25rem clamp(2.5rem, 6vw, 4rem);
 }
 
+/* Keep hero copy and its primary actions clear of the fixed mobile action bar.
+   This applies to every generated family, not only the cardless-immersive variant. */
+@media (max-width: 899px) {
+  .eb-scope:has(.eb-actionbar) .eb-hero__content,
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 1.5rem);
+  }
+}
+
 @media (min-width: 768px) { .eb-hero__content { padding-inline: 2rem; } }
 
 .eb-hero--overlay .eb-hero__content,
