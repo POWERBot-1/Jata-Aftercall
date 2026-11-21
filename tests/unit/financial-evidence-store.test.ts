@@ -197,6 +197,34 @@ describe("financial evidence persistence", () => {
     expect(mocks.tx.bankStatementCreditEvidence.createMany).not.toHaveBeenCalled();
   });
 
+  it("rejects control characters in importer identity before touching the database", async () => {
+    await expect(importCanonicalBankStatement(
+      "statement_line_id,booking_date,reference,currency,credit_minor\\nline-1,2026-11-20,STL-001,KES,98500\\n",
+      "finance-user-1\\nforged",
+    )).rejects.toThrow("FINANCIAL_EVIDENCE_ACTOR_REQUIRED");
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects control characters in provider payment references before persistence", async () => {
+    await expect(persistPaystackSettlementTransactions("snapshot-1", "3090024", {
+      records: [{
+        provider: "PAYSTACK",
+        providerTransactionId: "2067030515",
+        reference: "jata-ref-\\u0000-1",
+        status: "success",
+        amountMinor: 10_000,
+        currency: "KES",
+        providerFeeMinor: 390,
+        paidAt: "2026-11-20T10:00:00.000Z",
+      }],
+      page: 1,
+      perPage: 50,
+      total: 1,
+      pageCount: 1,
+    })).rejects.toThrow("FINANCIAL_EVIDENCE_INVALID_PAYMENT_REFERENCE");
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("rejects missing actor identity before touching the database", async () => {
     await expect(importCanonicalBankStatement(
       "statement_line_id,booking_date,reference,currency,credit_minor\nline-1,2026-11-20,STL-001,KES,98500\n",
