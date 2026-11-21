@@ -19,6 +19,7 @@
  * the caller's transaction, exactly like `settlePosPayment`. A replayed webhook finds the payment
  * already PAID and returns `alreadySettled` without extending the window twice.
  */
+import { providerSettlementEvidenceFields } from "../payments/provider-settlement-evidence";
 import {
   MJENGO_GRACE_DAYS,
   MJENGO_PLAN_DURATION_DAYS,
@@ -107,7 +108,10 @@ export async function settleMjengoPayment(tx: any, params: MjengoSettlementParam
   if (!repairingLegacyPaidPayment) {
     const changed = await tx.payment.updateMany({
       where: { id: payment.id, status: payment.status },
-      data: { status: "PAID" },
+      data: {
+        status: "PAID",
+        ...providerSettlementEvidenceFields({ reference: payment.reference, providerConfirmedAt: verification?.providerConfirmedAt }),
+      },
     });
     if (changed.count !== 1) {
       // A concurrent settlement won the race. Resolve idempotently instead of double-extending.
