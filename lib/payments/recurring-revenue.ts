@@ -57,7 +57,8 @@ export type RecurringRevenueExclusion = {
     | "PAYMENT_NOT_ELIGIBLE"
     | "PAYMENT_AMOUNT_MISMATCH"
     | "PAYMENT_CURRENCY_MISMATCH"
-    | "UNSUPPORTED_CURRENCY";
+    | "UNSUPPORTED_CURRENCY"
+    | "PRODUCT_NOT_INCLUDED";
 };
 
 export type RecurringRevenueResult = {
