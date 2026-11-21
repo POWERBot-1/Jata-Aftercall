@@ -560,6 +560,7 @@ export async function applyReversal(params: {
         providerReference: event.providerReference,
         succeeded: true,
         amountMinor: event.amountMinor,
+        currency: event.currency,
         client: tx,
       });
       if (refundResult.matched) {
