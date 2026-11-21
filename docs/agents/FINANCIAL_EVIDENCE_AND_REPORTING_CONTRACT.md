@@ -87,3 +87,8 @@ For authenticated Paystack `charge.success` events and successful transaction ve
 - No amount-only, date-only, substring or fuzzy matching is used.
 
 This tranche adds pure validation/matching primitives and unit tests only. It does not import a bank statement, query a Paystack settlement feed, persist a payout record, create a journal entry, or assert that any payout reached a bank account. Those capabilities remain blocked on provider-specific source evidence, an approved statement ingestion channel, and a separately reviewed persistence/migration design. No live financial records were read or changed.
+
+
+### Provider-specific follow-on: Paystack settlement feed
+
+Paystack documents read endpoints `GET /settlement` and `GET /settlement/{id}/transactions`. Its settlement response exposes status, currency, `total_processed`, `total_fees`, `effective_amount`, `deductions` and `settlement_date`; the underlying settlement transaction response exposes per-transaction `fees` and currency. These fields are provider-reported evidence, but they do not by themselves prove a bank statement credit. In particular, a missing/null `deductions` value must not be treated as a verified zero tax or adjustment, and the provider settlement ID must not be assumed to appear in a bank statement narration. A later adapter must retain provider settlement ID separately from any bank-statement reference, preserve source payload provenance, and leave arithmetic/bank matching unresolved where evidence is incomplete. Source: https://paystack.com/docs/api/settlement/.
