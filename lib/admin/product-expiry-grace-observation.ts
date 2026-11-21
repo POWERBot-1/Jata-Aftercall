@@ -63,6 +63,9 @@ export function observeSubscriptionExpiry(
   if (evidence.expiresAt !== null && !expiresAt) {
     return { ...base, state: "INVALID_GRACE_WINDOW", reason: "Stored expiry timestamp is invalid; no lifecycle action is safe." };
   }
+  if (evidence.graceUntil !== null && !graceUntil) {
+    return { ...base, state: "INVALID_GRACE_WINDOW", reason: "Stored grace deadline is invalid; no lifecycle action is safe." };
+  }
   if (!expiresAt) {
     return { ...base, state: "NO_EXPIRY", reason: "No expiry timestamp is recorded; retain access decision at the product gate." };
   }
