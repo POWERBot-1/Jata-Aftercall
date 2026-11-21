@@ -78,7 +78,7 @@ export function summarizePersistedFinancialEvidence(
   }
   const transactionSnapshotIds = new Set(transactions.map((row) => row.snapshotId));
   for (const row of snapshots) {
-    if (!transactionSnapshotIds.has(row.sourceSnapshotHash)) exceptions.TRANSACTION_EVIDENCE_MISSING++;
+    if (!transactionSnapshotIds.has(row.id)) exceptions.TRANSACTION_EVIDENCE_MISSING++;
   }
   const bankReferenceCounts = new Map<string, number>();
   for (const row of bankCredits) {
