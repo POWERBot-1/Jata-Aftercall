@@ -9,6 +9,7 @@ The Control provider panel needs to distinguish configuration presence from actu
 - `lib/control/provider-readiness.ts` inspects server-side configuration presence for Paystack, Cloudflare R2 and Telnyx Voice.
 - Only variable names, booleans, a configuration state and an observation timestamp are returned. Secret values are never serialized.
 - A fully configured provider is still reported as `CONFIGURED_NOT_VERIFIED`.
+- Voice call and customer-billing gate flags are exposed separately from provider configuration. `canReceiveCalls` and `canSell` are derived gate states, not proof of a successful call, media session or payment settlement. The inventory remains `CONFIGURATION_PRESENCE_ONLY`.
 - Missing or whitespace-only values remain `AWAITING_CONFIGURATION`.
 - The Control overview labels the source as a configuration inventory and the section as `PENDING`; it does not claim provider health.
 - The existing Control authorization and tenant-scope checks remain in force. This does not change the owner-approved all-DENY policy.
