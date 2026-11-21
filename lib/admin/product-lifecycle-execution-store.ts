@@ -71,6 +71,16 @@ function eventData(input: {
   };
 }
 
+/** Serialize enqueue, claim and finish decisions against the run lifecycle. */
+async function lockActiveRun(tx: Tx, runId: string): Promise<boolean> {
+  const rows = await tx.$queryRaw`
+    SELECT "id", "status" FROM "ProductLifecycleExecutionRun"
+    WHERE "id" = ${runId}
+    FOR UPDATE
+  `;
+  return rows.length === 1 && rows[0].status === "RUNNING";
+}
+
 /** Create a durable run once per caller-supplied idempotency key. */
 export async function createLifecycleExecutionRun(input: {
   runKey: string; mode?: "OBSERVE" | "PLAN"; cursor?: Record<string, unknown>;
@@ -119,10 +129,7 @@ export async function enqueueLifecycleTasks(runId: string, inputs: TaskInput[]) 
   });
 
   return prisma.$transaction(async (tx: Tx) => {
-    const run = await tx.productLifecycleExecutionRun.findUnique({
-      where: { id: runId }, select: { id: true, status: true },
-    });
-    if (!run || run.status !== "RUNNING") throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
+    if (!await lockActiveRun(tx, runId)) throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
     const inserted = await tx.productLifecycleExecutionTask.createMany({ data: rows, skipDuplicates: true });
     const tasks = await tx.productLifecycleExecutionTask.findMany({
       where: { idempotencyKey: { in: rows.map((row) => row.idempotencyKey) } },
@@ -149,10 +156,7 @@ export async function claimLifecycleTasks(input: {
   const leaseUntil = new Date(now.getTime() + leaseMs);
 
   return prisma.$transaction(async (tx: Tx) => {
-    const run = await tx.productLifecycleExecutionRun.findUnique({
-      where: { id: runId }, select: { id: true, status: true },
-    });
-    if (!run || run.status !== "RUNNING") throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
+    if (!await lockActiveRun(tx, runId)) throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
 
     // Exhausted work is moved to a terminal review queue with evidence, never silently discarded.
     const exhausted = await tx.$queryRaw`
@@ -306,10 +310,7 @@ export async function finishLifecycleExecutionRun(input: {
   const cursor = input.cursor === undefined ? undefined : JSON.parse(safeJson(input.cursor));
   const now = new Date();
   return prisma.$transaction(async (tx: Tx) => {
-    const run = await tx.productLifecycleExecutionRun.findUnique({
-      where: { id: input.runId }, select: { id: true, status: true },
-    });
-    if (!run || run.status !== "RUNNING") return { updated: false };
+    if (!await lockActiveRun(tx, input.runId)) return { updated: false };
     if (input.status === "COMPLETED") {
       const pending = await tx.productLifecycleExecutionTask.count({
         where: { runId: input.runId, state: { in: ["READY", "CLAIMED", "RETRY"] } },
