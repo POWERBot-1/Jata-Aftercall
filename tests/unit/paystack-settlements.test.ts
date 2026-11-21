@@ -15,6 +15,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe("Paystack read-only settlement adapter", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    vi.stubEnv("VERCEL_ENV", "test");
+    vi.stubEnv("PAYSTACK_SECRET_KEY", "");
+    vi.stubEnv("PAYSTACK_TEST_SECRET_KEY", "");
+    vi.stubEnv("PAYSTACK_PUBLIC_KEY", "");
+    vi.stubEnv("PAYSTACK_TEST_PUBLIC_KEY", "");
   });
 
   it("lists a bounded page and returns only reduced settlement evidence", async () => {
