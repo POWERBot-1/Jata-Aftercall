@@ -12,13 +12,15 @@ import {
  * Fetches bounded pages using SELECT-only Prisma queries.
  * Use an isolated/read-only database for acceptance testing; this function performs no writes.
  */
-export async function loadSubscriptionPaymentLifecycleReport() {
+export async function loadSubscriptionPaymentLifecycleReport(
+  client: Pick<typeof prisma, "subscription"> = prisma,
+) {
   const pageSize = 500;
   const evidence: SubscriptionPaymentEvidence[] = [];
   let cursor: string | undefined;
 
   for (;;) {
-    const page = await prisma.subscription.findMany({
+    const page = await client.subscription.findMany({
       take: pageSize,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: { id: "asc" },
