@@ -77,7 +77,13 @@ export async function loadProductEntitlementLifecycleReport() {
         select: { id: true, status: true, businessId: true, userId: true },
       })
     : [];
-  const paymentById = new Map(payments.map((payment) => [payment.id, payment]));
+  type PaymentEvidenceRow = { id: string; status: string; businessId: string | null; userId: string | null };
+  const paymentById = new Map<string, PaymentEvidenceRow>(
+    payments.map((payment) => {
+      const row = payment as PaymentEvidenceRow;
+      return [row.id, row];
+    }),
+  );
   const keyOf = (product: ProductKey, businessId: string) => product + ":" + businessId;
   const subByKey = new Map<string, SubscriptionRow[]>();
   const entByKey = new Map<string, EntitlementRow[]>();
