@@ -141,11 +141,20 @@ describe("financial evidence persistence", () => {
       provider: "PAYSTACK",
     });
     await expect(persistPaystackSettlementTransactions("snapshot-1", "3090024", {
-      records: [],
+      records: [{
+        provider: "PAYSTACK",
+        providerTransactionId: "2067030515",
+        reference: "jata-ref-1",
+        status: "success",
+        amountMinor: 10_000,
+        currency: "KES",
+        providerFeeMinor: 390,
+        paidAt: "2026-11-20T10:00:00.000Z",
+      }],
       page: 1,
       perPage: 50,
-      total: 0,
-      pageCount: 0,
+      total: 1,
+      pageCount: 1,
     })).rejects.toThrow("FINANCIAL_EVIDENCE_SETTLEMENT_SNAPSHOT_MISMATCH");
     expect(mocks.tx.providerSettlementTransactionEvidence.createMany).not.toHaveBeenCalled();
   });
