@@ -40,7 +40,7 @@ describe("summarizePersistedFinancialEvidence", () => {
     const report = summarizePersistedFinancialEvidence(
       [base, duplicate, incomplete],
       [{ snapshotId: base.id, paymentReference: null, status: "success" }],
-      [{ reference: "R1", currency: "KES", creditMinor: 10BigInt(0) }, { reference: "R1", currency: "KES", creditMinor: 10BigInt(0) }, { reference: "", currency: "KES", creditMinor: 2BigInt(0) }],
+      [{ reference: "R1", currency: "KES", creditMinor: BigInt(100) }, { reference: "R1", currency: "KES", creditMinor: BigInt(100) }, { reference: "", currency: "KES", creditMinor: BigInt(20) }],
     );
     expect(report.exceptions.DUPLICATE_SETTLEMENT_IDENTITY).toBe(1);
     expect(report.exceptions.DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS).toBe(1);
