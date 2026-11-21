@@ -142,4 +142,4 @@ The admin overview now presents **Evidence-qualified MRR (KES)** as a distinct p
 
 Legacy subscriptions without exact payment links remain excluded. The dedicated product models are read independently; null payment links remain excluded. The shared base Subscription model, AI Front Desk and Website Studio entitlements are not included in this projection pending authoritative product classification. No production migration, live DB read, or financial mutation is part of the reporting implementation.
 
-`tests/unit/recurring-revenue-report.test.ts` covers all six subscription sources, exact payment-ID lookup, missing legacy links, unreconciled payment exclusion, source failure and empty data. PostgreSQL and full CI acceptance on the exact commit remain pending.
+`tests/unit/recurring-revenue-report.test.ts` covers all five included dedicated subscription sources, exact payment-ID lookup, missing legacy links, unreconciled payment exclusion, source failure and empty data. PostgreSQL and full CI acceptance on the exact commit remain pending.
