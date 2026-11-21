@@ -1058,13 +1058,14 @@ button:focus-visible {
     min-height: max(14rem, calc(var(--eb-hero-min-height) - var(--eb-actionbar-h, 11.5rem) - 1.25rem));
   }
   .eb-scope:has(.eb-actionbar) .eb-hero__content {
-    padding-block: 1.25rem 1rem;
+    /* Preserve the bottom clearance reserved above for the measured fixed action bar. */
+    padding-top: 1.25rem;
   }
   .eb-scope:has(.eb-actionbar) .eb-hero__actions {
     margin-top: 0.75rem;
   }
   .eb-scope:has(.eb-actionbar) .eb-hero--centered {
-    padding-block: 1rem;
+    padding-top: 1rem;
   }
 }
 

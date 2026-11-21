@@ -221,19 +221,28 @@ try {
  const lifecycleResponse=await lifecyclePage.goto(new URL('/dev/motion-preview?preference=motion&queue=1',base).href,{waitUntil:'domcontentloaded'});
  await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return s?.dataset.motionEngine==='mini'&&t.length>8&&t.filter(e=>e.dataset.motionPlayed==='mini').length>=8;},{polling:10,timeout:12000});
  const lifecycleEarly=await lifecyclePage.evaluate(()=>{const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];const active=t.filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length;const started=t.filter(e=>e.dataset.motionPlayed==='mini').length;return {targets:t.length,started,active,queued:t.length-started};});
- const lifecycleCdp=await lifecyclePage.createCDPSession();
  let hiddenState=null,visibleState=null,visibilitySupported=true;
  try{
-  await lifecycleCdp.send('Emulation.setPageVisibilityState',{visibilityState:'hidden'});
+  // Chromium 157 no longer exposes Emulation.setPageVisibilityState. Exercise the
+  // application's real visibilitychange listener with a deterministic document
+  // visibility surface instead of treating a removed CDP command as an app failure.
+  await lifecyclePage.evaluate(()=>{
+   let state='visible';
+   Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>state});
+   Object.defineProperty(document,'hidden',{configurable:true,get:()=>state==='hidden'});
+   Object.defineProperty(document,'__jataSetVisibility',{configurable:true,value:(next)=>{state=next;document.dispatchEvent(new Event('visibilitychange'));}});
+  });
+  const setVisibility=(state)=>lifecyclePage.evaluate((next)=>document.__jataSetVisibility(next),state);
+  await setVisibility('hidden');
   await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const running=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length;return document.visibilityState==='hidden'&&s?.dataset.renderMode==='lite'&&s?.dataset.motionReason==='background'&&running===0;},{polling:10,timeout:5000});
   hiddenState=await lifecyclePage.evaluate(()=>({visibility:document.visibilityState,mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length}));
-  await lifecycleCdp.send('Emulation.setPageVisibilityState',{visibilityState:'visible'});
+  await setVisibility('visible');
   await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return document.visibilityState==='visible'&&s?.dataset.renderMode==='motion'&&t.every(e=>e.dataset.motionPlayed==='mini')&&!t.some(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending'));},{polling:10,timeout:15000});
   visibleState=await lifecyclePage.evaluate(()=>({visibility:document.visibilityState,mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,targets:document.querySelectorAll('.eb-scope [data-motion-recipe]').length,started:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.dataset.motionPlayed==='mini').length,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length}));
  }catch(error){visibilitySupported=false;visibleState={error:String(error).slice(0,300)};}
  const lifecycleResult={kind:'visibility-exit-reentry-queue-recovery',status:lifecycleResponse?.status()??null,early:lifecycleEarly,hiddenState,visibleState,visibilitySupported,result:visibilitySupported&&lifecycleResponse?.status()===200&&lifecycleEarly.targets>8&&lifecycleEarly.started===8&&lifecycleEarly.active>0&&lifecycleEarly.queued===lifecycleEarly.targets-8&&hiddenState?.visibility==='hidden'&&hiddenState?.mode==='lite'&&hiddenState?.reason==='background'&&hiddenState?.running===0&&visibleState?.visibility==='visible'&&visibleState?.mode==='motion'&&visibleState?.targets>8&&visibleState?.started===visibleState?.targets&&visibleState?.running===0?'PASS':'FAIL'};
  events.push(lifecycleResult);save();console.log('::notice title=Visibility exit/re-entry queue recovery::'+JSON.stringify(lifecycleResult));
- await lifecycleCdp.detach();await lifecyclePage.close();
+ await lifecyclePage.close();
  // Repeated SPA navigation must dispose the old motion observer before a new storefront scope mounts.
  const navigationPage=await browser.newPage();
  await navigationPage.evaluateOnNewDocument(()=>{const Native=window.IntersectionObserver;const stats={created:0,disconnected:0,active:0,observeCalls:0};window.__motionObserverStats=stats;window.IntersectionObserver=class extends Native{constructor(callback,options){super(callback,options);this.__motionTracked=options?.rootMargin==='0px 0px -4% 0px';this.__motionDisconnected=false;if(this.__motionTracked){stats.created++;stats.active++;}}observe(target){if(this.__motionTracked)stats.observeCalls++;return super.observe(target);}disconnect(){if(this.__motionTracked&&!this.__motionDisconnected){this.__motionDisconnected=true;stats.disconnected++;stats.active--;}return super.disconnect();}};});

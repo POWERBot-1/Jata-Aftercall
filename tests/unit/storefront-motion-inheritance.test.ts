@@ -26,6 +26,16 @@ describe("storefront motion integration contract (SSR, not browser evidence)", (
     if (data.theme.treatment.motion === "none") expect(html).not.toContain('data-motion-recipe=');
     else expect(html).toContain('data-motion-recipe=');
   });
+  it("preserves the reserved mobile action-bar clearance in every hero alignment", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    const reserved = css.slice(css.indexOf("Keep hero copy and its primary actions clear"), css.indexOf("Keep the first-screen hero CTA clear"));
+    const compact = css.slice(css.indexOf("Keep the first-screen hero CTA clear"), css.indexOf("/* ── Cards ──"));
+    expect(reserved).toContain("padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem)");
+    expect(compact).toContain("padding-top: 1.25rem;");
+    expect(compact).toContain("padding-top: 1rem;");
+    expect(compact).not.toContain("padding-block: 1.25rem 1rem;");
+    expect(compact).not.toContain("padding-block: 1rem;");
+  });
   it("detects new business pages that bypass the shell or an explicitly audited exception", () => {
     const root = "app/b/[slug]";
     const exceptions: Record<string, string[]> = {
