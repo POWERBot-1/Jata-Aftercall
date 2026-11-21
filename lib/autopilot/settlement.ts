@@ -11,6 +11,7 @@ import {
   serializeJsonWithoutInlineImageData,
 } from "@/lib/media/persistence-policy";
 import { isProviderTransactionId } from "@/lib/paymentVerification";
+import { providerSettlementEvidenceFields } from "@/lib/payments/provider-settlement-evidence";
 import {
   AUTOPILOT_GRACE_DAYS,
   assertAutopilotPlanPricing,
@@ -111,6 +112,7 @@ export async function settleAutopilotPayment(
       where: { id: payment.id, status: settledFrom },
       data: {
         status: "PAID",
+        ...providerSettlementEvidenceFields({ reference: payment.reference, providerConfirmedAt: verification?.providerConfirmedAt }),
         ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
         ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
