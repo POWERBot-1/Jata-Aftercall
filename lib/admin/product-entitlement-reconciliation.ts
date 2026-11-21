@@ -30,6 +30,7 @@ export type ProductEntitlementException =
   | "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION"
   | "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION"
   | "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT"
+  | "LINKED_PAYMENT_RECORD_NOT_FOUND"
   | "PAYMENT_TENANT_OR_OWNER_MISMATCH"
   | "DUPLICATE_PRODUCT_LIFECYCLE";
 
@@ -54,7 +55,7 @@ export type ProductEntitlementReport = {
 const activeSubscription = (status: string | null) =>
   status === "ACTIVE" || status === "EXPIRING" || status === "PAST_DUE";
 const activeEntitlement = (status: string | null) =>
-  status === "ACTIVE" || status === "LIVE" || status === "GRACE";
+  status === "ACTIVE" || status === "LIVE" || status === "GRACE" || status === "PAST_DUE";
 
 export function summarizeProductEntitlementLifecycle(
   evidence: ProductLifecycleEvidence[],
@@ -66,6 +67,7 @@ export function summarizeProductEntitlementLifecycle(
     ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION: 0,
     ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION: 0,
     ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT: 0,
+    LINKED_PAYMENT_RECORD_NOT_FOUND: 0,
     PAYMENT_TENANT_OR_OWNER_MISMATCH: 0,
     DUPLICATE_PRODUCT_LIFECYCLE: 0,
   };
@@ -123,6 +125,16 @@ export function summarizeProductEntitlementLifecycle(
         businessId: row.businessId,
         subscriptionId: row.subscriptionId ?? undefined,
         entitlementId: row.entitlementId ?? undefined,
+      });
+    }
+
+    if (row.paymentId && row.paymentStatus === null) {
+      push({
+        exception: "LINKED_PAYMENT_RECORD_NOT_FOUND",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        paymentId: row.paymentId,
       });
     }
 
