@@ -112,7 +112,7 @@ export function matchProviderSettlementToBankCredit(
     return { status: "UNRESOLVED", reason: "REFERENCE_COLLISION_ACROSS_SETTLEMENTS" };
   }
 
-  const candidates = bankCredits.filter((item) => reference(item.reference) === key;
+  const candidates = bankCredits.filter((item) => reference(item.reference) === key);
   if (candidates.length > 1) return { status: "AMBIGUOUS", reason: "DUPLICATE_BANK_REFERENCE" };
   if (candidates.length === 0) return { status: "UNMATCHED", reason: "NO_BANK_CREDIT" };
 
