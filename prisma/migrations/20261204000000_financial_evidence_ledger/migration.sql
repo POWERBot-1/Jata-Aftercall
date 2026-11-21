@@ -165,5 +165,18 @@ CREATE TRIGGER "BankStatementCreditEvidence_append_only"
   BEFORE UPDATE OR DELETE ON "BankStatementCreditEvidence"
   FOR EACH ROW EXECUTE FUNCTION financial_evidence_append_only_guard();
 
+CREATE TRIGGER "ProviderSettlementSnapshot_no_truncate"
+  BEFORE TRUNCATE ON "ProviderSettlementSnapshot"
+  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
+CREATE TRIGGER "ProviderSettlementTransactionEvidence_no_truncate"
+  BEFORE TRUNCATE ON "ProviderSettlementTransactionEvidence"
+  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
+CREATE TRIGGER "BankStatementImportBatch_no_truncate"
+  BEFORE TRUNCATE ON "BankStatementImportBatch"
+  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
+CREATE TRIGGER "BankStatementCreditEvidence_no_truncate"
+  BEFORE TRUNCATE ON "BankStatementCreditEvidence"
+  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
+
 -- No automated rollback: these tables establish financial history. Any rollback requires
 -- owner approval and a verified export/backup of every evidence row.
