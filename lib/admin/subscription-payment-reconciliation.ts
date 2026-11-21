@@ -23,6 +23,8 @@ export type SubscriptionPaymentEvidence = {
     environment: string;
     reconciliationStatus: string;
     providerSettledAt: Date | null;
+    providerSettlementReference: string | null;
+    currency: string;
     settledRefundMinor: bigint | null;
     settledChargebackMinor: bigint | null;
   };
@@ -94,7 +96,8 @@ export function summarizeSubscriptionPaymentLifecycle(
       payment.userId !== row.userId ||
       payment.planId !== row.planId ||
       payment.purpose !== "SUBSCRIPTION" ||
-      (row.paymentReference !== null && payment.reference !== row.paymentReference);
+      !row.paymentReference ||
+      payment.reference !== row.paymentReference;
 
     if (identityMismatch) {
       push({ exception: "SUBSCRIPTION_PAYMENT_IDENTITY_MISMATCH", subscriptionId: row.subscriptionId, paymentId: row.paymentId });
@@ -110,7 +113,8 @@ export function summarizeSubscriptionPaymentLifecycle(
 
     // A PAID label alone is not settlement proof. Test/unknown environments, unreconciled
     // provider records, or missing settlement timestamps must remain visible as exceptions.
-    if (payment.environment !== "LIVE" || payment.reconciliationStatus !== "MATCHED" || !payment.providerSettledAt) {
+    if (payment.environment !== "LIVE" || payment.reconciliationStatus !== "MATCHED" || !payment.providerSettledAt ||
+        payment.providerSettlementReference !== row.paymentReference || payment.currency.trim().toUpperCase() !== "KES") {
       push({ exception: "ACTIVE_SUBSCRIPTION_WITH_UNVERIFIED_PAYMENT", subscriptionId: row.subscriptionId, paymentId: row.paymentId });
       continue;
     }
