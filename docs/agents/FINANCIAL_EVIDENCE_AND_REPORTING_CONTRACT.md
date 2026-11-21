@@ -74,3 +74,16 @@ Provider refund settlement must match both the reserved refund amount in minor u
 ## Provider fee evidence (Paystack)
 
 For authenticated Paystack `charge.success` events and successful transaction verification responses, JATA captures Paystack's explicit `fees` integer as `providerFeeMinor` in the sanitized immutable payment-event payload. The value is accepted only as a non-negative safe integer in provider minor units. Missing, malformed, negative, fractional or unsafe values remain unknown; an explicit numeric zero remains a valid provider-reported value. This is evidence capture, not a fee ledger or a bank-settlement assertion. Paystack's `fees` field is not split into tax unless the provider supplies a separately authoritative tax field with documented semantics. JATA must not infer tax from the fee, a percentage, gross amount or net amount. The current implementation does not yet post fee/tax journal entries or reconcile Paystack net settlements against bank statements.
+
+
+## Provider payout ↔ bank-credit reconciliation primitives
+
+`lib/payments/provider-settlement-reconciliation.ts` defines a deterministic evidence boundary for future provider payout and bank statement ingestion:
+
+- A provider settlement is arithmetically valid only when gross, fee, tax, signed adjustment and net are all explicitly supplied as safe integer minor-unit values and `gross - fee - tax + adjustment = net`.
+- Missing fee, tax or adjustment remains incomplete; it is never silently treated as zero. Explicit numeric zero is accepted.
+- A bank credit is automatically matched only on one unique exact settlement reference, equal normalized currency and exact net credit amount.
+- Duplicate provider references or bank references are ambiguous. Missing references, amount differences and currency differences remain unmatched.
+- No amount-only, date-only, substring or fuzzy matching is used.
+
+This tranche adds pure validation/matching primitives and unit tests only. It does not import a bank statement, query a Paystack settlement feed, persist a payout record, create a journal entry, or assert that any payout reached a bank account. Those capabilities remain blocked on provider-specific source evidence, an approved statement ingestion channel, and a separately reviewed persistence/migration design. No live financial records were read or changed.
