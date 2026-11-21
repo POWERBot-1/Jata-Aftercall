@@ -14,8 +14,10 @@ type SubscriptionRow = {
   businessId: string;
   id: string;
   userId: string;
+  planId: string;
   status: string;
   paymentId: string | null;
+  paymentReference: string | null;
 };
 
 type EntitlementRow = {
@@ -36,12 +38,12 @@ export async function loadProductEntitlementLifecycleReport() {
   const [core, posSubs, autopilotSubs, mjengoSubs, erpProSubs, interactive, ai, posEnts, autopilotEnts, mjengoEnts, erpProEnts] =
     await Promise.all([
       prisma.subscription.findMany({
-        select: { id: true, businessId: true, userId: true, status: true, paymentId: true, plan: { select: { key: true } } },
+        select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true, plan: { select: { key: true } } },
       }),
-      prisma.posSubscription.findMany({ select: { id: true, businessId: true, userId: true, status: true, paymentId: true } }),
-      prisma.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, status: true, paymentId: true } }),
-      prisma.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, status: true, paymentId: true } }),
-      prisma.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, status: true, paymentId: true } }),
+      prisma.posSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
+      prisma.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
+      prisma.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
+      prisma.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
       prisma.interactiveBusinessEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
       prisma.aIPackageEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
       prisma.posEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
@@ -53,12 +55,12 @@ export async function loadProductEntitlementLifecycleReport() {
   const subscriptions: SubscriptionRow[] = [
     ...core.flatMap((row) => {
       const product = corePlanProduct(row.plan.key);
-      return product ? [{ product, businessId: row.businessId, id: row.id, userId: row.userId, status: row.status, paymentId: row.paymentId }] : [];
+      return product ? [{ product, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference }] : [];
     }),
-    ...posSubs.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, userId: row.userId, status: row.status, paymentId: row.paymentId })),
-    ...autopilotSubs.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, userId: row.userId, status: row.status, paymentId: row.paymentId })),
-    ...mjengoSubs.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, userId: row.userId, status: row.status, paymentId: row.paymentId })),
-    ...erpProSubs.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, userId: row.userId, status: row.status, paymentId: row.paymentId })),
+    ...posSubs.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
+    ...autopilotSubs.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
+    ...mjengoSubs.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
+    ...erpProSubs.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
   ];
 
   const entitlements: EntitlementRow[] = [
@@ -74,10 +76,10 @@ export async function loadProductEntitlementLifecycleReport() {
   const payments = paymentIds.length
     ? await prisma.payment.findMany({
         where: { id: { in: paymentIds } },
-        select: { id: true, status: true, businessId: true, userId: true },
+        select: { id: true, status: true, businessId: true, userId: true, planId: true, reference: true, purpose: true },
       })
     : [];
-  type PaymentEvidenceRow = { id: string; status: string; businessId: string | null; userId: string | null };
+  type PaymentEvidenceRow = { id: string; status: string; businessId: string | null; userId: string | null; planId: string | null; reference: string; purpose: string };
   const paymentById = new Map<string, PaymentEvidenceRow>(
     payments.map((payment) => {
       const row = payment as PaymentEvidenceRow;
@@ -113,6 +115,11 @@ export async function loadProductEntitlementLifecycleReport() {
           subscriptionStatus: sub?.status ?? null,
           paymentId: sub?.paymentId ?? null,
           paymentStatus: payment?.status ?? null,
+          paymentPlanId: payment?.planId ?? null,
+          paymentReference: payment?.reference ?? null,
+          subscriptionPaymentReference: sub?.paymentReference ?? null,
+          paymentPurpose: payment?.purpose ?? null,
+          subscriptionPlanId: sub?.planId ?? null,
           paymentBusinessId: payment?.businessId ?? null,
           paymentUserId: payment?.userId ?? null,
           subscriptionUserId: sub?.userId ?? null,
