@@ -5061,3 +5061,67 @@ model PaymentRecoveryTask {
   @@index([status, availableAt, priority])
   @@index([status, leaseUntil])
 }
+
+
+/// Durable lifecycle orchestration run. A RUNNING row is not proof of completion.
+model ProductLifecycleExecutionRun {
+  id          String   @id @default(cuid())
+  runKey      String   @unique
+  mode        String   @default("OBSERVE")
+  status      String   @default("RUNNING")
+  cursor      Json?
+  summary     Json?
+  leaseToken  String?
+  leaseUntil  DateTime?
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       ProductLifecycleExecutionTask[]
+  @@index([status, leaseUntil])
+  @@index([startedAt])
+}
+
+/// Idempotent product lifecycle work ledger. A task is evidence/work, never an entitlement grant.
+model ProductLifecycleExecutionTask {
+  id             String   @id @default(cuid())
+  runId          String
+  run            ProductLifecycleExecutionRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+  idempotencyKey String   @unique
+  product        String
+  businessId     String
+  subscriptionId String
+  transitionKey  String
+  state          String   @default("READY")
+  payload        Json
+  attempts       Int      @default(0)
+  maxAttempts    Int      @default(5)
+  availableAt    DateTime @default(now())
+  leaseToken     String?
+  leaseUntil     DateTime?
+  lastErrorCode  String?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  events         ProductLifecycleExecutionEvent[]
+  @@index([state, availableAt, createdAt])
+  @@index([state, leaseUntil])
+  @@index([product, businessId, subscriptionId])
+}
+
+/// Append-only transition evidence for lifecycle work. It contains no provider/customer payload.
+model ProductLifecycleExecutionEvent {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        ProductLifecycleExecutionTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  eventType   String
+  fromState   String?
+  toState     String
+  reasonCode  String
+  actorType   String
+  actorId     String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  @@index([taskId, createdAt])
+  @@index([eventType, createdAt])
+}
