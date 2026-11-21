@@ -286,6 +286,8 @@ export type ProviderStatusReport = {
   amountMinor: number | null;
   currency: string | null;
   providerTransactionId: string | null;
+  /** Provider-reported fee in minor units; null/absent is not interpreted as zero. */
+  providerFeeMinor?: number | null;
   message: string | null;
 };
 
@@ -305,6 +307,8 @@ export type ProviderEventOutcome =
       providerReceipt?: string | null;
       amountMinor: number;
       currency: string;
+      /** Paystack's reported fee in minor units. Absence means not supplied, not zero. */
+      providerFeeMinor?: number | null;
       destination: DestinationHint;
       method: string;
       customerName: string | null;
