@@ -52,3 +52,10 @@ The adopted referral policy is not a configured rate schedule. No numeric commis
 - Provider-originated fee, tax, refund and chargeback records, full ledger reconciliation, dedicated product subscription snapshots, and live/sandbox provider lifecycle acceptance remain outstanding until backed by provider evidence and traceable exact-head runs.
 
 No production migration, financial mutation, payout, or live charge is authorized by this contract.
+
+
+## Dedicated-product provider settlement timestamps
+
+The POS, Autopilot and MJENGO settlement transactions now use the shared provider-settlement evidence mapper. A providerSettledAt value is written only from a valid paid_at timestamp returned by the verified Paystack transaction, and providerSettlementReference is tied to the local payment reference. The local webhook receipt time is never substituted for provider settlement time. If paid_at is absent or malformed, the timestamp remains null and the payment remains unreconciled until authoritative evidence is imported.
+
+This does not complete fee/tax import, refund/chargeback reconciliation, bank-statement matching, or a full MRR/ARR calculation. Dedicated-product snapshots and payment-to-subscription reconciliation still require independent acceptance, including ERP PRO's actual activation path.
