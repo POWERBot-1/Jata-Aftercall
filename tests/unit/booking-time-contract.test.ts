@@ -320,8 +320,8 @@ describe("8. concurrency protection and tenant isolation survive the contract", 
 
   it("keeps the owner board tenant-scoped and authenticated", () => {
     const management = read("app/api/bookings/route.ts");
-    expect(management).toContain("guardTenantMutation(session, businessId)");
-    expect(management).toContain("guardTenantMutation(session, booking.businessId)");
+    expect(management).toContain('guardTenantMutation(session, businessId, "read")');
+    expect(management).toContain('guardTenantMutation(session, booking.businessId, "manage_orders")');
     expect(management).toMatch(/where: \{ businessId, \.\.\.\(status/);
     // Ownership is re-checked against the stored row, never trusted from the request body.
     expect(management).toContain("const booking = await prisma.booking.findUnique(");

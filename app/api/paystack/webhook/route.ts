@@ -6,6 +6,7 @@ import { validatePaymentEvidence } from "@/lib/paymentVerification";
 import { failOrderPayment, settleOrderPayment } from "@/lib/experience/payments";
 import { POS_PLAN_KEY } from "@/lib/pos/entitlement";
 import { isAutopilotPlanKey } from "@/lib/autopilot/entitlement";
+import { MJENGO_PLAN_KEY } from "@/lib/mjengo/entitlement";
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -26,6 +27,58 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
   }
   if (await isWebhookProcessed(eventId)) return NextResponse.json({ status: "already_processed" });
+
+  // Disputes are not proof of a settled chargeback. Persist a review marker and
+  // immutable audit evidence, but do not refund or suspend access automatically.
+  if (["charge.dispute.create", "charge.dispute.remind", "charge.dispute.resolve"].includes(type)) {
+    const transactionData = data.transaction && typeof data.transaction === "object" && !Array.isArray(data.transaction)
+      ? data.transaction as Record<string, unknown>
+      : null;
+    const disputeReference =
+      (typeof transactionData?.reference === "string" ? transactionData.reference : "") ||
+      (typeof data.transaction_reference === "string" ? data.transaction_reference : "") ||
+      (typeof data.reference === "string" ? data.reference : "");
+    if (!disputeReference || disputeReference.length > 100) {
+      return NextResponse.json({ error: "Invalid dispute transaction reference." }, { status: 400 });
+    }
+    const disputedPayment = await prisma.payment.findUnique({ where: { reference: disputeReference } });
+    if (!disputedPayment) {
+      await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
+      await logAudit({ action: "WEBHOOK_DISPUTE_UNKNOWN_REFERENCE", metadata: { event: type } });
+      return NextResponse.json({ status: "ignored" });
+    }
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.processedWebhook.create({ data: { id: eventId } });
+        await tx.payment.updateMany({
+          where: { id: disputedPayment.id },
+          data: { reconciliationStatus: "REVIEW_REQUIRED" },
+        });
+        await tx.auditEvent.create({
+          data: {
+            actorId: disputedPayment.userId,
+            action: "WEBHOOK_CHARGEBACK_DISPUTE_REVIEW_REQUIRED",
+            targetType: "PAYMENT",
+            targetId: disputedPayment.id,
+            metadata: JSON.stringify({
+              event: type,
+              disputeId: data.id == null ? null : String(data.id).slice(0, 100),
+              amount: typeof transactionData?.amount === "number" && Number.isSafeInteger(transactionData.amount)
+                ? transactionData.amount
+                : null,
+              currency: typeof transactionData?.currency === "string"
+                ? transactionData.currency.slice(0, 8)
+                : null,
+            }),
+          },
+        });
+      });
+      return NextResponse.json({ status: "dispute_requires_reconciliation" });
+    } catch {
+      if (await isWebhookProcessed(eventId)) return NextResponse.json({ status: "already_processed" });
+      return NextResponse.json({ error: "Dispute event could not be recorded; Paystack may retry." }, { status: 503 });
+    }
+  }
 
   if (type === "refund.processed") {
     const refundReference = typeof data.transaction_reference === "string" ? data.transaction_reference : typeof data.reference === "string" ? data.reference : "";
@@ -80,6 +133,17 @@ export async function POST(req: Request) {
               metadata: JSON.stringify({ reason: "REFUNDED" }),
             },
           });
+        } else if (changed.count && refundPayment.businessId && refundPlanKey === MJENGO_PLAN_KEY) {
+          const suspendedMjengo = await tx.mjengoSubscription.updateMany({
+            where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },
+            data: { status: "SUSPENDED" },
+          });
+          if (suspendedMjengo.count > 0) {
+            await tx.mjengoEntitlement.updateMany({
+              where: { businessId: refundPayment.businessId },
+              data: { status: "SUSPENDED" },
+            });
+          }
         } else if (changed.count && refundPayment.businessId && isAutopilotPlanKey(refundPlanKey)) {
           const suspendedSub = await tx.autopilotSubscription.updateMany({
             where: { businessId: refundPayment.businessId, paymentId: refundPayment.id },

@@ -12,7 +12,7 @@ if(base.protocol!=='http:'||!['localhost','127.0.0.1'].includes(base.hostname)||
 const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(sha!==process.env.EXPECTED_SHA) throw Error('HEAD mismatch');
 const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const out='motion-route-evidence';mkdirSync(out,{recursive:true});const db=new PrismaClient();const events=[],rows=[],aiRows=[];let browser,originalStudioSubscription=null;
-const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,aiRows,limitations:['No ten-section queue stress','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
+const save=()=>writeFileSync(path.join(out,'evidence.json'),JSON.stringify({sha,browser:browserVersion,events,rows,aiRows,limitations:['Queue stress uses a dev-only synthetic 18-target fixture; published-route coverage remains separate','No independent image review','Lite and reduced are not a previous-build baseline']},null,2));
 let browserVersion='unavailable';
 try {
  const business=await db.business.findUniqueOrThrow({where:{slug:'marys-beauty-studio'},select:{id:true,slug:true}});
@@ -76,7 +76,7 @@ try {
    const selector=target.auth?'.jata-ai-motion':'.eb-scope';await p.waitForFunction(s=>document.querySelector(s)?.dataset.renderMode,{timeout:10000},selector).catch(()=>{});
    await p.evaluate(async()=>{for(const e of document.querySelectorAll('[data-motion-recipe]')){e.scrollIntoView({block:'center',behavior:'instant'});await new Promise(r=>setTimeout(r,120));}await new Promise(r=>setTimeout(r,650));});
    const data=await p.evaluate(s=>{const scope=document.querySelector(s);return {mode:scope?.dataset.renderMode,reason:scope?.dataset.motionReason,engine:scope?.dataset.motionEngine,mediaMatches:window.__routeMediaCurrent?.()??null,mediaPreference:window.__routeMediaCurrent?.()===true?'reduce':window.__routeMediaCurrent?.()===false?'no-preference':null,targets:scope?.querySelectorAll('[data-motion-recipe]').length,probes:scope?.querySelectorAll('[data-motion-probe]').length,trace:window.__routeMotionTrace||[],visibleText:document.querySelector('h1')?.textContent};},selector);
-   const name=`${target.name}-${width}x${height}.jpg`;await p.screenshot({path:path.join(out,name),type:'jpeg',quality:50});
+   await p.evaluate(()=>window.scrollTo(0,0));await new Promise(r=>setTimeout(r,180));const name=`${target.name}-${width}x${height}.jpg`;await p.screenshot({path:path.join(out,name),type:'jpeg',quality:50,fullPage:true});
    const row={sha,browser:browserVersion,route:target.route,viewport:`${width}x${height}`,status:response?.status()??null,...data,screenshot:name};rows.push(row);save();
   }
  }
@@ -197,6 +197,58 @@ try {
  const emitted=settled.trace.filter(e=>e.kind==='media-query-change-emitted').length,listenerReceipts=settled.trace.filter(e=>e.kind==='media-query-listener-received').length;
  const repeat={kind:'repeated-preference-transitions',transitions,settled,emitted,listenerReceipts,result:transitions.length===6&&transitions.every((x,i)=>x.mode===(i%2?'lite':'motion')&&x.mediaMatches===Boolean(i%2)&&(i%2?(x.reason==='reduced-motion'&&x.running===0):x.reason==='eligible'))&&settled.mode==='lite'&&settled.reason==='reduced-motion'&&settled.running===0&&emitted>=6&&listenerReceipts>=6?'PASS':'INCONCLUSIVE_OR_FAIL'};
  events.push(repeat);save();console.log(`::notice title=Repeated preference transitions::${JSON.stringify({kind:repeat.kind,result:repeat.result,transitions,settled:{mode:settled.mode,reason:settled.reason,running:settled.running}})}`);
+ // Real-browser saturation of the actual controller using the dev-only 18-target fixture.
+ const queuePage=await browser.newPage();
+ await queuePage.setViewport({width:1366,height:5000,deviceScaleFactor:1});
+ await queuePage.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+ const queueResponse=await queuePage.goto(new URL('/dev/motion-preview?preference=motion&queue=1',base).href,{waitUntil:'domcontentloaded'});
+ // The controller bounds concurrently revealing ELEMENTS (MAX_ACTIVE_REVEALS = 8 in
+ // lib/experience/motionRuntime.ts); one element may run several Web Animations. Count elements with
+ // at least one running/pending animation, not raw animations. The dev fixture renders a compact
+ // layout so every target intersects at once; the target count is read from the DOM and must exceed
+ // eight so the bound is genuinely contended.
+ await queuePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return s?.dataset.motionEngine==='mini'&&t.length>8&&t.filter(e=>e.dataset.motionPlayed==='mini').length>=8;},{polling:10,timeout:12000});
+ const queueEarly=await queuePage.evaluate(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];const started=t.filter(e=>e.dataset.motionPlayed==='mini').length;const running=e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending');const active=t.filter(running).length;const animations=t.flatMap(e=>e.getAnimations()).filter(a=>a.playState==='running'||a.playState==='pending').length;return {targets:t.length,animations,visible:t.filter(e=>{const r=e.getBoundingClientRect();return r.bottom>0&&r.top<innerHeight;}).length,started,active,queued:t.length-started,engine:s?.dataset.motionEngine};});
+ const queueComplete=await queuePage.evaluate(async()=>{const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];const running=e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending');let maxActive=0,maxAnimations=0;const deadline=performance.now()+12000;while(performance.now()<deadline){const active=t.filter(running).length;maxActive=Math.max(maxActive,active);maxAnimations=Math.max(maxAnimations,t.flatMap(e=>e.getAnimations()).filter(a=>a.playState==='running'||a.playState==='pending').length);if(t.every(e=>e.dataset.motionPlayed==='mini')&&active===0)break;await new Promise(r=>setTimeout(r,10));}return {targets:t.length,started:t.filter(e=>e.dataset.motionPlayed==='mini').length,active:t.filter(running).length,maxActive,maxAnimations};});
+ const queueStress={kind:'eight-slot-queue-stress',status:queueResponse?.status()??null,early:queueEarly,complete:queueComplete,result:queueResponse?.status()===200&&queueEarly.targets>8&&queueEarly.visible===queueEarly.targets&&queueEarly.started===8&&queueEarly.queued===queueEarly.targets-8&&queueEarly.active<=8&&queueComplete.targets===queueEarly.targets&&queueComplete.started===queueEarly.targets&&queueComplete.active===0&&queueComplete.maxActive<=8?'PASS':'FAIL'};
+ events.push(queueStress);save();console.log('::notice title=Eight-slot motion queue stress::'+JSON.stringify(queueStress));
+ await queuePage.close();
+ // Saturated queue interruption: hidden/visible lifecycle must cancel active work and re-observe
+ // only the not-yet-started targets when the document becomes visible again.
+ const lifecyclePage=await browser.newPage();
+ await lifecyclePage.setViewport({width:1366,height:5000,deviceScaleFactor:1});
+ await lifecyclePage.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+ const lifecycleResponse=await lifecyclePage.goto(new URL('/dev/motion-preview?preference=motion&queue=1',base).href,{waitUntil:'domcontentloaded'});
+ await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return s?.dataset.motionEngine==='mini'&&t.length>8&&t.filter(e=>e.dataset.motionPlayed==='mini').length>=8;},{polling:10,timeout:12000});
+ const lifecycleEarly=await lifecyclePage.evaluate(()=>{const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];const active=t.filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length;const started=t.filter(e=>e.dataset.motionPlayed==='mini').length;return {targets:t.length,started,active,queued:t.length-started};});
+ const lifecycleCdp=await lifecyclePage.createCDPSession();
+ let hiddenState=null,visibleState=null,visibilitySupported=true;
+ try{
+  await lifecycleCdp.send('Emulation.setPageVisibilityState',{visibilityState:'hidden'});
+  await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const running=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length;return document.visibilityState==='hidden'&&s?.dataset.renderMode==='lite'&&s?.dataset.motionReason==='background'&&running===0;},{polling:10,timeout:5000});
+  hiddenState=await lifecyclePage.evaluate(()=>({visibility:document.visibilityState,mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length}));
+  await lifecycleCdp.send('Emulation.setPageVisibilityState',{visibilityState:'visible'});
+  await lifecyclePage.waitForFunction(()=>{const s=document.querySelector('.eb-scope');const t=[...document.querySelectorAll('.eb-scope [data-motion-recipe]')];return document.visibilityState==='visible'&&s?.dataset.renderMode==='motion'&&t.every(e=>e.dataset.motionPlayed==='mini')&&!t.some(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending'));},{polling:10,timeout:15000});
+  visibleState=await lifecyclePage.evaluate(()=>({visibility:document.visibilityState,mode:document.querySelector('.eb-scope')?.dataset.renderMode,reason:document.querySelector('.eb-scope')?.dataset.motionReason,targets:document.querySelectorAll('.eb-scope [data-motion-recipe]').length,started:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.dataset.motionPlayed==='mini').length,running:[...document.querySelectorAll('.eb-scope [data-motion-recipe]')].filter(e=>e.getAnimations().some(a=>a.playState==='running'||a.playState==='pending')).length}));
+ }catch(error){visibilitySupported=false;visibleState={error:String(error).slice(0,300)};}
+ const lifecycleResult={kind:'visibility-exit-reentry-queue-recovery',status:lifecycleResponse?.status()??null,early:lifecycleEarly,hiddenState,visibleState,visibilitySupported,result:visibilitySupported&&lifecycleResponse?.status()===200&&lifecycleEarly.targets>8&&lifecycleEarly.started===8&&lifecycleEarly.active>0&&lifecycleEarly.queued===lifecycleEarly.targets-8&&hiddenState?.visibility==='hidden'&&hiddenState?.mode==='lite'&&hiddenState?.reason==='background'&&hiddenState?.running===0&&visibleState?.visibility==='visible'&&visibleState?.mode==='motion'&&visibleState?.targets>8&&visibleState?.started===visibleState?.targets&&visibleState?.running===0?'PASS':'FAIL'};
+ events.push(lifecycleResult);save();console.log('::notice title=Visibility exit/re-entry queue recovery::'+JSON.stringify(lifecycleResult));
+ await lifecycleCdp.detach();await lifecyclePage.close();
+ // Repeated SPA navigation must dispose the old motion observer before a new storefront scope mounts.
+ const navigationPage=await browser.newPage();
+ await navigationPage.evaluateOnNewDocument(()=>{const Native=window.IntersectionObserver;const stats={created:0,disconnected:0,active:0,observeCalls:0};window.__motionObserverStats=stats;window.IntersectionObserver=class extends Native{constructor(callback,options){super(callback,options);this.__motionTracked=options?.rootMargin==='0px 0px -4% 0px';this.__motionDisconnected=false;if(this.__motionTracked){stats.created++;stats.active++;}}observe(target){if(this.__motionTracked)stats.observeCalls++;return super.observe(target);}disconnect(){if(this.__motionTracked&&!this.__motionDisconnected){this.__motionDisconnected=true;stats.disconnected++;stats.active--;}return super.disconnect();}};});
+ const navigationResponse=await navigationPage.goto(new URL('/b/marys-beauty-studio',base).href,{waitUntil:'domcontentloaded'});
+ await navigationPage.waitForFunction(()=>window.__motionObserverStats?.created>=1,{polling:20,timeout:10000});
+ const navigationStates=[await navigationPage.evaluate(()=>({...window.__motionObserverStats}))];
+ await navigationPage.click('a[href="/b/marys-beauty-studio/shop"]');
+ await navigationPage.waitForFunction(()=>location.pathname.endsWith('/shop')&&window.__motionObserverStats?.created>=2&&window.__motionObserverStats?.disconnected>=1,{polling:20,timeout:10000});
+ navigationStates.push(await navigationPage.evaluate(()=>({...window.__motionObserverStats})));
+ await navigationPage.click('a[href="/b/marys-beauty-studio"]');
+ await navigationPage.waitForFunction(()=>location.pathname==='/b/marys-beauty-studio'&&window.__motionObserverStats?.created>=3&&window.__motionObserverStats?.disconnected>=2,{polling:20,timeout:10000});
+ navigationStates.push(await navigationPage.evaluate(()=>({...window.__motionObserverStats})));
+ const navigationLifecycle={kind:'route-navigation-observer-cleanup',status:navigationResponse?.status()??null,states:navigationStates,result:navigationResponse?.status()===200&&navigationStates.length===3&&navigationStates[0].created===1&&navigationStates[0].disconnected===0&&navigationStates.every((s,i)=>s.active===1&&s.created-s.disconnected===1&&s.created<=i+1&&s.observeCalls>0)?'PASS':'FAIL'};
+ events.push(navigationLifecycle);save();console.log('::notice title=Route navigation observer cleanup::'+JSON.stringify(navigationLifecycle));
+ await navigationPage.close();
  // Actual owner preference and OS preference are applied independently through the real draft API.
  for(const widthHeight of [[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]]){
   const [width,height]=widthHeight;await owner.bringToFront();await owner.setViewport({width,height,deviceScaleFactor:1});
@@ -220,4 +272,4 @@ try {
 }catch(e){events.push({kind:'BLOCKED',error:String(e?.stack||e).slice(0,1000)});}finally{save();await browser?.close();await db.$disconnect();}
 const errors=events.filter(x=>x.kind==='BLOCKED');const normalRows=rows.filter(x=>!x.setting),constrainedRows=rows.filter(x=>x.setting),normalMotionRowsPass=normalRows.length===30&&normalRows.every(x=>x.mode==='motion'&&x.reason==='eligible'&&x.mediaMatches===false),initialConstraintRowsPass=constrainedRows.length===12&&constrainedRows.every(x=>x.status===200&&x.probes===1&&x.mode==='lite'&&x.mediaMatches===(x.setting==='os-reduced')&&(x.setting==='owner-lite'?x.reason==='owner-lite':x.setting==='os-reduced'&&x.reason==='reduced-motion'));const aiRowsPass=aiRows.length===12&&aiRows.every(x=>x.status===200&&x.present&&x.probes===1&&x.mode===(x.setting==='reduced'?'lite':'motion')&&x.mediaMatches===(x.setting==='reduced')&&(x.setting==='reduced'?x.reason==='reduced-motion':x.reason==='eligible'));
 const summary={sha,browser:browserVersion,rows:rows.length,errors,routeRows:normalRows.length,normalMotionRowsPass,liteRows:constrainedRows.filter(x=>x.mode==='lite').length,initialConstraintRowsPass,aiRows:aiRows.length,aiRowsPass};console.log(`::notice title=Route behaviour observations::${JSON.stringify(summary)}`);
-if(errors.length||['synthetic-published-ai-fixture','restore-studio-subscription-fixture','real-reduced-motion-cancellation','repeated-preference-transitions'].some(kind=>!events.some(x=>x.kind===kind&&x.result==='PASS'))||summary.routeRows!==30||!normalMotionRowsPass||summary.liteRows!==12||!initialConstraintRowsPass||!aiRowsPass||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;
+if(errors.length||['synthetic-published-ai-fixture','restore-studio-subscription-fixture','real-reduced-motion-cancellation','repeated-preference-transitions','eight-slot-queue-stress','visibility-exit-reentry-queue-recovery','route-navigation-observer-cleanup'].some(kind=>!events.some(x=>x.kind===kind&&x.result==='PASS'))||summary.routeRows!==30||!normalMotionRowsPass||summary.liteRows!==12||!initialConstraintRowsPass||!aiRowsPass||rows.some(x=>x.status!==200||x.probes!==1))process.exitCode=1;

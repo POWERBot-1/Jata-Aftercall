@@ -1,6 +1,7 @@
 /** Server-only Paystack integration. Never return or log secret configuration. */
 import crypto from "crypto";
 import prisma from "./db";
+import { getPaystackSecretKey } from "./payments/config";
 import { isProviderTransactionId, isSettleablePaymentStatus, subscriptionWindow } from "./paymentVerification";
 import { PAYMENT_CURRENCY } from "./paymentCurrency";
 import { POS_PLAN_KEY } from "./pos/entitlement";
@@ -15,7 +16,7 @@ import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
 function getSecret(): string {
-  const secret = process.env.PAYSTACK_SECRET_KEY;
+  const secret = getPaystackSecretKey();
   if (!secret) throw new Error("PAYSTACK_NOT_CONFIGURED");
   return secret;
 }
@@ -82,8 +83,12 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
 }
 
 export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
-  if (!signature || !process.env.PAYSTACK_SECRET_KEY) return false;
-  const expected = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(rawBody).digest();
+  // Paystack sends a 128-character SHA-512 HMAC as hexadecimal. Buffer.from(hex)
+  // silently ignores a trailing non-hex suffix, so validate the complete encoding before
+  // decoding; otherwise a valid signature plus junk can be accepted as the valid prefix.
+  const secret = getPaystackSecretKey();
+  if (!signature || !/^[0-9a-f]{128}$/i.test(signature) || !secret) return false;
+  const expected = crypto.createHmac("sha512", secret).update(rawBody).digest();
   const supplied = Buffer.from(signature, "hex");
   return supplied.length === expected.length && crypto.timingSafeEqual(expected, supplied);
 }
@@ -173,8 +178,8 @@ export async function activateSubscriptionForPayment(
       return settleAutopilotPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
     }
     // MJENGO OS — KES 2,000 / 30 days, independent of BUSINESS_POS (KES 499) and ERP_PRO
-    // (KES 3,000). It writes planKey='MJENGO_OS' rows, so a POS payment can never switch it on
-    // and a MJENGO payment can never switch POS on. The product-terms guard lives inside
+    // (KES 3,000). It writes dedicated MjengoSubscription/MjengoEntitlement rows, so ERP PRO
+    // and POS remain independent. The product-terms guard lives inside
     // settleMjengoPayment and refuses rather than granting a mismatched product.
     if (plan.key === MJENGO_PLAN_KEY) {
       return settleMjengoPayment(tx, { payment, plan, eventId, verification, repairingLegacyPaidPayment });
@@ -227,6 +232,9 @@ export async function activateSubscriptionForPayment(
         data: {
           status: "PAID",
           ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
+          ...(verification?.providerConfirmedAt && Number.isFinite(Date.parse(verification.providerConfirmedAt))
+            ? { providerSettledAt: new Date(verification.providerConfirmedAt), providerSettlementReference: payment.reference }
+            : {}),
           ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
         },
       });
@@ -245,10 +253,16 @@ export async function activateSubscriptionForPayment(
       update: {
         userId: payment.userId, planId: plan.id, status: "ACTIVE", startAt, expiresAt,
         graceUntil: new Date(expiresAt.getTime() + 3 * 86400000),
+        recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+        recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+        recurringPriceEffectiveAt: now,
       },
       create: {
         businessId: payment.businessId, userId: payment.userId, planId: plan.id,
         status: "ACTIVE", startAt, expiresAt, graceUntil: new Date(expiresAt.getTime() + 3 * 86400000),
+        recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+        recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+        recurringPriceEffectiveAt: now,
       },
     });
     await tx.business.update({ where: { id: payment.businessId }, data: { status: "ACTIVE" } });

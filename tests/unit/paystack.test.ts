@@ -38,6 +38,52 @@ describe("Paystack webhook signature verification", () => {
     expect(verifyWebhookSignature("{}", null, secret)).toBe(false);
   });
 
+
+  it("rejects a valid HMAC followed by a non-hex suffix in the production verifier", async () => {
+    const previousSecret = process.env.PAYSTACK_SECRET_KEY;
+    process.env.PAYSTACK_SECRET_KEY = secret;
+    try {
+      const { verifyWebhookSignature: verifyActual } = await import("@/lib/paystack");
+      const body = JSON.stringify({ event: "charge.success", data: { reference: "actual-verifier" } });
+      const validSignature = crypto.createHmac("sha512", secret).update(body).digest("hex");
+
+      expect(verifyActual(body, validSignature)).toBe(true);
+      // Node's Buffer.from(value, "hex") truncates at the first invalid character.
+      // The verifier must reject the malformed full header, not accept its valid prefix.
+      expect(verifyActual(body, `${validSignature}zz`)).toBe(false);
+      expect(verifyActual(body, `${validSignature.slice(0, -2)}g0`)).toBe(false);
+    } finally {
+      if (previousSecret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
+      else process.env.PAYSTACK_SECRET_KEY = previousSecret;
+    }
+  });
+
+  it("uses the Preview test key for webhook verification and ignores the shared live key", async () => {
+    const priorSecret = process.env.PAYSTACK_SECRET_KEY;
+    const priorTestSecret = process.env.PAYSTACK_TEST_SECRET_KEY;
+    const priorVercelEnv = process.env.VERCEL_ENV;
+    process.env.VERCEL_ENV = "preview";
+    process.env.PAYSTACK_SECRET_KEY = "sk_live_wrong_environment";
+    process.env.PAYSTACK_TEST_SECRET_KEY = secret;
+    try {
+      const { verifyWebhookSignature: verifyActual } = await import("@/lib/paystack");
+      const body = JSON.stringify({ event: "charge.success", data: { reference: "preview-isolation" } });
+      const testSignature = crypto.createHmac("sha512", secret).update(body).digest("hex");
+      const liveSignature = crypto.createHmac("sha512", "sk_live_wrong_environment").update(body).digest("hex");
+      expect(verifyActual(body, testSignature)).toBe(true);
+      expect(verifyActual(body, liveSignature)).toBe(false);
+      delete process.env.PAYSTACK_TEST_SECRET_KEY;
+      expect(verifyActual(body, liveSignature)).toBe(false);
+    } finally {
+      if (priorSecret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
+      else process.env.PAYSTACK_SECRET_KEY = priorSecret;
+      if (priorTestSecret === undefined) delete process.env.PAYSTACK_TEST_SECRET_KEY;
+      else process.env.PAYSTACK_TEST_SECRET_KEY = priorTestSecret;
+      if (priorVercelEnv === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = priorVercelEnv;
+    }
+  });
+
   it("amount mismatch must be rejected server-side (logic test)", () => {
     const expected = 99900; // 999 KES in kobo
     const paystackAmount = 10000; // wrong amount

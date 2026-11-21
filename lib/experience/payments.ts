@@ -11,9 +11,11 @@
  */
 
 import prisma from "../db";
+import { getPaystackSecretKey } from "../payments/config";
 import { getBaseUrl } from "../url";
 import { generatePaymentReference } from "../paymentReference";
 import { PAYMENT_CURRENCY } from "../paymentCurrency";
+import { readPaystackConfig } from "../payments/config";
 import { initializeTransaction, toKobo, verifyTransaction } from "../paystack";
 import { createNotification } from "../notification";
 import { logAudit } from "../audit";
@@ -175,6 +177,7 @@ export async function createOrderPaymentRecord(input: InitializeOrderPaymentInpu
       amount: toKobo(amountKES),
       currency: PAYMENT_CURRENCY,
       status: "PENDING",
+      environment: readPaystackConfig().mode === "LIVE" ? "LIVE" : readPaystackConfig().mode === "TEST" ? "TEST" : "UNKNOWN",
       purpose,
       orderId: order?.id || null,
       bookingId: input.bookingId || null,
@@ -220,7 +223,7 @@ export async function startOrderPayment(
 
   const callbackUrl = `${getBaseUrl()}${input.callbackPath.startsWith("/") ? input.callbackPath : `/${input.callbackPath}`}`;
 
-  if (!process.env.PAYSTACK_SECRET_KEY) {
+  if (!getPaystackSecretKey()) {
     if (process.env.NODE_ENV === "production") {
       await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
       return { kind: "error", error: "Online payments are temporarily unavailable. Please try again later.", status: 503 };
@@ -436,7 +439,7 @@ export async function verifyOrderPayment(reference: string): Promise<OrderPaymen
   if (payment.status === "PAID") return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };
   if (payment.status === "REFUNDED") return { state: "CANCELLED", orderId: payment.orderId, providerChecked: false };
 
-  if (payment.status === "PENDING" && process.env.NODE_ENV !== "production" && !process.env.PAYSTACK_SECRET_KEY) {
+  if (payment.status === "PENDING" && process.env.NODE_ENV !== "production" && !getPaystackSecretKey()) {
     // Test/demo confirmation path (no provider configured). Never reachable in production.
     await settleOrderPayment(payment.id, { verification: { paystackId: `mock_${normalizedReference}`, raw: { testMock: true } } });
     return { state: "SUCCESS", orderId: payment.orderId, providerChecked: false };

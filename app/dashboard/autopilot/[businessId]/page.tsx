@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { assertBusinessRole, TenantError } from "@/lib/tenant";
 import { getPlanByKey } from "@/lib/pricing";
@@ -23,6 +22,7 @@ import {
   AutopilotCommandCenter,
   type AutopilotOverviewPayload,
 } from "@/components/autopilot/AutopilotCommandCenter";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ type Props = { params: Promise<{ businessId: string }> };
 
 export default async function AutopilotBusinessCommandCenterPage({ params }: Props) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
 
   const { businessId } = await params;
 

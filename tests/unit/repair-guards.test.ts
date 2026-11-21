@@ -191,6 +191,11 @@ describe("runtime and schema guards", () => {
       // only — no existing table (including the four stamp-card tables) is altered, read or
       // rewritten, and no column is added to one.
       "20261129000000_loyalty_points_rewards",
+      // Product isolation backfills matching legacy rows into independent ERP PRO / MJENGO OS
+      // tables without deleting or rewriting any existing ERP, MJENGO, or POS records. Timestamped
+      // after every released migration so fresh-database order equals production application order.
+      "20261202000000_mjengo_isolated_entitlements",
+      "20261203000000_financial_evidence_contract",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -270,6 +275,7 @@ describe("runtime and schema guards", () => {
       "20261127000000_voice_call_foundation",
       "20261128000000_business_hub_conversion",
       "20261129000000_loyalty_points_rewards",
+      "20261202000000_mjengo_isolated_entitlements",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

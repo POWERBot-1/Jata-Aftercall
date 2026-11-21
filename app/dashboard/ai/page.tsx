@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/db";
@@ -15,6 +14,7 @@ import { evaluateAIReadiness } from "@/lib/ai-readiness";
 import { getAIFrontDeskPublication } from "@/lib/ai-publication";
 import { formatOpeningHours } from "@/lib/openingHours";
 import { Bot, ExternalLink, Settings2 } from "lucide-react";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,8 @@ export default async function AIDashboardPage({
   const sp = searchParams ? await searchParams : undefined;
   const user = await getCurrentUser().catch(() => null);
   if (!user) {
-    redirect("/login?callbackUrl=/dashboard/ai");
+    // Login never read `callbackUrl`, so this destination was always dropped (R-RT-01).
+    await redirectToDashboardLogin();
   }
 
   const business = await prisma.business

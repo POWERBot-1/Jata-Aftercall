@@ -120,7 +120,8 @@ describe("PATCH /api/business nominated contact number", () => {
   it("validates a nominated number update through the tenant guard before writing", async () => {
     const response = await PATCH(request("PATCH", { businessId: "biz-a", phone: "0724317010" }));
     expect(response.status).toBe(200);
-    expect(mocks.guard).toHaveBeenCalledWith(expect.objectContaining({ userId: "owner-a" }), "biz-a", "read");
+    // Contact numbers are business settings: MANAGER and above (R-TI-03).
+    expect(mocks.guard).toHaveBeenCalledWith(expect.objectContaining({ userId: "owner-a" }), "biz-a", "manage_settings");
     const data = mocks.businessUpdate.mock.calls[0][0].data;
     expect(data.phone).toBe("0724317010");
     expect(normalizeKePhone(data.phone)).toBe("254724317010");

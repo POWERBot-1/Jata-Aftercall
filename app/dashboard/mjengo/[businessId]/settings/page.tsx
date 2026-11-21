@@ -37,7 +37,7 @@ export default async function MjengoPlanSettings({ params }: { params: Promise<{
     .findUnique({ where: { id: businessId }, select: { name: true, slug: true } })
     .catch(() => null);
   const safeName = mjengoSafeText(business?.name ?? businessId);
-  const storage: any = await (prisma as any).erpEntitlement
+  const storage: any = await (prisma as any).mjengoEntitlement
     ?.findUnique?.({ where: { businessId }, select: { packageKey: true, status: true } })
     .catch(() => null);
 
@@ -78,8 +78,8 @@ export default async function MjengoPlanSettings({ params }: { params: Promise<{
           <dd className="text-xl font-bold">{storage?.packageKey ?? "none"}</dd>
           <dd className="text-sm text-muted-foreground">
             {storage && storage.packageKey !== MJENGO_PLAN_KEY
-              ? `This row belongs to ${storage.packageKey}. MJENGO OS cannot be activated beside it until product storage is separated — checkout is refused rather than overwriting it.`
-              : "Reserved for MJENGO OS."}
+              ? `MJENGO OS has a dedicated entitlement record; ERP PRO and POS access remain independent.`
+              : "Dedicated MJENGO OS entitlement storage."}
           </dd>
         </div>
       </dl>

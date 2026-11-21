@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const businessId = url.searchParams.get("businessId");
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardTenantMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {

@@ -543,8 +543,13 @@ model Business {
 
   // ── JATA AFTERCALL POS / ERP - PRO (additive back-relations) ──
   erpConfiguration        ErpConfiguration?
+  // Legacy shared ERP rows are retained as immutable history; live ERP PRO uses its own tables.
   erpSubscription         ErpSubscription?
   erpEntitlement          ErpEntitlement?
+  erpProSubscription      ErpProSubscription?
+  erpProEntitlement       ErpProEntitlement?
+  mjengoSubscription      MjengoSubscription?
+  mjengoEntitlement       MjengoEntitlement?
   erpAccounts             ErpAccount[]
   erpPeriods              ErpPeriod[]
   erpJournals             ErpJournal[]
@@ -784,10 +789,17 @@ model Subscription {
   startAt    DateTime?
   expiresAt  DateTime?
   graceUntil DateTime?
+  // Immutable-at-settlement commercial snapshot. Null means recurring value is not yet evidenced.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
   @@index([userId])
+  @@index([status, expiresAt])
 }
 
 enum SubscriptionStatus {
@@ -811,6 +823,16 @@ model Payment {
   currency   String        @default("KES")
   status     PaymentStatus @default(PENDING)
   paystackId String?
+  // UNKNOWN is mandatory for legacy/unclassified rows; never infer environment from status.
+  environment PaymentEnvironment @default(UNKNOWN)
+  providerSettledAt DateTime?
+  providerSettlementReference String?
+  providerFeeMinor BigInt?
+  providerTaxMinor BigInt?
+  settledRefundMinor BigInt?
+  settledChargebackMinor BigInt?
+  reconciliationStatus String @default("UNRECONCILED")
+  reconciledAt DateTime?
   raw        String?       @db.Text
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
@@ -827,6 +849,13 @@ model Payment {
   @@index([userId])
   @@index([businessId])
   @@index([orderId])
+  @@index([environment, status, providerSettledAt])
+}
+
+enum PaymentEnvironment {
+  UNKNOWN
+  TEST
+  LIVE
 }
 
 enum PaymentStatus {
@@ -1560,6 +1589,12 @@ model PosSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -2699,6 +2734,12 @@ model AutopilotSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -2965,6 +3006,12 @@ model ErpSubscription {
   paymentId        String?
   paymentReference String?
   cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -4819,4 +4866,170 @@ model StudioWebsiteMember {
   @@unique([websiteId, userId])
   @@index([userId, status])
   @@index([websiteId, status])
+}
+
+
+/// MJENGO OS subscription is isolated from ERP PRO so both products can coexist per tenant.
+model MjengoSubscription {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  planKey          String   @default("MJENGO_OS")
+  status           String   @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([businessId, status])
+  @@index([paymentId])
+}
+
+/// MJENGO OS entitlement is isolated from ERP PRO and POS entitlements.
+model MjengoEntitlement {
+  id          String   @id @default(cuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String   @default("MJENGO_OS")
+  status      String   @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId, status])
+}
+
+
+/// Active ERP PRO subscription storage, separate from legacy shared ERP rows and MJENGO OS.
+model ErpProSubscription {
+  id               String   @id @default(cuid())
+  businessId       String   @unique
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String
+  planId           String
+  planKey          String   @default("ERP_PRO")
+  status           String   @default("PENDING")
+  startAt          DateTime?
+  expiresAt        DateTime?
+  graceUntil       DateTime?
+  paymentId        String?
+  paymentReference String?
+  cancelledAt      DateTime?
+  // Nullable, immutable-at-settlement commercial snapshot; null is excluded from MRR.
+  recurringAmountKES Int?
+  recurringDiscountKES Int?
+  recurringCurrency String?
+  recurringIntervalDays Int?
+  recurringPriceEffectiveAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([businessId, status])
+  @@index([paymentId])
+}
+
+/// Active ERP PRO entitlement storage, separate from legacy shared ERP rows and MJENGO OS.
+model ErpProEntitlement {
+  id          String   @id @default(cuid())
+  businessId  String   @unique
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  packageKey  String   @default("ERP_PRO")
+  status      String   @default("NONE")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId, status])
+}
+
+
+// Provider settlement snapshots are immutable evidence from the provider feed, not bank proof.
+model ProviderSettlementSnapshot {
+  id                    String   @id @default(cuid())
+  provider              PaymentProviderKey @default(PAYSTACK)
+  providerSettlementId  String
+  status                String
+  currency              String?
+  grossProcessedMinor   BigInt?
+  providerFeeMinor      BigInt?
+  effectiveNetMinor     BigInt?
+  deductionsMinor       BigInt?
+  settlementDate        DateTime?
+  sourceEndpoint        String
+  sourcePage            Int
+  sourcePerPage         Int
+  sourceFilter          Json?
+  sourceSnapshotHash    String   @unique
+  fetchedByActorId      String?
+  fetchedAt             DateTime @default(now())
+  transactions          ProviderSettlementTransactionEvidence[]
+
+  @@index([provider, providerSettlementId, fetchedAt])
+  @@index([fetchedAt])
+}
+
+// Reduced transaction evidence only; never persist the raw Paystack response or customer payload.
+model ProviderSettlementTransactionEvidence {
+  id                    String   @id @default(cuid())
+  snapshotId            String
+  snapshot              ProviderSettlementSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  providerTransactionId String?
+  paymentReference      String?
+  status                String?
+  amountMinor           BigInt?
+  currency              String?
+  providerFeeMinor      BigInt?
+  paidAt                DateTime?
+  sourceRowHash         String
+  sourcePage            Int
+  sourcePerPage         Int
+  createdAt             DateTime @default(now())
+
+  @@unique([snapshotId, sourceRowHash])
+  @@index([paymentReference])
+  @@index([providerTransactionId])
+}
+
+// Import metadata contains only a digest and schema version, never the uploaded statement file.
+model BankStatementImportBatch {
+  id                 String   @id @default(cuid())
+  sourceFileSha256   String   @unique
+  schemaVersion      String   @default("canonical-v1")
+  importedByActorId   String
+  rowCount           Int
+  importedAt         DateTime @default(now())
+  credits            BankStatementCreditEvidence[]
+
+  @@index([importedAt])
+}
+
+// Normalized credit-only bank evidence. Raw narration and bank-account identifiers are excluded.
+model BankStatementCreditEvidence {
+  id              String   @id @default(cuid())
+  importBatchId   String
+  importBatch     BankStatementImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  statementLineId String
+  bookingDate     DateTime
+  reference       String
+  currency        String
+  creditMinor     BigInt
+  createdAt       DateTime @default(now())
+
+  @@unique([importBatchId, statementLineId])
+  @@index([reference, currency, creditMinor])
+  @@index([bookingDate])
 }

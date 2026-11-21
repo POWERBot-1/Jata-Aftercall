@@ -1,20 +1,19 @@
 import { redirect } from "next/navigation";
-import { getSession, type SessionPayload } from "./auth";
+import { getControlIdentity } from "@/lib/control/access";
+import type { SessionPayload } from "./auth";
 
 /**
- * Per-page authorization for the admin console.
- *
- * `app/admin/layout.tsx` redirects non-admins, but a layout is NOT an authorization boundary:
- * with partial rendering a request that says "the layout is already loaded" (`RSC: 1` plus a
- * `Next-Router-State-Tree` header) renders the page segment alone, so the page — and every
- * customer email, phone number and payment reference it queries — ran for anonymous visitors.
- * Every admin page therefore calls this *before* it reads anything.
- *
- * `redirect()` throws, so nothing after the call runs for a refused request.
+ * Legacy /admin UI is not an independent authorization system.
+ * Until the owner-authority policy has an explicit, verified ALLOW matrix,
+ * all legacy ADMIN sessions remain denied. A role label is not owner proof.
  */
 export async function requireAdminPage(): Promise<SessionPayload> {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  if (session.role !== "ADMIN") redirect("/dashboard");
-  return session;
+  const access = await getControlIdentity();
+  if (access.ok === false) {
+    if (access.status === 401) redirect("/login");
+    redirect("/control/policy");
+  }
+  // Operational access is still not a blanket grant to legacy admin pages.
+  // This route family must be migrated to explicit per-action capabilities first.
+  redirect("/control/policy");
 }

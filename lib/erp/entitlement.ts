@@ -205,8 +205,8 @@ export async function syncErpEntitlement(businessId: string, client: any = prism
     ? (await client.payment?.findFirst?.({ where: { businessId, planId: plan.id, status: "PAID" }, orderBy: { createdAt: "desc" } }).catch?.(() => null)) ?? null
     : null;
 
-  let subscription = (await client.erpSubscription?.findUnique?.({ where: { businessId } }).catch?.(() => null)) ?? null;
-  const entitlement = (await client.erpEntitlement?.findUnique?.({ where: { businessId } }).catch?.(() => null)) ?? null;
+  let subscription = (await client.erpProSubscription?.findUnique?.({ where: { businessId } }).catch?.(() => null)) ?? null;
+  const entitlement = (await client.erpProEntitlement?.findUnique?.({ where: { businessId } }).catch?.(() => null)) ?? null;
   const configuration = (await client.erpConfiguration?.findUnique?.({ where: { businessId } }).catch?.(() => null)) ?? null;
 
   // Provision from a *verified* paid Payment, once per payment. A payment is never inferred from a
@@ -226,12 +226,18 @@ export async function syncErpEntitlement(businessId: string, client: any = prism
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference ?? null,
+      // Snapshot the server-resolved price only after a provider-verified payment row exists.
+      recurringAmountKES: payment.providerSettledAt ? plan.priceKES : null,
+      recurringDiscountKES: payment.providerSettledAt ? 0 : null,
+      recurringCurrency: payment.providerSettledAt ? (payment.currency ?? "KES") : null,
+      recurringIntervalDays: payment.providerSettledAt ? plan.durationDays : null,
+      recurringPriceEffectiveAt: payment.providerSettledAt ?? null,
       cancelledAt: null,
     };
     try {
       subscription = subscription
-        ? await client.erpSubscription.update({ where: { businessId }, data })
-        : await client.erpSubscription.create({ data: { businessId, userId: payment.userId ?? "system", ...data } });
+        ? await client.erpProSubscription.update({ where: { businessId }, data })
+        : await client.erpProSubscription.create({ data: { businessId, userId: payment.userId ?? "system", ...data } });
     } catch {
       // A failed provisioning write must not turn a paid business into an error page. The derived
       // state below still reports AWAITING_PAYMENT honestly until the write succeeds.
@@ -252,10 +258,10 @@ export async function syncErpEntitlement(businessId: string, client: any = prism
     const mirrorStatus = state.status === "NONE" && state.lifecycle === "SETUP" ? "NONE" : state.status;
     if (entitlement) {
       if (entitlement.status !== mirrorStatus) {
-        await client.erpEntitlement.update({ where: { businessId }, data: { status: mirrorStatus, expiresAt: state.expiresAt, activatedAt: state.entitled ? entitlement.activatedAt ?? new Date() : entitlement.activatedAt } });
+        await client.erpProEntitlement.update({ where: { businessId }, data: { status: mirrorStatus, expiresAt: state.expiresAt, activatedAt: state.entitled ? entitlement.activatedAt ?? new Date() : entitlement.activatedAt } });
       }
     } else if (state.entitled) {
-      await client.erpEntitlement.create({ data: { businessId, packageKey: ERP_PLAN_KEY, status: mirrorStatus, activatedAt: new Date(), expiresAt: state.expiresAt } });
+      await client.erpProEntitlement.create({ data: { businessId, packageKey: ERP_PLAN_KEY, status: mirrorStatus, activatedAt: new Date(), expiresAt: state.expiresAt } });
     }
   } catch {
     /* mirror only */

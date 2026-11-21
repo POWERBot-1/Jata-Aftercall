@@ -36,8 +36,11 @@ jobs:
       - run: npm ci
       - run: bash scripts/lib/prisma-generate.sh
       - run: bash scripts/lib/prisma-cli.sh migrate deploy
-      - name: Generate ephemeral demo fixture password
-        run: printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')" >> "$GITHUB_ENV"
+      - name: Generate and mask ephemeral demo fixture password
+        run: |
+          fixture_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::$fixture_password"
+          printf 'DEMO_FIXTURE_PASSWORD=%s\\n' "$fixture_password" >> "$GITHUB_ENV"
       - name: Seed fictional database fixtures
         env:
           JATA_ALLOW_FIXTURE_SEED: "true"
@@ -46,7 +49,7 @@ jobs:
       - name: Start isolated production build
         run: |
           PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-server.log 2>&1 &
-          for i in $(seq 1 90); do curl -fsS http://localhost:4100/health >/dev/null 2>&1 && exit 0; sleep 2; done
+          for i in $(seq 1 90); do curl -fsS http://localhost:4100/ >/dev/null 2>&1 && exit 0; sleep 2; done
           cat /tmp/motion-server.log; exit 1
       # Bounded on purpose. On 2026-11-11 this step sat in_progress for 37+ minutes on
       # `sudo apt-get update` (an unbounded network call inside a 50-minute job): the capture steps
@@ -59,13 +62,22 @@ jobs:
             ffmpeg -version | head -1
             exit 0
           fi
-          installed=0
-          timeout 240 sudo apt-get update -qq && timeout 240 sudo apt-get install -y -qq ffmpeg && installed=1
-          if [ "$installed" != "1" ] || ! command -v ffmpeg >/dev/null 2>&1; then
-            echo "::error title=MOTION_ENCODER_BLOCKED::ffmpeg is unavailable and could not be installed within the deadline. No recording evidence is claimed for this head."
+          # Try the runner's cached apt package index first; do not block on apt-get update.
+          if sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
+            ffmpeg -version | head -1
+            exit 0
+          fi
+          # If the apt index is unavailable, use the npm-distributed static binary.
+          npm install --no-save --prefer-offline ffmpeg-static
+          ffmpeg_bin="$(node -p "require('ffmpeg-static')")"
+          if [ -z "$ffmpeg_bin" ] || [ ! -x "$ffmpeg_bin" ]; then
+            echo "::error title=MOTION_ENCODER_BLOCKED::Neither the runner apt package nor ffmpeg-static provided an executable binary."
             exit 1
           fi
-          ffmpeg -version | head -1
+          mkdir -p "$RUNNER_TEMP/ffmpeg-bin"
+          ln -sf "$ffmpeg_bin" "$RUNNER_TEMP/ffmpeg-bin/ffmpeg"
+          echo "$RUNNER_TEMP/ffmpeg-bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/ffmpeg-bin/ffmpeg" -version | head -1
       - name: Capture real generated Studio family paths
         timeout-minutes: 15
         if: ${{ !cancelled() }}
@@ -106,5 +118,101 @@ jobs:
         with:
           name: motion-partial-${{ github.event.pull_request.head.sha || github.sha }}
           path: motion-evidence/
+          retention-days: 30
+          if-no-files-found: error
+
+
+  historical-baseline:
+    name: Reproduce owner-named pre-motion baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: jata
+          POSTGRES_PASSWORD: jata
+          POSTGRES_DB: jata_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      DIRECT_URL: postgresql://jata:jata@localhost:5432/jata_e2e?schema=public
+      AUTH_SECRET: interactive-business-e2e-test-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      MOTION_ISOLATED: '1'
+      CI: 'true'
+      EXPECTED_SHA: a28c1a46101ac90bbf28d374b4986b689196de8d
+    steps:
+      - name: Checkout historical source revision
+        uses: actions/checkout@v4
+        with:
+          ref: a28c1a46101ac90bbf28d374b4986b689196de8d
+          path: baseline
+          fetch-depth: 1
+      - name: Checkout current capture harness
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: candidate
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: baseline/package-lock.json
+      - name: Install and migrate historical revision
+        run: |
+          set -euo pipefail
+          cd baseline
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Generate and mask historical fixture password
+        run: |
+          set -euo pipefail
+          fixture_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::$fixture_password"
+          printf 'DEMO_FIXTURE_PASSWORD=%s\\n' "$fixture_password" >> "$GITHUB_ENV"
+      - name: Sanitize historical fixture seed
+        run: |
+          set -euo pipefail
+          node candidate/scripts/motion/prepare-historical-baseline-seed.mjs baseline/prisma/seed.ts
+      - name: Seed synthetic historical fixture
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
+        run: |
+          set -euo pipefail
+          cd baseline
+          npm run seed
+      - name: Build historical source
+        run: |
+          set -euo pipefail
+          cd baseline
+          npm run build
+      - name: Start historical production build
+        run: |
+          set -euo pipefail
+          cd baseline
+          PUBLIC_BASE_URL=http://localhost:4100 NEXTAUTH_URL=http://localhost:4100 npx next start -p 4100 -H 127.0.0.1 > /tmp/motion-baseline-server.log 2>&1 &
+          for i in $(seq 1 90); do curl -fsS http://localhost:4100/ >/dev/null 2>&1 && exit 0; sleep 2; done
+          cat /tmp/motion-baseline-server.log
+          exit 1
+      - name: Capture historical legacy published storefront baseline
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          mkdir -p baseline/scripts/motion
+          cp candidate/scripts/motion/capture-legacy-public-baseline.mjs baseline/scripts/motion/capture-legacy-public-baseline.mjs
+          cd baseline
+          export CHROME_PATH="$(command -v google-chrome || command -v chromium || true)"
+          node scripts/motion/capture-legacy-public-baseline.mjs
+      - name: Upload historical baseline screenshots and observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-baseline-a28c1a4-${{ github.event.pull_request.head.sha || github.sha }}
+          path: baseline/motion-family-evidence/
           retention-days: 30
           if-no-files-found: error

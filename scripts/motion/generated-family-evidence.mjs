@@ -12,9 +12,10 @@ const sha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(); if(
 const demoFixturePassword=process.env.DEMO_FIXTURE_PASSWORD;if(!demoFixturePassword)throw Error('Missing ephemeral DEMO_FIXTURE_PASSWORD');
 const families=['cinematic','editorial','luxury','minimal','magazine','marketplace','product-first','storytelling','spatial','interactive-showroom','gallery','split-screen','fullscreen-media','scrollytelling','cardless-immersive','map-driven','catalog','portfolio','service-journey','experimental'];
 const sizes=[[320,568],[360,800],[390,844],[430,932],[768,1024],[1366,768]];
+const baselineMode=process.env.MOTION_BASELINE_CAPTURE==='1';
 const out='motion-family-evidence'; mkdirSync(out,{recursive:true});
 const prisma=new PrismaClient(); const rows=[], steps=[];
-const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. No independent review, baseline recording or full route coverage.'},null,2));
+const save=()=>writeFileSync(path.join(out,'observations.json'),JSON.stringify({sha,browser:browserVersion,captureMode:baselineMode?'historical-pre-motion-baseline':'candidate-after',rows,steps,limitations:'Synthetic isolated entitlement; real app generation, draft and publishing. Manual visual inspection remains separate; queue-stress and previous-build Lite comparison are not covered by this capture.'},null,2));
 const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']}); const browserVersion=await browser.version();
 let fixture;
 try {
@@ -55,9 +56,10 @@ try {
      await p.setViewport({width,height,deviceScaleFactor:1}); await p.emulateMediaFeatures([{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}]);
      const response=await p.goto(new URL(route,base).href,{waitUntil:'domcontentloaded',timeout:45000}); row.status=response?.status()??null;
      await p.waitForFunction(()=>Boolean(document.querySelector('.eb-scope')?.dataset.renderMode),{timeout:10000}).catch(()=>{});
-     row.observation=await p.evaluate(()=>{const r=document.querySelector('.eb-scope'); const ts=[...(r?.querySelectorAll('[data-motion-recipe]')||[])];return {family:r?.dataset.templateFamily,mode:r?.dataset.renderMode,reason:r?.dataset.motionReason,engine:r?.dataset.motionEngine,probes:r?.querySelectorAll('[data-motion-probe]').length,targets:ts.length,played:ts.filter(e=>e.dataset.motionPlayed).length,overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};});
+     await p.waitForFunction(()=>{const bar=document.querySelector('.eb-actionbar');if(!bar)return true;const height=Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--eb-actionbar-h'));return bar.getBoundingClientRect().height>0&&height>0;},{timeout:5000}).catch(()=>{});
+     row.observation=await p.evaluate(()=>{const r=document.querySelector('.eb-scope'); const ts=[...(r?.querySelectorAll('[data-motion-recipe]')||[])];const bar=document.querySelector('.eb-actionbar');const barRect=bar?.getBoundingClientRect();const barVisible=Boolean(barRect&&barRect.height>0&&getComputedStyle(bar).display!=='none');const hero=document.querySelector('.eb-hero');const heroContent=hero?.querySelector('.eb-hero__content,.eb-hero__grid')||hero;const heroText=[...(heroContent?.querySelectorAll('.eb-eyebrow,.eb-h1,.eb-lede,.eb-hero__actions')||[])];const heroTextOverlapsActionBar=barVisible&&heroText.some(el=>{const box=el.getBoundingClientRect();return box.width>0&&box.height>0&&box.bottom>barRect.top+1&&box.top<barRect.bottom-1;});return {family:r?.dataset.templateFamily,mode:r?.dataset.renderMode,reason:r?.dataset.motionReason,engine:r?.dataset.motionEngine,probes:r?.querySelectorAll('[data-motion-probe]').length,targets:ts.length,played:ts.filter(e=>e.dataset.motionPlayed).length,heroCtaLabel:document.querySelector('.eb-hero__actions .eb-btn')?.textContent?.replace(/\\s+/g,' ').trim() || '',overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,actionBarPresent:barVisible,heroTextOverlapsActionBar};});
      const name=`${family}-${preview?'draft':'published'}-${width}x${height}-${reduced?'reduced':'normal'}.jpg`; await p.screenshot({path:path.join(out,name),type:'jpeg',quality:45,fullPage:true}); row.screenshot=name;
-     row.result=row.status===200 && row.observation.family===family && row.observation.probes===1 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL';
+     row.result=baselineMode?(row.status===200?'CAPTURED':'FAIL'):(row.status===200 && row.observation.family===family && row.observation.probes===1 && row.observation.heroCtaLabel.length>0 && !row.observation.heroTextOverlapsActionBar && row.observation.overflow<=0 && (!reduced || row.observation.mode==='lite')?'OBSERVED':'FAIL');
     }catch(e){row.result='ERROR';row.error=String(e).slice(0,400);}
     rows.push(row); save(); if(!preview) await p.close();
     }
@@ -66,6 +68,7 @@ try {
  }
 } catch(e){steps.push({stage:'BLOCKED',error:String(e).slice(0,800)});}
 finally{save();await browser.close();await prisma.$disconnect();}
-const summary={sha,browser:browserVersion,expected:families.length*2*6*2,rows:rows.length,observed:rows.filter(r=>r.result==='OBSERVED').length,failures:rows.filter(r=>r.result!=='OBSERVED').length,provisioningErrors:steps.filter(s=>s.stage==='ERROR'||s.stage==='BLOCKED').slice(0,10)};
+const expected=families.length*2*6*2; const successful=rows.filter(r=>r.result===(baselineMode?'CAPTURED':'OBSERVED')).length;
+const summary={sha,browser:browserVersion,captureMode:baselineMode?'historical-pre-motion-baseline':'candidate-after',expected,rows:rows.length,successful,failures:rows.length-successful,provisioningErrors:steps.filter(s=>s.stage==='ERROR'||s.stage==='BLOCKED').slice(0,10)};
 console.log(`::notice title=Generated family evidence::${JSON.stringify(summary)}`);
 if(summary.rows!==summary.expected || summary.failures || summary.provisioningErrors.length) process.exitCode=1;

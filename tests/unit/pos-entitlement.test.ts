@@ -386,7 +386,7 @@ describe("settlement activates the POS inside the payment transaction (§31, §4
   });
 
   it("is idempotent: a replayed event cannot activate twice (§75)", async () => {
-    const tx = txWith({ currentSubscription: { id: "sub", businessId: "bizA", status: "ACTIVE" } });
+    const tx = txWith({ currentSubscription: { id: "sub", businessId: "bizA", paymentId: payment.id, status: "ACTIVE" } });
     const result = await settlePosPayment(tx as never, { payment: { ...payment, status: "PAID" }, plan, eventId: "evt_dup" });
     expect(result.alreadySettled).toBe(true);
     expect(tx.posSubscription.upsert).not.toHaveBeenCalled();

@@ -195,7 +195,10 @@ export async function PATCH(req: Request) {
     const guard = await guardTenantMutation(
       session,
       businessId,
-      body.isPublished !== undefined ? "publish" : "read",
+      // Name, contact numbers, location, theme and description are business settings (MANAGER and
+      // above). "read" here let a VIEWER or STAFF member redirect the business's phone and
+      // WhatsApp numbers (R-TI-03).
+      body.isPublished !== undefined ? "publish" : "manage_settings",
     );
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     if (containsInlineImageDataUrl(body)) {

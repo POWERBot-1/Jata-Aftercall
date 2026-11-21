@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ getCurrentUser: vi.fn(async () => mocks.user) }));
 vi.mock("@/lib/tenant", () => ({
   canAccessBusiness: vi.fn(async (userId: string, businessId: string) => userId === "user-a" && businessId === "business-a"),
+  // user-a owns business-a, so it may handle orders; nobody else may (R-TI-03).
+  canMemberPerform: vi.fn(async (userId: string, businessId: string) => userId === "user-a" && businessId === "business-a"),
 }));
 vi.mock("@/lib/ai-config", () => ({
   getExtendedAIConfig: vi.fn(async () => ({ bulkPricing: mocks.bulkPricing })),

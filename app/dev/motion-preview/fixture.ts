@@ -50,3 +50,16 @@ export function familyFixture(family: TemplateFamilyKey, preference: RenderPrefe
   data.theme = themeOf(data.document);
   return data;
 }
+
+/** Development-only stress fixture for the real bounded storefront motion controller. */
+export function queueStressFixture(preference: RenderPreference = "motion"): StorefrontData {
+  const data = motionFixture(preference);
+  data.document.sections.push(...Array.from({ length: 12 }, (_, index) => ({
+    id: `queue-stress-${index + 1}`,
+    type: "about" as const,
+    visible: true,
+    title: `Queue stress target ${index + 1}`,
+    body: "Synthetic content used only to verify the eight-animation concurrency bound and queued reveal recovery.",
+  })));
+  return data;
+}
