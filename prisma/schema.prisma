@@ -4978,7 +4978,7 @@ model ProviderSettlementSnapshot {
   fetchedAt             DateTime @default(now())
   transactions          ProviderSettlementTransactionEvidence[]
 
-  @@index([provider, providerSettlementId, fetchedAt])
+  @@index([provider, providerSettlementId, fetchedAt], map: "ProviderSettlementSnapshot_provider_providerSettlementId_fetche")
   @@index([fetchedAt])
 }
 
@@ -4986,7 +4986,7 @@ model ProviderSettlementSnapshot {
 model ProviderSettlementTransactionEvidence {
   id                    String   @id @default(cuid())
   snapshotId            String
-  snapshot              ProviderSettlementSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  snapshot              ProviderSettlementSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict, map: "ProviderSettlementTransactionEvidence_snapshot_fkey")
   providerTransactionId String?
   paymentReference      String?
   status                String?
@@ -4999,7 +4999,7 @@ model ProviderSettlementTransactionEvidence {
   sourcePerPage         Int
   createdAt             DateTime @default(now())
 
-  @@unique([snapshotId, sourceRowHash])
+  @@unique([snapshotId, sourceRowHash], map: "ProviderSettlementTransactionEvidence_snapshotId_sourceRowHash_")
   @@index([paymentReference])
   @@index([providerTransactionId])
 }
@@ -5021,7 +5021,7 @@ model BankStatementImportBatch {
 model BankStatementCreditEvidence {
   id              String   @id @default(cuid())
   importBatchId   String
-  importBatch     BankStatementImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  importBatch     BankStatementImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Restrict, map: "BankStatementCreditEvidence_batch_fkey")
   statementLineId String
   bookingDate     DateTime
   reference       String
