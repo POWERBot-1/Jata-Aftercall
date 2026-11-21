@@ -708,6 +708,10 @@ function createFallbackPrisma(): any {
     loyaltyReward: emptyModel(),
     loyaltyRewardRedemption: emptyModel(),
     businessHubActivity: emptyModel(),
+    providerSettlementSnapshot: emptyModel(),
+    providerSettlementTransactionEvidence: emptyModel(),
+    bankStatementImportBatch: emptyModel(),
+    bankStatementCreditEvidence: emptyModel(),
   };
   return stub;
 }
