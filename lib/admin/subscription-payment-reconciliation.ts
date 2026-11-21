@@ -119,7 +119,7 @@ export function summarizeSubscriptionPaymentLifecycle(
       continue;
     }
 
-    if ((payment.settledRefundMinor ?? 0n) > 0n || (payment.settledChargebackMinor ?? 0n) > 0n) {
+    if ((payment.settledRefundMinor ?? BigInt(0)) > BigInt(0) || (payment.settledChargebackMinor ?? BigInt(0)) > BigInt(0)) {
       push({ exception: "ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK", subscriptionId: row.subscriptionId, paymentId: row.paymentId });
     }
   }
