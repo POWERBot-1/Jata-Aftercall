@@ -12,7 +12,14 @@ export type PlatformProviderInventory = {
   providers: {
     paystack: ProviderConfiguration;
     storage: ProviderConfiguration;
-    voice: ProviderConfiguration;
+    voice: ProviderConfiguration & {
+      /** Derived from explicit feature-gate flags; not proof of a successful call. */
+      callGateEnabled: boolean;
+      /** Derived from explicit billing-gate flags; not proof of payment settlement. */
+      customerBillingGateEnabled: boolean;
+      canReceiveCalls: boolean;
+      canSell: boolean;
+    };
   };
 };
 
@@ -27,10 +34,7 @@ const R2_REQUIRED = [
   "R2_PUBLIC_BASE_URL",
 ] as const;
 
-function inspect(
-  env: Environment,
-  required: readonly string[],
-): ProviderConfiguration {
+function inspect(env: Environment, required: readonly string[]): ProviderConfiguration {
   const missingConfiguration = required.filter((key) => !env[key]?.trim());
   return {
     state: missingConfiguration.length ? "AWAITING_CONFIGURATION" : "CONFIGURED_NOT_VERIFIED",
@@ -40,10 +44,10 @@ function inspect(
 }
 
 /**
- * Reports only whether server-side configuration keys are present.
- * This is deliberately not a provider health check and never returns secret values.
- * A configured provider remains NOT VERIFIED until a provider-native probe and
- * independent operational evidence are implemented.
+ * Reports only whether server-side configuration keys are present and which
+ * explicit voice feature gates are enabled. It never reports provider health:
+ * successful connectivity, call acceptance, delivery and settlement require
+ * separate provider-native evidence.
  */
 export function getPlatformProviderInventory(
   env: Environment = process.env,
@@ -57,9 +61,20 @@ export function getPlatformProviderInventory(
       paystack: inspect(env, PAYSTACK_REQUIRED),
       storage: inspect(env, R2_REQUIRED),
       voice: {
-        state: voice.missingConfiguration.length ? "AWAITING_CONFIGURATION" : "CONFIGURED_NOT_VERIFIED",
-        configured: voice.missingConfiguration.length === 0,
-        missingConfiguration: voice.missingConfiguration,
+        ...inspect(env, [
+          "TELNYX_PUBLIC_KEY",
+          "TELNYX_API_KEY",
+          "TELNYX_CONNECTION_ID",
+          "TELNYX_PHONE_NUMBER",
+          "VOICE_MEDIA_STREAM_URL",
+          "VOICE_MEDIA_STREAM_TOKEN",
+          "VOICE_AI_PROVIDER",
+          ...(env.VOICE_AI_PROVIDER?.trim() === "openai" ? ["OPENAI_API_KEY"] : []),
+        ]),
+        callGateEnabled: env.VOICE_CALLS_ENABLED === "true",
+        customerBillingGateEnabled: env.VOICE_CUSTOMER_BILLING_ENABLED === "true",
+        canReceiveCalls: voice.canReceiveCalls,
+        canSell: voice.canSell,
       },
     },
   };
