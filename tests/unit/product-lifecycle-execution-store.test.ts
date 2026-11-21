@@ -9,11 +9,14 @@ describe("transaction-backed product lifecycle persistence contract", () => {
     expect(source).toContain("prisma.$transaction(async (tx");
     expect(source).toContain("createMany({ data: rows, skipDuplicates: true })");
     expect(source).toContain("lifecycleIdempotencyKey");
-    expect(source).toContain('run.status !== "RUNNING"');
+    expect(source).toContain("lockActiveRun(tx, runId)");
+    expect(source).toContain('rows[0].status === "RUNNING"');
   });
 
   it("claims bounded batches using PostgreSQL row locks and unique per-task lease tokens", () => {
     expect(source).toContain("FOR UPDATE SKIP LOCKED");
+    expect(source).toContain('WHERE "id" = ${runId}');
+    expect(source).toContain("FOR UPDATE");
     expect(source).toContain('LIMIT ${limit}');
     expect(source).toContain("gen_random_uuid()::text");
     expect(source).toContain('"leaseToken" = gen_random_uuid()::text');
