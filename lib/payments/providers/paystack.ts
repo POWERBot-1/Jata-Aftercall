@@ -364,6 +364,7 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
           providerReference: refundId,
           providerTransactionId: typeof data.transaction_reference === "string" ? data.transaction_reference : null,
           amountMinor: amountMinor ?? 0,
+          currency: typeof data.currency === "string" ? data.currency : null,
           reason: "Paystack refund processed",
           sanitized,
         };
