@@ -5,9 +5,9 @@ import {
   type RecurringRevenueResult,
 } from "@/lib/payments/recurring-revenue";
 
+const BUSINESS_PAGE_PLAN_KEYS = new Set(["MONTHLY", "ANNUAL"]);
+
 const SUBSCRIPTION_SOURCES = [
-  // The shared Subscription model also serves AI Front Desk tiers. Until a canonical,
-  // audited plan-key allowlist separates Business Page from Front Desk, omit it entirely.
   ["posSubscription", "BUSINESS_POS"],
   ["autopilotSubscription", "AUTOPILOT"],
   ["mjengoSubscription", "MJENGO_OS"],
@@ -56,6 +56,45 @@ export async function readEvidenceGatedMrr(
   client: any,
   asOf: Date = new Date(),
 ): Promise<RecurringRevenueResult> {
+  const sharedDelegate = client.subscription;
+  if (!sharedDelegate || typeof sharedDelegate.findMany !== "function") {
+    throw new Error("MRR_SUBSCRIPTION_SOURCE_UNAVAILABLE:subscription");
+  }
+  // PlanConfig.key is the authoritative product discriminator for the shared row.
+  // Only MONTHLY and ANNUAL are Business Page; Front Desk and Website Studio are excluded.
+  const sharedRows = await sharedDelegate.findMany({
+    select: { ...SUBSCRIPTION_SELECT, plan: { select: { key: true } } },
+  });
+  const sharedSubscriptions: RecurringSubscriptionEvidence[] = [];
+  const sharedExclusions: RecurringRevenueResult["exclusions"] = [];
+  for (const row of sharedRows) {
+    const planKey = row.plan?.key;
+    if (!BUSINESS_PAGE_PLAN_KEYS.has(planKey)) {
+      sharedExclusions.push({
+        product: "SHARED_SUBSCRIPTION",
+        businessId: row.businessId,
+        reason: "PRODUCT_NOT_INCLUDED",
+      });
+      continue;
+    }
+    sharedSubscriptions.push({
+      product: "BUSINESS_PAGE",
+      businessId: row.businessId,
+      planId: row.planId,
+      planKey,
+      status: row.status,
+      startAt: row.startAt,
+      expiresAt: row.expiresAt,
+      recurringAmountKES: row.recurringAmountKES,
+      recurringDiscountKES: row.recurringDiscountKES,
+      recurringCurrency: row.recurringCurrency,
+      recurringIntervalDays: row.recurringIntervalDays,
+      recurringPriceEffectiveAt: row.recurringPriceEffectiveAt,
+      paymentId: row.paymentId,
+      paymentReference: row.paymentReference,
+    });
+  }
+
   const sourceRows = await Promise.all(SUBSCRIPTION_SOURCES.map(async ([model, product]) => {
     const delegate = client[model];
     if (!delegate || typeof delegate.findMany !== "function") {
@@ -79,7 +118,7 @@ export async function readEvidenceGatedMrr(
       paymentReference: row.paymentReference,
     }));
   }));
-  const subscriptions = sourceRows.flat();
+  const subscriptions = [...sharedSubscriptions, ...sourceRows.flat()];
   const paymentIds = [...new Set(subscriptions.map((row) => row.paymentId).filter((id): id is string => Boolean(id)))];
   const payments = paymentIds.length
     ? await client.payment.findMany({
@@ -101,5 +140,6 @@ export async function readEvidenceGatedMrr(
     providerSettlementReference: row.providerSettlementReference,
     reconciliationStatus: row.reconciliationStatus,
   }));
-  return calculateEvidenceGatedMrr(subscriptions, evidence, asOf);
+  const result = calculateEvidenceGatedMrr(subscriptions, evidence, asOf);
+  return { ...result, exclusions: [...sharedExclusions, ...result.exclusions] };
 }
