@@ -34,6 +34,11 @@ describe("product entitlement reconciliation", () => {
     expect(report.counts.ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION).toBe(1);
   });
 
+  it("detects active subscription paired with an inactive entitlement", () => {
+    const report = summarizeProductEntitlementLifecycle([row({ entitlementStatus: "NONE" })]);
+    expect(report.counts.ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT).toBe(1);
+  });
+
   it("detects active entitlement paired with an inactive subscription", () => {
     const report = summarizeProductEntitlementLifecycle([row({ subscriptionStatus: "EXPIRED" })]);
     expect(report.counts.ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION).toBe(1);
@@ -55,7 +60,7 @@ describe("product entitlement reconciliation", () => {
   });
 
   it("reports products not yet covered rather than implying complete coverage", () => {
-    const report = summarizeProductEntitlementLifecycle([row()], ["WEBSITE_STUDIO"]);
-    expect(report.excludedProducts).toContain("WEBSITE_STUDIO");
+    const report = summarizeProductEntitlementLifecycle([row()], ["BUSINESS_PAGE"]);
+    expect(report.excludedProducts).toContain("BUSINESS_PAGE");
   });
 });
