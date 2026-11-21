@@ -85,7 +85,7 @@ export async function completePaymentRecoveryTask(
   client: RecoveryQueueClient = prisma as unknown as RecoveryQueueClient,
 ): Promise<boolean> {
   const result = await client.paymentRecoveryTask.updateMany({
-    where: { id, leaseToken, status: "LEASED" },
+    where: { id, leaseToken, status: "LEASED", leaseUntil: { gt: now } },
     data: { status: "COMPLETED", completedAt: now, leaseToken: null, leaseUntil: null, lastErrorCode: null },
   });
   return result.count === 1;
@@ -98,12 +98,12 @@ export async function failPaymentRecoveryTask(
   const safeCode = /^[A-Z0-9_:-]{1,80}$/.test(errorCode) ? errorCode : "UNCLASSIFIED_WORKER_ERROR";
   const now = options.now ?? new Date();
   const task = await client.paymentRecoveryTask.findFirst({
-    where: { id, leaseToken, status: "LEASED" }, select: { attempts: true, maxAttempts: true },
+    where: { id, leaseToken, status: "LEASED", leaseUntil: { gt: now } }, select: { attempts: true, maxAttempts: true },
   });
   if (!task) return "STALE_LEASE";
   const exhausted = task.attempts >= task.maxAttempts;
   const result = await client.paymentRecoveryTask.updateMany({
-    where: { id, leaseToken, status: "LEASED" },
+    where: { id, leaseToken, status: "LEASED", leaseUntil: { gt: now } },
     data: exhausted
       ? { status: "DEAD_LETTER", leaseToken: null, leaseUntil: null, lastErrorCode: safeCode }
       : { status: "RETRY", availableAt: new Date(now.getTime() + paymentRecoveryRetryDelayMs(task.attempts)),
