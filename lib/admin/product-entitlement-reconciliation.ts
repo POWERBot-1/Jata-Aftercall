@@ -27,6 +27,7 @@ export type ProductLifecycleEvidence = {
 export type ProductEntitlementException =
   | "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT"
   | "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT"
+  | "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT"
   | "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION"
   | "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION"
   | "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT"
@@ -61,6 +62,7 @@ export function summarizeProductEntitlementLifecycle(
   const counts: ProductEntitlementReport["counts"] = {
     ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT: 0,
     ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT: 0,
+    ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT: 0,
     ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION: 0,
     ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION: 0,
     ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT: 0,
@@ -94,6 +96,8 @@ export function summarizeProductEntitlementLifecycle(
 
     if (subActive && !row.entitlementId) {
       push({ exception: "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined });
+    } else if (subActive && row.entitlementId && !entitlementActive) {
+      push({ exception: "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, entitlementId: row.entitlementId });
     } else if (subActive && row.entitlementId && !entitlementActive) {
       push({ exception: "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, entitlementId: row.entitlementId });
     }
