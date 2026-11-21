@@ -35,7 +35,8 @@ describe("read-only product expiry and grace observation", () => {
 
   it("flags malformed expiry timestamps and inverted grace windows for review", () => {
     expect(observeSubscriptionExpiry(row({ expiresAt: "not-a-date" as unknown as Date }), now).state).toBe("INVALID_GRACE_WINDOW");
-    expect(observeSubscriptionExpiry(row({ graceUntil: new Date("2026-11-19T12:00:00Z") }), now).state).toBe("INVALID_GRACE_WINDOW");\n    expect(observeSubscriptionExpiry(row({ graceUntil: "not-a-date" as unknown as Date }), now).state).toBe("INVALID_GRACE_WINDOW");
+    expect(observeSubscriptionExpiry(row({ graceUntil: new Date("2026-11-19T12:00:00Z") }), now).state).toBe("INVALID_GRACE_WINDOW");
+    expect(observeSubscriptionExpiry(row({ graceUntil: "not-a-date" as unknown as Date }), now).state).toBe("INVALID_GRACE_WINDOW");
   });
 
   it("does not classify cancelled or suspended rows as candidates for expiry mutation", () => {
