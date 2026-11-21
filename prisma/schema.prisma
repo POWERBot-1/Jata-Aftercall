@@ -4955,3 +4955,77 @@ model ErpProEntitlement {
 
   @@index([businessId, status])
 }
+
+
+// Provider settlement snapshots are immutable evidence from the provider feed, not bank proof.
+model ProviderSettlementSnapshot {
+  id                    String   @id @default(cuid())
+  provider              PaymentProviderKey @default(PAYSTACK)
+  providerSettlementId  String
+  status                String
+  currency              String?
+  grossProcessedMinor   BigInt?
+  providerFeeMinor      BigInt?
+  effectiveNetMinor     BigInt?
+  deductionsMinor       BigInt?
+  settlementDate        DateTime?
+  sourceEndpoint        String
+  sourcePage            Int
+  sourcePerPage         Int
+  sourceFilter          Json?
+  sourceSnapshotHash    String   @unique
+  fetchedAt             DateTime @default(now())
+  transactions          ProviderSettlementTransactionEvidence[]
+
+  @@index([provider, providerSettlementId, fetchedAt])
+  @@index([fetchedAt])
+}
+
+// Reduced transaction evidence only; never persist the raw Paystack response or customer payload.
+model ProviderSettlementTransactionEvidence {
+  id                    String   @id @default(cuid())
+  snapshotId            String
+  snapshot              ProviderSettlementSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  providerTransactionId String?
+  paymentReference      String?
+  status                String?
+  amountMinor           BigInt?
+  currency              String?
+  providerFeeMinor      BigInt?
+  paidAt                DateTime?
+  sourceRowHash         String
+  createdAt             DateTime @default(now())
+
+  @@unique([snapshotId, sourceRowHash])
+  @@index([paymentReference])
+  @@index([providerTransactionId])
+}
+
+// Import metadata contains only a digest and schema version, never the uploaded statement file.
+model BankStatementImportBatch {
+  id                 String   @id @default(cuid())
+  sourceFileSha256   String   @unique
+  schemaVersion      String   @default("canonical-v1")
+  rowCount           Int
+  importedAt         DateTime @default(now())
+  credits            BankStatementCreditEvidence[]
+
+  @@index([importedAt])
+}
+
+// Normalized credit-only bank evidence. Raw narration and bank-account identifiers are excluded.
+model BankStatementCreditEvidence {
+  id              String   @id @default(cuid())
+  importBatchId   String
+  importBatch     BankStatementImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  statementLineId String
+  bookingDate     DateTime
+  reference       String
+  currency        String
+  creditMinor     BigInt
+  createdAt       DateTime @default(now())
+
+  @@unique([importBatchId, statementLineId])
+  @@index([reference, currency, creditMinor])
+  @@index([bookingDate])
+}
