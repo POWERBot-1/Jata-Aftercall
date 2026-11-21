@@ -20,6 +20,11 @@ export type SubscriptionPaymentEvidence = {
     planId: string | null;
     purpose: string;
     status: string;
+    environment: string;
+    reconciliationStatus: string;
+    providerSettledAt: Date | null;
+    settledRefundMinor: bigint | null;
+    settledChargebackMinor: bigint | null;
   };
 };
 
@@ -27,6 +32,8 @@ export type SubscriptionPaymentException =
   | "ACTIVE_SUBSCRIPTION_WITHOUT_PAYMENT"
   | "SUBSCRIPTION_PAYMENT_NOT_FOUND"
   | "ACTIVE_SUBSCRIPTION_WITH_UNPAID_PAYMENT"
+  | "ACTIVE_SUBSCRIPTION_WITH_UNVERIFIED_PAYMENT"
+  | "ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK"
   | "SUBSCRIPTION_PAYMENT_IDENTITY_MISMATCH";
 
 export type SubscriptionPaymentFinding = {
@@ -52,6 +59,8 @@ export function summarizeSubscriptionPaymentLifecycle(
     ACTIVE_SUBSCRIPTION_WITHOUT_PAYMENT: 0,
     SUBSCRIPTION_PAYMENT_NOT_FOUND: 0,
     ACTIVE_SUBSCRIPTION_WITH_UNPAID_PAYMENT: 0,
+    ACTIVE_SUBSCRIPTION_WITH_UNVERIFIED_PAYMENT: 0,
+    ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK: 0,
     SUBSCRIPTION_PAYMENT_IDENTITY_MISMATCH: 0,
   };
   const seen = new Set<string>();
@@ -92,8 +101,22 @@ export function summarizeSubscriptionPaymentLifecycle(
       continue;
     }
 
-    if (active(row.status) && payment.status !== "PAID") {
+    if (!active(row.status)) continue;
+
+    if (payment.status !== "PAID") {
       push({ exception: "ACTIVE_SUBSCRIPTION_WITH_UNPAID_PAYMENT", subscriptionId: row.subscriptionId, paymentId: row.paymentId });
+      continue;
+    }
+
+    // A PAID label alone is not settlement proof. Test/unknown environments, unreconciled
+    // provider records, or missing settlement timestamps must remain visible as exceptions.
+    if (payment.environment !== "LIVE" || payment.reconciliationStatus !== "MATCHED" || !payment.providerSettledAt) {
+      push({ exception: "ACTIVE_SUBSCRIPTION_WITH_UNVERIFIED_PAYMENT", subscriptionId: row.subscriptionId, paymentId: row.paymentId });
+      continue;
+    }
+
+    if ((payment.settledRefundMinor ?? 0n) > 0n || (payment.settledChargebackMinor ?? 0n) > 0n) {
+      push({ exception: "ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK", subscriptionId: row.subscriptionId, paymentId: row.paymentId });
     }
   }
 
