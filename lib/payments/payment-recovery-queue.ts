@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db";
 import type { PaymentRecoveryQueueItem } from "@/lib/payments/payment-lifecycle-recovery";
+import { paymentRecoveryRetryDelayMs } from "@/lib/payments/payment-recovery-policy";
 
 export type ClaimedPaymentRecoveryTask = {
   id: string; idempotencyKey: string; exception: string;
@@ -22,11 +23,6 @@ export type RecoveryQueueClient = {
     $queryRaw<T>(query: Prisma.Sql): Promise<T>;
   }) => Promise<T>): Promise<T>;
 };
-
-export function paymentRecoveryRetryDelayMs(attempt: number): number {
-  if (!Number.isInteger(attempt) || attempt < 1) throw new Error("PAYMENT_RECOVERY_ATTEMPT_INVALID");
-  return Math.min(30_000 * 2 ** Math.min(attempt - 1, 10), 6 * 60 * 60 * 1000);
-}
 
 export async function enqueuePaymentRecoveryTasks(
   items: PaymentRecoveryQueueItem[],
