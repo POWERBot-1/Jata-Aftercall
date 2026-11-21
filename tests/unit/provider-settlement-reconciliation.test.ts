@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseCanonicalBankStatementCsv } from "@/lib/payments/bank-statement-csv";
 import {
   matchProviderSettlementToBankCredit,
   validateProviderSettlementEvidence,
@@ -76,6 +77,20 @@ describe("matchProviderSettlementToBankCredit", () => {
       status: "MATCHED",
       settlementReference: "STL-2026-001",
       statementLineId: "statement-line-1",
+      amountMinor: 98_500,
+      currency: "KES",
+    });
+  });
+
+
+  it("matches a canonical parsed bank statement credit against the provider settlement", () => {
+    const parsed = parseCanonicalBankStatementCsv(
+      "statement_line_id,booking_date,reference,currency,credit_minor\\nline-77,2026-11-21,STL-2026-001,KES,98500\\n",
+    );
+    expect(matchProviderSettlementToBankCredit(settlement, [settlement], parsed.rows)).toEqual({
+      status: "MATCHED",
+      settlementReference: "STL-2026-001",
+      statementLineId: "line-77",
       amountMinor: 98_500,
       currency: "KES",
     });
