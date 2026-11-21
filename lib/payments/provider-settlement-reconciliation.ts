@@ -29,7 +29,7 @@ export type BankCreditEvidence = {
 export type SettlementArithmeticResult =
   | { status: "VALID"; expectedNetMinor: number }
   | { status: "INCOMPLETE"; missing: string[] }
-  | { status: "INVALID"; reason: "INVALID_AMOUNT" | "INVALID_CURRENCY" | "INVALID_REFERENCE" | "ARITHMETIC_MISMATCH" };
+  | { status: "INVALID"; reason: "INVALID_AMOUNT" | "INVALID_CURRENCY" | "INVALID_REFERENCE" | "INVALID_PROVIDER" | "ARITHMETIC_MISMATCH" };
 
 export type SettlementBankMatch =
   | { status: "MATCHED"; settlementReference: string; statementLineId: string; amountMinor: number; currency: string }
@@ -53,7 +53,7 @@ export function validateProviderSettlementEvidence(
 ): SettlementArithmeticResult {
   const settlementReference = reference(input.settlementReference);
   if (typeof input.provider !== "string" || !/^[A-Z0-9_-]{2,40}$/i.test(input.provider.trim())) {
-    return { status: "INVALID", reason: "INVALID_REFERENCE" };
+    return { status: "INVALID", reason: "INVALID_PROVIDER" };
   }
   if (!settlementReference) return { status: "INVALID", reason: "INVALID_REFERENCE" };
   if (!currencyCode(input.currency)) return { status: "INVALID", reason: "INVALID_CURRENCY" };
