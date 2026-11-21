@@ -134,4 +134,12 @@ The first calculation output is KES-only. Non-KES rows are excluded rather than 
 
 `tests/unit/recurring-revenue.test.ts` adds focused unit cases for eligibility, annual normalization, legacy missing links, test/unknown/unreconciled payments, identity/amount/currency mismatches, expired periods, unsupported terms, incomplete snapshots and ambiguous payment identities.
 
-**Acceptance limitation:** this is a pure calculation layer, not yet wired into admin reporting or independently executed on this exact commit. The shared base `Subscription` model does not yet carry a payment ID/reference pair and must remain excluded until authoritative linkage is implemented. AI Front Desk and Website Studio entitlements are not recurring subscriptions in this calculation. No MRR/ARR dashboard claim is authorized by this helper alone.
+### Read-only admin MRR projection
+
+`lib/admin/recurring-revenue-report.ts` loads the base Business Page subscription plus the POS, Autopilot, MJENGO, legacy ERP and ERP PRO subscription models. It joins each row to Payment only by its stored payment ID, then passes the normalized evidence to the pure calculator. It does not infer historical links, mutate payment/subscription rows, perform FX, or write a ledger. If any required subscription source or payment query fails, the report fails closed so the admin overview displays Unavailable rather than a partial total.
+
+The admin overview now presents **Evidence-qualified MRR (KES)** as a distinct projection, alongside (not substituted for) the historical PAID subscription payment amount. It also shows eligible and excluded subscription counts. The figure is not statutory revenue, cash collected, provider net payout, ARR, or proof of bank receipt. The calculator's `reconciliationStatus = MATCHED` condition is an explicit Payment-row gate; it must not be represented as a bank-credit match unless the separate provider-payout-to-bank evidence process has established that exact relationship.
+
+Legacy subscriptions without exact payment links remain excluded. The dedicated product models are read independently; null payment links remain excluded. AI Front Desk and Website Studio entitlements are not recurring subscription models in this projection. No production migration, live DB read, or financial mutation is part of the reporting implementation.
+
+`tests/unit/recurring-revenue-report.test.ts` covers all six subscription sources, exact payment-ID lookup, missing legacy links, unreconciled payment exclusion, source failure and empty data. PostgreSQL and full CI acceptance on the exact commit remain pending.
