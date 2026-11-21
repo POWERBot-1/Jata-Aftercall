@@ -34,7 +34,8 @@ export type SettlementArithmeticResult =
 export type SettlementBankMatch =
   | { status: "MATCHED"; settlementReference: string; statementLineId: string; amountMinor: number; currency: string }
   | { status: "UNMATCHED"; reason: "INVALID_SETTLEMENT" | "NO_BANK_CREDIT" | "AMOUNT_OR_CURRENCY_MISMATCH" }
-  | { status: "AMBIGUOUS"; reason: "DUPLICATE_SETTLEMENT_REFERENCE" | "DUPLICATE_BANK_REFERENCE" };
+  | { status: "AMBIGUOUS"; reason: "DUPLICATE_SETTLEMENT_REFERENCE" | "DUPLICATE_BANK_REFERENCE" }
+  | { status: "UNRESOLVED"; reason: "REFERENCE_COLLISION_ACROSS_SETTLEMENTS" };
 
 const safeMinor = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -101,7 +102,17 @@ export function matchProviderSettlementToBankCredit(
     return { status: "AMBIGUOUS", reason: "DUPLICATE_SETTLEMENT_REFERENCE" };
   }
 
-  const candidates = bankCredits.filter((item) => reference(item.reference) === key);
+  // A bank reference must map to one settlement across the complete supplied evidence set.
+  // If another provider or settlement reuses this reference, refuse to match even if the
+  // duplicate is not from the selected provider.
+  const crossSettlementCollisions = settlements.filter((item) =>
+    reference(item.settlementReference) === key,
+  );
+  if (crossSettlementCollisions.length !== 1) {
+    return { status: "UNRESOLVED", reason: "REFERENCE_COLLISION_ACROSS_SETTLEMENTS" };
+  }
+
+  const candidates = bankCredits.filter((item) => reference(item.reference) === key;
   if (candidates.length > 1) return { status: "AMBIGUOUS", reason: "DUPLICATE_BANK_REFERENCE" };
   if (candidates.length === 0) return { status: "UNMATCHED", reason: "NO_BANK_CREDIT" };
 
