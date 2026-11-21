@@ -23,7 +23,8 @@ This module persists lifecycle work and its execution evidence. It is not an ent
 ## Required validation before any runtime activation
 1. Prisma schema validation and client generation against the candidate schema.
 2. Unit tests and PostgreSQL integration tests against a disposable PostgreSQL instance. The lifecycle integration suite verifies SKIP LOCKED behavior under a held row lock, stale-token fencing after lease reclamation, and append-only event enforcement. Its synthetic event fixtures are intentionally retained because the ledger rejects DELETE.
-3. Concurrent claim test proving no duplicate claim under parallel transactions.
-4. Stale-token, expired-lease, retry/dead-letter and append-only trigger tests.
+3. Concurrent claim test proving no duplicate claim under simultaneous worker transactions.
+4. Stale-token fencing after lease reclamation, exact lease-expiry boundary rejection, retry backoff and reclaim, attempt-limit dead-lettering, manual-review transition, run-finalization guard and enqueue-after-finalization rejection.
+5. Append-only trigger tests for UPDATE and DELETE. Synthetic event fixtures remain in the disposable database because the ledger intentionally rejects DELETE.
 5. Exact-head CI green, plus reconciliation of all repository-wide release blockers.
 6. Separate authorization for migration, worker route, scheduler and any future customer-access policy.
