@@ -132,7 +132,7 @@ export async function enqueueLifecycleTasks(runId: string, inputs: TaskInput[]) 
     if (!await lockActiveRun(tx, runId)) throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
     const inserted = await tx.productLifecycleExecutionTask.createMany({ data: rows, skipDuplicates: true });
     const tasks = await tx.productLifecycleExecutionTask.findMany({
-      where: { idempotencyKey: { in: rows.map((row) => row.idempotencyKey) } },
+      where: { runId, idempotencyKey: { in: rows.map((row) => row.idempotencyKey) } },
       orderBy: { createdAt: "asc" },
     });
     return { received: rows.length, inserted: inserted.count, tasks };
