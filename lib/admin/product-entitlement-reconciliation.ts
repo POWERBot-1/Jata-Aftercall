@@ -3,7 +3,7 @@
  * Normalized evidence only: no writes, access grants, revocations, or payment-state inference.
  */
 export type ProductKey =
-  | "BUSINESS_PAGE"
+  | "WEBSITE_STUDIO"
   | "AI_FRONT_DESK"
   | "BUSINESS_POS"
   | "AUTOPILOT"
@@ -26,6 +26,7 @@ export type ProductLifecycleEvidence = {
 
 export type ProductEntitlementException =
   | "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT"
+  | "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT"
   | "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION"
   | "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION"
   | "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT"
@@ -50,15 +51,16 @@ export type ProductEntitlementReport = {
   excludedProducts: string[];
 };
 
-const activeSubscription = (s: string | null) => s === "ACTIVE" || s === "EXPIRING";
+const activeSubscription = (s: string | null) => s === "ACTIVE" || s === "EXPIRING" || s === "PAST_DUE";
 const activeEntitlement = (s: string | null) => s === "ACTIVE" || s === "LIVE" || s === "GRACE";
 
 export function summarizeProductEntitlementLifecycle(
   evidence: ProductLifecycleEvidence[],
-  excludedProducts: string[] = ["WEBSITE_STUDIO"],
+  excludedProducts: string[] = ["BUSINESS_PAGE"],
 ): ProductEntitlementReport {
   const counts: ProductEntitlementReport["counts"] = {
     ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT: 0,
+    ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT: 0,
     ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION: 0,
     ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION: 0,
     ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT: 0,
@@ -92,6 +94,8 @@ export function summarizeProductEntitlementLifecycle(
 
     if (subActive && !row.entitlementId) {
       push({ exception: "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined });
+    } else if (subActive && row.entitlementId && !entitlementActive) {
+      push({ exception: "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, entitlementId: row.entitlementId });
     }
     if (entitlementActive && !row.subscriptionId) {
       push({ exception: "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION", product: row.product, businessId: row.businessId, entitlementId: row.entitlementId ?? undefined });
