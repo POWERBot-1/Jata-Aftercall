@@ -43,9 +43,10 @@ export async function POST(req: Request) {
     }
     const disputedPayment = await prisma.payment.findUnique({ where: { reference: disputeReference } });
     if (!disputedPayment) {
-      await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
+      // Do not consume the event ID before payment evidence exists. A transient
+      // payment-record visibility/order issue must remain retryable.
       await logAudit({ action: "WEBHOOK_DISPUTE_UNKNOWN_REFERENCE", metadata: { event: type } });
-      return NextResponse.json({ status: "ignored" });
+      return NextResponse.json({ error: "Dispute payment reference is not yet available; Paystack may retry." }, { status: 503 });
     }
     try {
       await prisma.$transaction(async (tx) => {
@@ -85,8 +86,9 @@ export async function POST(req: Request) {
     if (!refundReference || refundReference.length > 100) return NextResponse.json({ error: "Invalid webhook reference." }, { status: 400 });
     const refundPayment = await prisma.payment.findUnique({ where: { reference: refundReference } });
     if (!refundPayment) {
-      await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
-      return NextResponse.json({ status: "ignored" });
+      // Unknown references are not permanently consumed. If the payment row is
+      // temporarily unavailable, retry can reconcile it once the record exists.
+      return NextResponse.json({ error: "Refund payment reference is not yet available; Paystack may retry." }, { status: 503 });
     }
     try {
       // Partial refunds are valid Paystack events, but this app has no partial-refund
@@ -186,9 +188,10 @@ export async function POST(req: Request) {
   if (!reference || reference.length > 100) return NextResponse.json({ error: "Invalid webhook reference." }, { status: 400 });
   const payment = await prisma.payment.findUnique({ where: { reference } });
   if (!payment) {
-    await prisma.processedWebhook.upsert({ where: { id: eventId }, update: {}, create: { id: eventId } });
+    // Leave the event unclaimed so a later provider retry can succeed if the
+    // local payment record becomes visible. Never acknowledge missing evidence.
     await logAudit({ action: "WEBHOOK_UNKNOWN_REFERENCE", metadata: { event: type } });
-    return NextResponse.json({ status: "ignored" });
+    return NextResponse.json({ error: "Payment reference is not yet available; Paystack may retry." }, { status: 503 });
   }
 
   if (type === "charge.success") {
