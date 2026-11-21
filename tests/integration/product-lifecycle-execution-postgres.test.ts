@@ -36,13 +36,8 @@ describe.skipIf(!realPrismaConfigured)("product lifecycle ledger PostgreSQL conc
   });
 
   afterAll(async () => {
-    for (const runId of runIds) {
-      const tasks = await db.productLifecycleExecutionTask.findMany({ where: { runId }, select: { id: true } });
-      const taskIds = tasks.map((task: { id: string }) => task.id);
-      if (taskIds.length) await db.productLifecycleExecutionEvent.deleteMany({ where: { taskId: { in: taskIds } } });
-      await db.productLifecycleExecutionTask.deleteMany({ where: { runId } });
-      await db.productLifecycleExecutionRun.deleteMany({ where: { id: runId } });
-    }
+    // Event history is intentionally append-only; use only a disposable PostgreSQL test database.
+    // Synthetic run/task/event fixtures are retained for the lifetime of that disposable database.
     if (db) await db.$disconnect();
   });
 
