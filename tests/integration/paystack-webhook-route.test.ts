@@ -332,4 +332,56 @@ describe("Paystack webhook", () => {
     expect(await (await POST(request())).json()).toEqual({ status: "already_processed" });
     expect(mocks.paymentFind).not.toHaveBeenCalled();
   });
+
+  it("records a Paystack dispute as review-required without refunding or suspending access", async () => {
+    const dispute = {
+      id: "evt-dispute-1",
+      event: "charge.dispute.create",
+      data: { id: 902, transaction: { reference: "jata-ref", amount: 14900, currency: "KES" } },
+    };
+    mocks.paymentFind.mockResolvedValue({
+      id: "pay-a", reference: "jata-ref", userId: "user-a", businessId: "business-a",
+      amount: 14900, currency: "KES", status: "PAID", reconciliationStatus: "RECONCILED",
+    });
+    const response = await POST(request(dispute));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "dispute_requires_reconciliation" });
+    expect(mocks.webhookCreate).toHaveBeenCalledWith({ data: { id: "evt-dispute-1" } });
+    expect(mocks.paymentUpdateMany).toHaveBeenCalledWith({
+      where: { id: "pay-a" }, data: { reconciliationStatus: "REVIEW_REQUIRED" },
+    });
+    expect(mocks.auditCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorId: "user-a", action: "WEBHOOK_CHARGEBACK_DISPUTE_REVIEW_REQUIRED",
+        targetType: "PAYMENT", targetId: "pay-a",
+      }),
+    });
+    expect(mocks.subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.activate).not.toHaveBeenCalled();
+  });
+
+  it.each(["charge.dispute.remind", "charge.dispute.resolve"])(
+    "records %s as review evidence rather than final settlement",
+    async (event) => {
+      const response = await POST(request({
+        id: `evt-${event}`, event,
+        data: { id: 902, transaction: { reference: "jata-ref" } },
+      }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ status: "dispute_requires_reconciliation" });
+      expect(mocks.paymentUpdateMany).toHaveBeenCalledWith({
+        where: { id: "pay-a" }, data: { reconciliationStatus: "REVIEW_REQUIRED" },
+      });
+    },
+  );
+
+  it("rejects dispute events without a bounded transaction reference", async () => {
+    const response = await POST(request({
+      id: "evt-dispute-invalid", event: "charge.dispute.create", data: { id: 902, transaction: {} },
+    }));
+    expect(response.status).toBe(400);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.paymentUpdateMany).not.toHaveBeenCalled();
+  });
+
 });
