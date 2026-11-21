@@ -20,6 +20,11 @@ const row = (overrides: Partial<SubscriptionPaymentEvidence> = {}): Subscription
     planId: "plan-1",
     purpose: "SUBSCRIPTION",
     status: "PAID",
+    environment: "LIVE",
+    reconciliationStatus: "MATCHED",
+    providerSettledAt: new Date("2026-11-22T10:00:00.000Z"),
+    settledRefundMinor: 0n,
+    settledChargebackMinor: 0n,
   },
   ...overrides,
 });
@@ -59,6 +64,25 @@ describe("subscription/payment reconciliation inventory", () => {
       row({ status: "PENDING", payment: { ...row().payment!, status: "PENDING" } }),
     ]);
     expect(report.findings).toEqual([]);
+  });
+
+
+  it("does not treat a PAID label as verified settlement when environment or reconciliation evidence is missing", () => {
+    const report = summarizeSubscriptionPaymentLifecycle([
+      row({ payment: { ...row().payment!, environment: "UNKNOWN" } }),
+      row({ subscriptionId: "sub-test", payment: { ...row().payment!, environment: "TEST" } }),
+      row({ subscriptionId: "sub-unmatched", payment: { ...row().payment!, reconciliationStatus: "UNRECONCILED" } }),
+      row({ subscriptionId: "sub-no-settlement", payment: { ...row().payment!, providerSettledAt: null } }),
+    ]);
+    expect(report.counts.ACTIVE_SUBSCRIPTION_WITH_UNVERIFIED_PAYMENT).toBe(4);
+  });
+
+  it("flags active subscriptions whose linked payment has settled refunds or chargebacks", () => {
+    const report = summarizeSubscriptionPaymentLifecycle([
+      row({ payment: { ...row().payment!, settledRefundMinor: 100n } }),
+      row({ subscriptionId: "sub-chargeback", payment: { ...row().payment!, settledChargebackMinor: 50n } }),
+    ]);
+    expect(report.counts.ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK).toBe(2);
   });
 
   it("rejects duplicate subscription identities rather than silently deduplicating", () => {
