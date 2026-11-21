@@ -22,7 +22,7 @@ export type FinancialEvidenceException =
   | "INCOMPLETE_SETTLEMENT_FIELDS"
   | "UNSUPPORTED_SETTLEMENT_STATUS"
   | "DUPLICATE_SETTLEMENT_IDENTITY"
-  | "DUPLICATE_SETTLEMENT_REFERENCE"
+  | "DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS"
   | "TRANSACTION_EVIDENCE_MISSING"
   | "BANK_REFERENCE_DUPLICATE"
   | "BANK_CREDIT_WITHOUT_REFERENCE";
@@ -49,7 +49,7 @@ export function summarizePersistedFinancialEvidence(
     INCOMPLETE_SETTLEMENT_FIELDS: 0,
     UNSUPPORTED_SETTLEMENT_STATUS: 0,
     DUPLICATE_SETTLEMENT_IDENTITY: 0,
-    DUPLICATE_SETTLEMENT_REFERENCE: 0,
+    DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS: 0,
     TRANSACTION_EVIDENCE_MISSING: 0,
     BANK_REFERENCE_DUPLICATE: 0,
     BANK_CREDIT_WITHOUT_REFERENCE: 0,
@@ -66,7 +66,7 @@ export function summarizePersistedFinancialEvidence(
   for (const count of settlementCounts.values()) {
     if (count > 1) exceptions.DUPLICATE_SETTLEMENT_IDENTITY += count - 1;
   }
-  // Different providers reusing a settlement ID/reference-like identifier is surfaced too.
+  // Different providers reusing a provider settlement ID is surfaced as an identity collision.
   const idProviders = new Map<string, Set<string>>();
   for (const row of snapshots) {
     const providers = idProviders.get(row.providerSettlementId) ?? new Set<string>();
@@ -74,7 +74,7 @@ export function summarizePersistedFinancialEvidence(
     idProviders.set(row.providerSettlementId, providers);
   }
   for (const providers of idProviders.values()) {
-    if (providers.size > 1) exceptions.DUPLICATE_SETTLEMENT_REFERENCE++;
+    if (providers.size > 1) exceptions.DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS++;
   }
   const transactionSnapshotIds = new Set(transactions.map((row) => row.snapshotId));
   for (const row of snapshots) {
