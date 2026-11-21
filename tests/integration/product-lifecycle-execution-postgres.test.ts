@@ -20,8 +20,8 @@ async function makeRun(taskCount: number) {
   runIds.push(run.id);
   const inputs = Array.from({ length: taskCount }, (_, index) => ({
     product: "AI_FRONT_DESK" as const,
-    businessId: `synthetic-business-${index}`,
-    subscriptionId: `synthetic-subscription-${index}`,
+    businessId: `${run.id}-synthetic-business-${index}`,
+    subscriptionId: `${run.id}-synthetic-subscription-${index}`,
     transitionKey: "EXPIRED",
     payload: { fixture: true, index },
   }));
