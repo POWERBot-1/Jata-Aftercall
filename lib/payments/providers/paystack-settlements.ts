@@ -164,7 +164,7 @@ async function getPaystackPage<T>(
   const secretKey = options.secretKey ?? (config.ready ? config.secretKey : "");
   if (!secretKey) throw new Error("PAYSTACK_NOT_CONFIGURED");
 
-  const page = Number(query.get("page") ?? DEFAULT_PER_PAGE);
+  const page = Number(query.get("page") ?? 1);
   const perPage = Number(query.get("perPage") ?? DEFAULT_PER_PAGE);
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(`${PAYSTACK_BASE}${path}?${query.toString()}`, {
@@ -191,6 +191,9 @@ export async function listPaystackSettlements(
   const page = boundedInteger(filters.page, 1, MAX_PAGE);
   const perPage = boundedInteger(filters.perPage, DEFAULT_PER_PAGE, MAX_PER_PAGE);
   const query = new URLSearchParams({ page: String(page), perPage: String(perPage) });
+  if (filters.status && !["success", "processing", "pending", "failed"].includes(filters.status)) {
+    throw new Error("PAYSTACK_SETTLEMENT_INVALID_STATUS");
+  }
   if (filters.status) query.set("status", filters.status);
   const from = validateDateFilter(filters.from);
   const to = validateDateFilter(filters.to);
