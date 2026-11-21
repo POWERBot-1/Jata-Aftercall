@@ -108,3 +108,19 @@ This adapter is not a payout ledger or bank integration. Paystack's settlement I
 `lib/payments/bank-statement-csv.ts` accepts only a deliberately narrow canonical CSV format with the exact header `statement_line_id,booking_date,reference,currency,credit_minor`. It parses credit rows only, normalizes currency and booking date, rejects duplicate line IDs, malformed CSV, invalid dates/references/currencies/amounts, unsafe integers, extra columns, files over 5 MiB and imports over 10,000 data rows. A single invalid financial row rejects the entire file; it is not silently skipped. The parser returns only the five normalized fields and does not retain raw statement narration, account numbers, customer details or the original file.
 
 Bank-specific CSV/PDF formats must be mapped into this canonical format by an authorized finance operator before import. This parser is not yet connected to a file upload, persistent statement-import ledger, user-facing workflow or automatic posting. No real bank statement was uploaded or parsed. Exact-reference, amount and currency matching remains a separate step; a provider payout is not considered bank-confirmed until that independent match is reviewed.
+
+
+## Append-only provider settlement and bank-credit evidence ledger
+
+Migration `20261204000000_financial_evidence_ledger` adds four isolated evidence models:
+
+- `ProviderSettlementSnapshot` stores normalized Paystack settlement summary fields, provider settlement ID, source endpoint/page/filter provenance, normalized snapshot SHA-256 and optional fetcher identity.
+- `ProviderSettlementTransactionEvidence` stores reduced transaction rows attached to the exact settlement snapshot, including provider transaction ID, JATA payment reference, amount, currency, fee, paid timestamp, page provenance and a per-row digest.
+- `BankStatementImportBatch` stores the original file SHA-256, canonical schema version, mandatory importing actor identity and row count. The uploaded file itself is not persisted.
+- `BankStatementCreditEvidence` stores only normalized credit rows: statement line ID, booking date, reference, currency and credit amount in minor units.
+
+All monetary values are nullable where the provider may omit evidence and use PostgreSQL BIGINT. Database constraints reject invalid hashes, currencies, amounts, pagination, row counts and references. Foreign keys use RESTRICT. Database triggers reject UPDATE and DELETE on all four evidence tables. Duplicate source snapshots, transaction rows and identical statement files are idempotently skipped by their content digests/unique keys.
+
+`lib/payments/financial-evidence-store.ts` provides transactional persistence primitives for already-fetched normalized Paystack pages and already-supplied canonical CSV text. It does not call Paystack, expose an upload route, persist raw provider payloads or bank files, update Payment rows, create accounting journals, perform automatic bank matching, or authorize payouts. Bank statement imports require an explicit actor ID. The offline Prisma fallback includes fail-closed stubs for the new models.
+
+Important evidence boundary: Paystack settlement IDs are not treated as bank statement references. Persisting both evidence sets does not constitute a match. Exact payout-to-bank reconciliation still requires an independently evidenced bank reference and separately reviewed decision. No production migration has been applied and no live financial data has been read or written.
