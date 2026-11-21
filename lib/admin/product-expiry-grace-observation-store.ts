@@ -45,14 +45,14 @@ export async function loadProductExpiryGraceObservation(input: {
   const db = prisma as any;
 
   const [core, pos, autopilot, mjengo, erpPro] = await Promise.all([
-    page(db.subscription, cursors.core, limit, {
+    page<RawRow & { plan: { key: string } }>(db.subscription, cursors.core, limit, {
       id: true, businessId: true, status: true, expiresAt: true, graceUntil: true,
       plan: { select: { key: true } },
     }),
-    page(db.posSubscription, cursors.pos, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
-    page(db.autopilotSubscription, cursors.autopilot, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
-    page(db.mjengoSubscription, cursors.mjengo, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
-    page(db.erpProSubscription, cursors.erpPro, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
+    page<RawRow>(db.posSubscription, cursors.pos, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
+    page<RawRow>(db.autopilotSubscription, cursors.autopilot, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
+    page<RawRow>(db.mjengoSubscription, cursors.mjengo, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
+    page<RawRow>(db.erpProSubscription, cursors.erpPro, limit, { id: true, businessId: true, status: true, expiresAt: true, graceUntil: true }),
   ]);
 
   const rows: LifecycleExpiryEvidence[] = [
