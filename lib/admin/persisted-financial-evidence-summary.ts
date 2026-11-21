@@ -5,6 +5,7 @@
  * mutate evidence, or infer bank receipt. Snapshot repeats are surfaced explicitly.
  */
 export type PersistedSettlementSnapshot = {
+  id: string;
   provider: string;
   providerSettlementId: string;
   status: string;
