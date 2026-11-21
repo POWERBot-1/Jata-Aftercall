@@ -64,6 +64,39 @@ describe("readEvidenceGatedMrr", () => {
     expect(db.erpProSubscription.findMany).toHaveBeenCalledTimes(1);
   });
 
+  it("includes each dedicated subscription family only through its own exact payment link", async () => {
+    const products = [
+      ["posSubscription", "BUSINESS_POS"],
+      ["autopilotSubscription", "AUTOPILOT"],
+      ["mjengoSubscription", "MJENGO_OS"],
+      ["erpSubscription", "ERP_LEGACY"],
+      ["erpProSubscription", "ERP_PRO"],
+    ] as const;
+    const paymentRows = products.map((_, index) => ({
+      ...pay,
+      id: `pay-${index + 1}`,
+      businessId: `biz-${index + 1}`,
+      planId: `plan-${index + 1}`,
+      reference: `JATA-${index + 1}`,
+      providerSettlementReference: `JATA-${index + 1}`,
+    }));
+    const db: any = client([], paymentRows);
+    products.forEach(([model, planKey], index) => {
+      db[model].findMany.mockResolvedValue([{
+        ...sub,
+        businessId: `biz-${index + 1}`,
+        planId: `plan-${index + 1}`,
+        planKey,
+        paymentId: `pay-${index + 1}`,
+        paymentReference: `JATA-${index + 1}`,
+      }]);
+    });
+
+    const result = await readEvidenceGatedMrr(db, asOf);
+    expect(result.eligibleSubscriptions).toBe(5);
+    expect(result.mrrMinor).toBe(5 * 14900);
+  });
+
   it("includes only authoritative Business Page keys from the shared Subscription model", async () => {
     const db = client([
       sub,
