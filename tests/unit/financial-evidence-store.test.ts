@@ -89,9 +89,9 @@ describe("financial evidence persistence", () => {
       sourcePage: 2,
       sourcePerPage: 25,
       fetchedByActorId: "owner-user-1",
-      grossProcessedMinor: 100_000n,
-      providerFeeMinor: 1_500n,
-      effectiveNetMinor: 98_500n,
+      grossProcessedMinor: BigInt("100000"),
+      providerFeeMinor: BigInt("1500"),
+      effectiveNetMinor: BigInt("98500"),
       deductionsMinor: null,
       sourceFilter: { status: "success", from: "2026-11-01", to: "2026-11-30" },
     });
@@ -127,8 +127,8 @@ describe("financial evidence persistence", () => {
       snapshotId: "snapshot-1",
       providerTransactionId: "2067030515",
       paymentReference: "jata-ref-1",
-      amountMinor: 10_000n,
-      providerFeeMinor: 390n,
+      amountMinor: BigInt("10000"),
+      providerFeeMinor: BigInt("390"),
       sourcePage: 1,
       sourcePerPage: 50,
     });
@@ -182,7 +182,7 @@ describe("financial evidence persistence", () => {
       statementLineId: "line-1",
       reference: "STL-001",
       currency: "KES",
-      creditMinor: 98_500n,
+      creditMinor: BigInt("98500"),
     })]);
     expect(JSON.stringify(credits, (_key, value) => typeof value === "bigint" ? value.toString() : value)).not.toContain(csv);
   });
