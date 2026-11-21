@@ -27,7 +27,6 @@ export type ProductLifecycleEvidence = {
 export type ProductEntitlementException =
   | "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT"
   | "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT"
-  | "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT"
   | "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION"
   | "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION"
   | "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT"
@@ -52,16 +51,17 @@ export type ProductEntitlementReport = {
   excludedProducts: string[];
 };
 
-const activeSubscription = (s: string | null) => s === "ACTIVE" || s === "EXPIRING" || s === "PAST_DUE";
-const activeEntitlement = (s: string | null) => s === "ACTIVE" || s === "LIVE" || s === "GRACE";
+const activeSubscription = (status: string | null) =>
+  status === "ACTIVE" || status === "EXPIRING" || status === "PAST_DUE";
+const activeEntitlement = (status: string | null) =>
+  status === "ACTIVE" || status === "LIVE" || status === "GRACE";
 
 export function summarizeProductEntitlementLifecycle(
   evidence: ProductLifecycleEvidence[],
-  excludedProducts: string[] = ["BUSINESS_PAGE"],
+  excludedProducts: string[] = ["BUSINESS_PAGE", "LEGACY_ERP"],
 ): ProductEntitlementReport {
   const counts: ProductEntitlementReport["counts"] = {
     ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT: 0,
-    ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT: 0,
     ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT: 0,
     ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION: 0,
     ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION: 0,
@@ -71,17 +71,15 @@ export function summarizeProductEntitlementLifecycle(
   };
   const findings: ProductEntitlementFinding[] = [];
   const grouped = new Map<string, ProductLifecycleEvidence[]>();
-  const push = (f: ProductEntitlementFinding) => {
-    findings.push(f);
-    counts[f.exception] += 1;
+  const push = (finding: ProductEntitlementFinding) => {
+    findings.push(finding);
+    counts[finding.exception] += 1;
   };
 
   for (const row of evidence) {
     if (!row.businessId) throw new Error("PRODUCT_ENTITLEMENT_BUSINESS_ID_REQUIRED");
     const key = row.product + ":" + row.businessId;
-    const rows = grouped.get(key) ?? [];
-    rows.push(row);
-    grouped.set(key, rows);
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
   }
 
   for (const rows of grouped.values()) {
@@ -91,33 +89,64 @@ export function summarizeProductEntitlementLifecycle(
       continue;
     }
 
-    const subActive = activeSubscription(row.subscriptionStatus);
-    const entitlementActive = activeEntitlement(row.entitlementStatus);
+    const subscriptionIsActive = activeSubscription(row.subscriptionStatus);
+    const entitlementIsActive = activeEntitlement(row.entitlementStatus);
 
-    if (subActive && !row.entitlementId) {
-      push({ exception: "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined });
-    } else if (subActive && row.entitlementId && !entitlementActive) {
-      push({ exception: "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, entitlementId: row.entitlementId });
-    } else if (subActive && row.entitlementId && !entitlementActive) {
-      push({ exception: "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, entitlementId: row.entitlementId });
-    }
-    if (entitlementActive && !row.subscriptionId) {
-      push({ exception: "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION", product: row.product, businessId: row.businessId, entitlementId: row.entitlementId ?? undefined });
-    } else if (entitlementActive && !subActive) {
-      push({ exception: "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, entitlementId: row.entitlementId ?? undefined });
+    if (subscriptionIsActive && !row.entitlementId) {
+      push({
+        exception: "ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+      });
+    } else if (subscriptionIsActive && row.entitlementId && !entitlementIsActive) {
+      push({
+        exception: "ACTIVE_SUBSCRIPTION_WITH_INACTIVE_ENTITLEMENT",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        entitlementId: row.entitlementId,
+      });
     }
 
-    if (subActive && row.paymentId && row.paymentStatus !== "PAID") {
-      push({ exception: "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, paymentId: row.paymentId });
+    if (entitlementIsActive && !row.subscriptionId) {
+      push({
+        exception: "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION",
+        product: row.product,
+        businessId: row.businessId,
+        entitlementId: row.entitlementId ?? undefined,
+      });
+    } else if (entitlementIsActive && !subscriptionIsActive) {
+      push({
+        exception: "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        entitlementId: row.entitlementId ?? undefined,
+      });
     }
-    if (subActive && !row.paymentId) {
-      push({ exception: "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined });
+
+    if (subscriptionIsActive && (!row.paymentId || row.paymentStatus !== "PAID")) {
+      push({
+        exception: "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        paymentId: row.paymentId ?? undefined,
+      });
     }
+
     if (row.paymentId && (
       (row.paymentBusinessId !== null && row.paymentBusinessId !== row.businessId) ||
       (row.paymentUserId !== null && row.subscriptionUserId !== null && row.paymentUserId !== row.subscriptionUserId)
     )) {
-      push({ exception: "PAYMENT_TENANT_OR_OWNER_MISMATCH", product: row.product, businessId: row.businessId, subscriptionId: row.subscriptionId ?? undefined, paymentId: row.paymentId });
+      push({
+        exception: "PAYMENT_TENANT_OR_OWNER_MISMATCH",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        paymentId: row.paymentId,
+      });
     }
   }
 
