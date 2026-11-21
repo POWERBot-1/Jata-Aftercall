@@ -35,8 +35,8 @@ const pay = {
 function client(baseSubscriptionRows: any[] = [sub], paymentRows: any[] = [pay]) {
   const empty = () => ({ findMany: vi.fn().mockResolvedValue([]) });
   return {
-    subscription: { findMany: vi.fn().mockResolvedValue(baseSubscriptionRows) },
-    posSubscription: empty(),
+    subscription: empty(),
+    posSubscription: { findMany: vi.fn().mockResolvedValue(baseSubscriptionRows) },
     autopilotSubscription: empty(),
     mjengoSubscription: empty(),
     erpSubscription: empty(),
