@@ -78,11 +78,11 @@ describe("calculateEvidenceGatedMrr", () => {
   });
 
   it.each([
-    ["TEST", "MATCHED", "PAID", "LIVE", "PAYMENT_NOT_ELIGIBLE"],
-    ["LIVE", "UNRECONCILED", "PAID", "LIVE", "PAYMENT_NOT_ELIGIBLE"],
-    ["LIVE", "MATCHED", "PENDING", "LIVE", "PAYMENT_NOT_ELIGIBLE"],
-    ["LIVE", "MATCHED", "PAID", "UNKNOWN", "PAYMENT_NOT_ELIGIBLE"],
-  ])("excludes non-eligible payment evidence", (environment, reconciliationStatus, status, _unused, reason) => {
+    ["TEST", "MATCHED", "PAID", "PAYMENT_NOT_ELIGIBLE"],
+    ["LIVE", "UNRECONCILED", "PAID", "PAYMENT_NOT_ELIGIBLE"],
+    ["LIVE", "MATCHED", "PENDING", "PAYMENT_NOT_ELIGIBLE"],
+    ["UNKNOWN", "MATCHED", "PAID", "PAYMENT_NOT_ELIGIBLE"],
+  ])("excludes non-eligible payment evidence", (environment, reconciliationStatus, status, reason) => {
     const result = calculateEvidenceGatedMrr(
       [subscription()],
       [payment({ environment, reconciliationStatus, status })],

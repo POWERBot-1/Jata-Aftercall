@@ -166,6 +166,7 @@ describe("runtime and schema guards", () => {
       "20261120000000_agent_referral_revision_write_fence",
       "20261121000000_agent_notification_attempt_history",
       "20261122000000_agent_notification_recovery_audit",
+      "20261122000000_product_lifecycle_execution_ledger",
       "20261123000000_agent_notification_replay",
       "20261124000000_user_role_session_revocation",
       "20261125000000_media_storage_identity",
@@ -204,6 +205,8 @@ describe("runtime and schema guards", () => {
       // append-only TRUNCATE guards. Nullable attribution fields and fail-closed checks preserve
       // existing rows; no production financial records are rewritten.
       "20261205000000_financial_evidence_ledger_hardening",
+      "20261206000000_subscription_payment_linkage",
+      "20261207000000_payment_recovery_queue",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

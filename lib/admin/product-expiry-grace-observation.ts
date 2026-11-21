@@ -66,11 +66,14 @@ export function observeSubscriptionExpiry(
   if (!expiresAt) {
     return { ...base, state: "NO_EXPIRY", reason: "No expiry timestamp is recorded; retain access decision at the product gate." };
   }
-  if (graceUntil && graceUntil.getTime() < expiresAt.getTime()) {
-    return { ...base, state: "INVALID_GRACE_WINDOW", reason: "Grace deadline precedes the subscription expiry; policy requires review." };
-  }
   if (now.getTime() < expiresAt.getTime()) {
     return { ...base, state: "CURRENT", reason: "Subscription period has not reached its recorded expiry." };
+  }
+  if (evidence.graceUntil !== null && !graceUntil) {
+    return { ...base, state: "INVALID_GRACE_WINDOW", reason: "Stored grace deadline is invalid; no lifecycle action is safe." };
+  }
+  if (graceUntil && graceUntil.getTime() < expiresAt.getTime()) {
+    return { ...base, state: "INVALID_GRACE_WINDOW", reason: "Grace deadline precedes the subscription expiry; policy requires review." };
   }
   if (!graceUntil) {
     return { ...base, state: "GRACE_POLICY_UNKNOWN", reason: "Subscription expiry has passed but no explicit grace deadline is recorded." };

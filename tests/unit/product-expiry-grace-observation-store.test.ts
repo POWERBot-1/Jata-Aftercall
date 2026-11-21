@@ -61,6 +61,9 @@ describe("bounded lifecycle inventory adapter", () => {
     ]);
     const result = await loadProductExpiryGraceObservation();
     expect(result.total).toBe(4);
-    expect(result.counts.NO_EXPIRY).toBe(4);\n    expect(result.observations.map((item) => item.product)).toEqual([\n      "BUSINESS_PAGE", "BUSINESS_PAGE", "WEBSITE_STUDIO", "AI_FRONT_DESK",\n    ]);
+    expect(result.counts.NO_EXPIRY).toBe(4);
+    expect(result.observations.map((item) => item.product)).toEqual([
+      "BUSINESS_PAGE", "BUSINESS_PAGE", "WEBSITE_STUDIO", "AI_FRONT_DESK",
+    ]);
   });
 });
