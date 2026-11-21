@@ -116,7 +116,22 @@ export async function GET() {
   }
 
   const providerScope = scopedBusinessIds(grants, "providers.read");
-  if (providerScope.allowed) sections.providers = unavailable("Vercel / Neon / Paystack / messaging / storage provider probes", providerScope.global ? "No authenticated provider health probe with a verified source and last-success timestamp is configured. No credentials or simulated status are shown." : "Provider status is platform-wide; an explicit platform-wide grant is required. No provider probe or simulated status is shown.");
+  if (providerScope.allowed && !providerScope.global) {
+    sections.providers = unavailable("Platform provider configuration and health", "Provider status is platform-wide; an explicit platform-wide grant is required.");
+  } else if (providerScope.global) {
+    try {
+      const { getPlatformProviderInventory } = await import("@/lib/control/provider-readiness");
+      const inventory = getPlatformProviderInventory();
+      sections.providers = measured(
+        "Server-side provider configuration inventory",
+        inventory,
+        "PENDING",
+        "Configuration presence only. No network connectivity, live-call acceptance, webhook delivery, storage write/read, payment settlement, provider approval or deliverability is verified. Secret values are never returned.",
+      );
+    } catch {
+      sections.providers = unavailable("Server-side provider configuration inventory", "The configuration inventory could not be evaluated; no provider health is inferred.");
+    }
+  }
 
   const systemScope = scopedBusinessIds(grants, "system.health.read");
   if (systemScope.allowed && !systemScope.global) sections.system = unavailable("Application runtime and database connection", "Platform health is not tenant-keyed; an explicit platform-wide grant is required.");
