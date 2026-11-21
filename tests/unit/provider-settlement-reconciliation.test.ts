@@ -85,7 +85,7 @@ describe("matchProviderSettlementToBankCredit", () => {
 
   it("matches a canonical parsed bank statement credit against the provider settlement", () => {
     const parsed = parseCanonicalBankStatementCsv(
-      "statement_line_id,booking_date,reference,currency,credit_minor\\nline-77,2026-11-21,STL-2026-001,KES,98500\\n",
+      "statement_line_id,booking_date,reference,currency,credit_minor\nline-77,2026-11-21,STL-2026-001,KES,98500\n",
     );
     expect(matchProviderSettlementToBankCredit(settlement, [settlement], parsed.rows)).toEqual({
       status: "MATCHED",
