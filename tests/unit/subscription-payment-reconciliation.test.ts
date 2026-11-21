@@ -23,6 +23,8 @@ const row = (overrides: Partial<SubscriptionPaymentEvidence> = {}): Subscription
     environment: "LIVE",
     reconciliationStatus: "MATCHED",
     providerSettledAt: new Date("2026-11-22T10:00:00.000Z"),
+    providerSettlementReference: "ref-1",
+    currency: "KES",
     settledRefundMinor: 0n,
     settledChargebackMinor: 0n,
   },
