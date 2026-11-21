@@ -789,6 +789,10 @@ model Subscription {
   startAt    DateTime?
   expiresAt  DateTime?
   graceUntil DateTime?
+  // Exact payment provenance is written only in the same transaction as verified settlement.
+  paymentId  String?            @unique
+  payment    Payment?           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  paymentReference String?
   // Immutable-at-settlement commercial snapshot. Null means recurring value is not yet evidenced.
   recurringAmountKES Int?
   recurringDiscountKES Int?
@@ -798,6 +802,7 @@ model Subscription {
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
 
+  @@index([paymentReference])
   @@index([userId])
   @@index([status, expiresAt])
 }
@@ -844,6 +849,7 @@ model Payment {
   bookingId    String?
   customerEmail String?    // Guest checkout payer — never a secret (§47)
   posPublicationResolution PosPublicationResolution?
+  subscription Subscription?
   agentCommissionEntries AgentCommissionLedgerEntry[]
 
   @@index([userId])
