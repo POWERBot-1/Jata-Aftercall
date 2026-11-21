@@ -17,6 +17,11 @@ export type ProductLifecycleEvidence = {
   subscriptionStatus: string | null;
   paymentId: string | null;
   paymentStatus: string | null;
+  paymentPlanId: string | null;
+  paymentReference: string | null;
+  subscriptionPaymentReference: string | null;
+  paymentPurpose: string | null;
+  subscriptionPlanId: string | null;
   paymentBusinessId: string | null;
   paymentUserId: string | null;
   subscriptionUserId: string | null;
@@ -32,6 +37,7 @@ export type ProductEntitlementException =
   | "ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT"
   | "LINKED_PAYMENT_RECORD_NOT_FOUND"
   | "PAYMENT_TENANT_OR_OWNER_MISMATCH"
+  | "PAYMENT_PROVENANCE_MISMATCH"
   | "DUPLICATE_PRODUCT_LIFECYCLE";
 
 export type ProductEntitlementFinding = {
@@ -69,6 +75,7 @@ export function summarizeProductEntitlementLifecycle(
     ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT: 0,
     LINKED_PAYMENT_RECORD_NOT_FOUND: 0,
     PAYMENT_TENANT_OR_OWNER_MISMATCH: 0,
+    PAYMENT_PROVENANCE_MISMATCH: 0,
     DUPLICATE_PRODUCT_LIFECYCLE: 0,
   };
   const findings: ProductEntitlementFinding[] = [];
@@ -145,6 +152,22 @@ export function summarizeProductEntitlementLifecycle(
         businessId: row.businessId,
         subscriptionId: row.subscriptionId ?? undefined,
         paymentId: row.paymentId ?? undefined,
+      });
+    }
+
+    if (row.paymentId && row.paymentStatus !== null && (
+      !row.subscriptionPlanId ||
+      !row.paymentPlanId ||
+      row.paymentPlanId !== row.subscriptionPlanId ||
+      row.paymentPurpose !== "SUBSCRIPTION" ||
+      (row.subscriptionPaymentReference !== null && row.paymentReference !== row.subscriptionPaymentReference)
+    )) {
+      push({
+        exception: "PAYMENT_PROVENANCE_MISMATCH",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        paymentId: row.paymentId,
       });
     }
 
