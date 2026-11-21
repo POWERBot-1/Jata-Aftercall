@@ -80,6 +80,8 @@ function parseCsv(text: string): string[][] {
     }
     if (char === '"' && field.length === 0 && !closedQuote) {
       quoted = true;
+    } else if (char === '"' ) {
+      throw new BankStatementCsvError("INVALID_CSV");
     } else if (char === "," ) {
       row.push(field);
       field = "";
