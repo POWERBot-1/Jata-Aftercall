@@ -111,6 +111,15 @@ describe("matchProviderSettlementToBankCredit", () => {
     });
   });
 
+  it("refuses bank matching when a settlement reference collides across providers", () => {
+    const duplicateProviderSettlement = { ...settlement, provider: "OTHER_PROVIDER" };
+    expect(matchProviderSettlementToBankCredit(
+      settlement,
+      [settlement, duplicateProviderSettlement],
+      [bankCredit],
+    )).toEqual({ status: "UNRESOLVED", reason: "REFERENCE_COLLISION_ACROSS_SETTLEMENTS" });
+  });
+
   it("flags duplicate bank references as ambiguous", () => {
     expect(matchProviderSettlementToBankCredit(settlement, [settlement], [bankCredit, bankCredit])).toEqual({
       status: "AMBIGUOUS",
