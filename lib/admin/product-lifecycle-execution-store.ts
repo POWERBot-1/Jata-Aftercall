@@ -161,8 +161,8 @@ export async function claimLifecycleTasks(input: {
         WHERE "runId" = ${runId}
           AND "attempts" >= "maxAttempts"
           AND ("state" IN ('READY', 'RETRY') OR ("state" = 'CLAIMED' AND "leaseUntil" <= ${now}))
-        FOR UPDATE SKIP LOCKED
         LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
       )
       UPDATE "ProductLifecycleExecutionTask" AS task
       SET "state" = 'DEAD_LETTER', "leaseToken" = NULL, "leaseUntil" = NULL,
@@ -188,13 +188,13 @@ export async function claimLifecycleTasks(input: {
           AND (("state" IN ('READY', 'RETRY') AND "availableAt" <= ${now})
             OR ("state" = 'CLAIMED' AND "leaseUntil" <= ${now}))
         ORDER BY "availableAt" ASC, "createdAt" ASC, "id" ASC
-        FOR UPDATE SKIP LOCKED
         LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
       )
       UPDATE "ProductLifecycleExecutionTask" AS task
       SET "state" = 'CLAIMED',
           "attempts" = task."attempts" + 1,
-          "leaseToken" = md5(random()::text || clock_timestamp()::text || task."id"),
+          "leaseToken" = gen_random_uuid()::text,
           "leaseUntil" = ${leaseUntil},
           "updatedAt" = ${now}
       FROM candidates
