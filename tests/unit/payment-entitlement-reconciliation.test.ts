@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { summarizePaymentEntitlementLifecycle } from "@/lib/admin/payment-entitlement-reconciliation";
+import { summarizePaymentEntitlementLifecycle, type PaymentLifecycleEvidence, type EntitlementLifecycleEvidence } from "@/lib/admin/payment-entitlement-reconciliation";
 
-const payment = (overrides: Partial<any> = {}) => ({
+const payment = (overrides: Partial<PaymentLifecycleEvidence> = {}) => ({
   id: "pay-1", businessId: "biz-1", reference: "ref-1", status: "PAID", purpose: "SUBSCRIPTION", amountMinor: 14900, currency: "KES", ...overrides,
 });
-const entitlement = (overrides: Partial<any> = {}) => ({
+const entitlement = (overrides: Partial<EntitlementLifecycleEvidence> = {}) => ({
   id: "ent-1", product: "PAGE", businessId: "biz-1", paymentId: "pay-1", paymentReference: "ref-1", status: "ACTIVE", ...overrides,
 });
 
