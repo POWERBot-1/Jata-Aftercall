@@ -244,4 +244,43 @@ describe.skipIf(!enabled)("Payment Wallet refund reservation with real PostgreSQ
     expect(foreignTenant).toMatchObject({ ok: false, code: "NOT_FOUND" });
     expect(await prisma.refund.count({ where: { transactionId: fixture.transactionId } })).toBe(0);
   });
+
+  it("keeps an asynchronous refund reserved when the provider confirms the wrong currency", async () => {
+    process.env.PAYSTACK_SECRET_KEY = "sk_test_refund_currency_mismatch";
+    const fixture = await makeFixture("currency-mismatch");
+    const requested = await request(
+      fixture,
+      100,
+      (async () => paystackResponse(true, `refund-${stamp}-currency`, { async: true })) as unknown as typeof fetch,
+    );
+    expect(requested).toMatchObject({ ok: true, status: "PENDING_PROVIDER" });
+
+    const { resolvePendingProviderRefund } = await import("@/lib/payments/refunds");
+    const result = await resolvePendingProviderRefund({
+      provider: "PAYSTACK",
+      providerReference: `refund-${stamp}-currency`,
+      succeeded: true,
+      amountMinor: 10_000,
+      currency: "USD",
+    });
+    expect(result).toMatchObject({ matched: true, kind: "exception", reason: "REFUND_AMOUNT_MISMATCH" });
+
+    const after = await checkInvariant(fixture.transactionId, fixture.paidMinor);
+    expect(after.outstanding).toBe(10_000);
+    expect(after.transaction?.amountRefundedMinor).toBe(0);
+    expect(after.transaction?.status).toBe("PAID");
+    expect(await prisma.refund.count({
+      where: { transactionId: fixture.transactionId, status: "PENDING_PROVIDER" },
+    })).toBe(1);
+    expect(await prisma.paymentReconciliation.findFirst({
+      where: { transactionId: fixture.transactionId, providerReference: `refund-${stamp}-currency` },
+      orderBy: { createdAt: "desc" },
+    })).toMatchObject({
+      result: "UNCONFIRMED",
+      expectedAmountMinor: 10_000,
+      receivedAmountMinor: 10_000,
+      currency: "USD",
+    });
+  });
+
 });
