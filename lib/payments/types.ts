@@ -317,6 +317,7 @@ export type ProviderEventOutcome =
       providerReference: string;
       providerTransactionId: string | null;
       amountMinor: number;
+      currency?: string | null;
       reason: string | null;
       sanitized: Record<string, unknown>;
     }
