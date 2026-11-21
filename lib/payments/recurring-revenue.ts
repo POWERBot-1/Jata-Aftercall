@@ -56,7 +56,8 @@ export type RecurringRevenueExclusion = {
     | "PAYMENT_IDENTITY_MISMATCH"
     | "PAYMENT_NOT_ELIGIBLE"
     | "PAYMENT_AMOUNT_MISMATCH"
-    | "PAYMENT_CURRENCY_MISMATCH";
+    | "PAYMENT_CURRENCY_MISMATCH"
+    | "UNSUPPORTED_CURRENCY";
 };
 
 export type RecurringRevenueResult = {
@@ -134,6 +135,10 @@ export function calculateEvidenceGatedMrr(
     if (!safeNonNegativeInt(amount) || !safeNonNegativeInt(discount) ||
         discount > amount || !/^[A-Z]{3}$/.test(currency)) {
       exclude(subscription, "INVALID_SNAPSHOT");
+      continue;
+    }
+    if (currency !== "KES") {
+      exclude(subscription, "UNSUPPORTED_CURRENCY");
       continue;
     }
     if (interval !== 30 && interval !== 365) {
