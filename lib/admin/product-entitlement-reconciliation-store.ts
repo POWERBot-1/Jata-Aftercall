@@ -18,6 +18,8 @@ type SubscriptionRow = {
   paymentId: string | null;
 };
 
+type PaymentLookupRow = { id: string; status: string; businessId: string; userId: string | null };
+
 type EntitlementRow = {
   product: ProductKey;
   businessId: string;
@@ -77,7 +79,7 @@ export async function loadProductEntitlementLifecycleReport() {
         select: { id: true, status: true, businessId: true, userId: true },
       })
     : [];
-  const paymentById = new Map(payments.map((payment) => [payment.id, payment]));
+  const paymentById = new Map<string, PaymentLookupRow>((payments as PaymentLookupRow[]).map((payment) => [payment.id, payment]));
   const keyOf = (product: ProductKey, businessId: string) => product + ":" + businessId;
   const subByKey = new Map<string, SubscriptionRow[]>();
   const entByKey = new Map<string, EntitlementRow[]>();
