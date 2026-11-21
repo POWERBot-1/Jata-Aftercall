@@ -19,6 +19,7 @@ const row = (overrides: Partial<LifecycleExpiryEvidence> = {}): LifecycleExpiryE
 describe("read-only product expiry and grace observation", () => {
   it("identifies current subscriptions before their expiry", () => {
     expect(observeSubscriptionExpiry(row({ expiresAt: new Date("2026-11-24T12:00:00Z") }), now).state).toBe("CURRENT");
+    expect(observeSubscriptionExpiry(row({ expiresAt: new Date("2026-11-24T12:00:00Z"), graceUntil: "not-a-date" as unknown as Date }), now).state).toBe("CURRENT");
   });
 
   it("identifies grace only when an explicit grace deadline is stored", () => {
