@@ -49,7 +49,7 @@ describe.skipIf(!realPrismaConfigured)("product lifecycle ledger PostgreSQL conc
       businessId: original.businessId,
       subscriptionId: original.subscriptionId,
       transitionKey: original.transitionKey,
-      payload: original.payload,
+      payload: original.payload as Record<string, unknown>,
     }]);
     expect(replay.inserted).toBe(0);
     expect(replay.tasks).toHaveLength(1);
