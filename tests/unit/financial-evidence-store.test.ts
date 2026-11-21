@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
     providerSettlementSnapshot: {
       createMany: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
     providerSettlementTransactionEvidence: {
       createMany: vi.fn(),
@@ -59,13 +60,26 @@ describe("financial evidence persistence", () => {
 
   it("stores reduced settlement summaries as idempotent evidence", async () => {
     mocks.tx.providerSettlementSnapshot.createMany.mockResolvedValue({ count: 1 });
+    mocks.tx.providerSettlementSnapshot.findMany.mockResolvedValue([{
+      id: "snapshot-1",
+      providerSettlementId: "3090024",
+      sourceSnapshotHash: "a".repeat(64),
+    }]);
     const result = await persistPaystackSettlementSummaries(
       settlementPage,
       { page: 2, perPage: 25, status: "success", from: "2026-11-01", to: "2026-11-30" },
       "owner-user-1",
     );
 
-    expect(result).toEqual({ received: 1, inserted: 1 });
+    expect(result).toEqual({
+      received: 1,
+      inserted: 1,
+      snapshots: [{
+        id: "snapshot-1",
+        providerSettlementId: "3090024",
+        sourceSnapshotHash: "a".repeat(64),
+      }],
+    });
     const call = mocks.tx.providerSettlementSnapshot.createMany.mock.calls[0][0];
     expect(call.skipDuplicates).toBe(true);
     expect(call.data[0]).toMatchObject({
