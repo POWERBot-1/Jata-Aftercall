@@ -245,6 +245,16 @@ describe("Paystack webhook", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it("keeps unknown charge references retryable without consuming the event ID", async () => {
+    mocks.paymentFind.mockResolvedValue(null);
+    const response = await POST(request(payload));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Payment reference is not yet available; Paystack may retry." });
+    expect(mocks.webhookUpsert).not.toHaveBeenCalled();
+    expect(mocks.activate).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it("records a partial refund for manual review without marking the payment fully refunded", async () => {
     mocks.paymentFind.mockResolvedValue({
       id: "pay-a", reference: "jata-ref", userId: "user-a", businessId: "business-a",
