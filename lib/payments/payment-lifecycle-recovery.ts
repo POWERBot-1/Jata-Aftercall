@@ -4,6 +4,7 @@
  * Queue items are review work, not commands. This module never retries provider calls,
  * activates/suspends entitlements, changes payments, issues refunds, or posts ledger entries.
  */
+import { createHash } from "node:crypto";
 import type {
   PaymentEntitlementException,
   PaymentEntitlementFinding,
@@ -48,7 +49,7 @@ export function buildPaymentLifecycleRecoveryQueue(
       finding.entitlementId ?? null,
       finding.product ?? null,
     ];
-    const idempotencyKey = "payment-recovery:v1:" + encodeURIComponent(JSON.stringify(identity));
+    const idempotencyKey = "payment-recovery:v1:" + createHash("sha256").update(JSON.stringify(identity)).digest("hex");
     if (unique.has(idempotencyKey)) continue;
 
     unique.set(idempotencyKey, {
