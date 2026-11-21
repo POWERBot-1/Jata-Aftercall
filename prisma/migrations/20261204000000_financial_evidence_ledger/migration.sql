@@ -19,7 +19,6 @@ CREATE TABLE "ProviderSettlementSnapshot" (
   "sourcePerPage" INTEGER NOT NULL,
   "sourceFilter" JSONB,
   "sourceSnapshotHash" TEXT NOT NULL,
-  "fetchedByActorId" TEXT,
   "fetchedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ProviderSettlementSnapshot_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "ProviderSettlementSnapshot_status_check"
@@ -35,7 +34,7 @@ CREATE TABLE "ProviderSettlementSnapshot" (
     ),
   CONSTRAINT "ProviderSettlementSnapshot_source_check"
     CHECK (
-      "sourceEndpoint" = '/settlement' AND
+      "sourceEndpoint" IN ('/settlement', '/settlement/{id}/transactions') AND
       "sourcePage" BETWEEN 1 AND 10000 AND
       "sourcePerPage" BETWEEN 1 AND 100
     ),
@@ -61,8 +60,6 @@ CREATE TABLE "ProviderSettlementTransactionEvidence" (
   "providerFeeMinor" BIGINT,
   "paidAt" TIMESTAMP(3),
   "sourceRowHash" TEXT NOT NULL,
-  "sourcePage" INTEGER NOT NULL,
-  "sourcePerPage" INTEGER NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "ProviderSettlementTransactionEvidence_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "ProviderSettlementTransactionEvidence_snapshot_fkey"
@@ -77,8 +74,6 @@ CREATE TABLE "ProviderSettlementTransactionEvidence" (
     CHECK ("currency" IS NULL OR "currency" ~ '^[A-Z]{3}$'),
   CONSTRAINT "ProviderSettlementTransactionEvidence_sourceRowHash_check"
     CHECK ("sourceRowHash" ~ '^[a-f0-9]{64}$'),
-  CONSTRAINT "ProviderSettlementTransactionEvidence_source_check"
-    CHECK ("sourcePage" BETWEEN 1 AND 10000 AND "sourcePerPage" BETWEEN 1 AND 100),
   CONSTRAINT "ProviderSettlementTransactionEvidence_reference_check"
     CHECK ("paymentReference" IS NULL OR length("paymentReference") BETWEEN 1 AND 128)
 );
@@ -94,7 +89,6 @@ CREATE TABLE "BankStatementImportBatch" (
   "id" TEXT NOT NULL,
   "sourceFileSha256" TEXT NOT NULL,
   "schemaVersion" TEXT NOT NULL DEFAULT 'canonical-v1',
-  "importedByActorId" TEXT NOT NULL,
   "rowCount" INTEGER NOT NULL,
   "importedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "BankStatementImportBatch_pkey" PRIMARY KEY ("id"),
@@ -102,8 +96,6 @@ CREATE TABLE "BankStatementImportBatch" (
     CHECK ("sourceFileSha256" ~ '^[a-f0-9]{64}$'),
   CONSTRAINT "BankStatementImportBatch_schema_check"
     CHECK ("schemaVersion" = 'canonical-v1'),
-  CONSTRAINT "BankStatementImportBatch_actor_check"
-    CHECK (length("importedByActorId") BETWEEN 1 AND 128),
   CONSTRAINT "BankStatementImportBatch_rowCount_check"
     CHECK ("rowCount" BETWEEN 1 AND 10000)
 );
@@ -143,7 +135,7 @@ CREATE INDEX "BankStatementCreditEvidence_reference_currency_creditMinor_idx"
 CREATE INDEX "BankStatementCreditEvidence_bookingDate_idx"
   ON "BankStatementCreditEvidence"("bookingDate");
 
--- Database-level append-only protection for all four evidence tables.
+-- Provider snapshots and bank evidence are append-only at the database boundary.
 CREATE FUNCTION financial_evidence_append_only_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -155,28 +147,18 @@ $$;
 CREATE TRIGGER "ProviderSettlementSnapshot_append_only"
   BEFORE UPDATE OR DELETE ON "ProviderSettlementSnapshot"
   FOR EACH ROW EXECUTE FUNCTION financial_evidence_append_only_guard();
+
 CREATE TRIGGER "ProviderSettlementTransactionEvidence_append_only"
   BEFORE UPDATE OR DELETE ON "ProviderSettlementTransactionEvidence"
   FOR EACH ROW EXECUTE FUNCTION financial_evidence_append_only_guard();
+
 CREATE TRIGGER "BankStatementImportBatch_append_only"
   BEFORE UPDATE OR DELETE ON "BankStatementImportBatch"
   FOR EACH ROW EXECUTE FUNCTION financial_evidence_append_only_guard();
+
 CREATE TRIGGER "BankStatementCreditEvidence_append_only"
   BEFORE UPDATE OR DELETE ON "BankStatementCreditEvidence"
   FOR EACH ROW EXECUTE FUNCTION financial_evidence_append_only_guard();
 
-CREATE TRIGGER "ProviderSettlementSnapshot_no_truncate"
-  BEFORE TRUNCATE ON "ProviderSettlementSnapshot"
-  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
-CREATE TRIGGER "ProviderSettlementTransactionEvidence_no_truncate"
-  BEFORE TRUNCATE ON "ProviderSettlementTransactionEvidence"
-  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
-CREATE TRIGGER "BankStatementImportBatch_no_truncate"
-  BEFORE TRUNCATE ON "BankStatementImportBatch"
-  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
-CREATE TRIGGER "BankStatementCreditEvidence_no_truncate"
-  BEFORE TRUNCATE ON "BankStatementCreditEvidence"
-  FOR EACH STATEMENT EXECUTE FUNCTION financial_evidence_append_only_guard();
-
--- No automated rollback: these tables establish financial history. Any rollback requires
--- owner approval and a verified export/backup of every evidence row.
+-- Rollback is intentionally not automated. Any rollback requires an owner-approved backup,
+-- evidence export and explicit authorization because this migration establishes financial history.
