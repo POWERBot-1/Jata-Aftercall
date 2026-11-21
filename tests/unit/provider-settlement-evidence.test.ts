@@ -11,7 +11,7 @@ describe("providerSettlementEvidenceFields", () => {
     expect(fields.providerSettlementReference).toBe("jata_ref_123");
   });
 
-  it.each([undefined, null, "", "not-a-date", "x".repeat(65)])(
+  it.each([undefined, null, "", "   ", "not-a-date", "x".repeat(65)])(
     "omits settlement timestamp for absent or invalid provider time: %s",
     (providerConfirmedAt) => {
       expect(providerSettlementEvidenceFields({
