@@ -4974,6 +4974,7 @@ model ProviderSettlementSnapshot {
   sourcePerPage         Int
   sourceFilter          Json?
   sourceSnapshotHash    String   @unique
+  fetchedByActorId      String?
   fetchedAt             DateTime @default(now())
   transactions          ProviderSettlementTransactionEvidence[]
 
@@ -5008,6 +5009,7 @@ model BankStatementImportBatch {
   id                 String   @id @default(cuid())
   sourceFileSha256   String   @unique
   schemaVersion      String   @default("canonical-v1")
+  importedByActorId   String
   rowCount           Int
   importedAt         DateTime @default(now())
   credits            BankStatementCreditEvidence[]
