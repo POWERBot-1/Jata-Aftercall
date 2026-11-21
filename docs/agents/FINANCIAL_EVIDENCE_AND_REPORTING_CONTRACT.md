@@ -64,3 +64,8 @@ This does not complete fee/tax import, refund/chargeback reconciliation, bank-st
 ## Paystack dispute-event handling
 
 Signed Paystack charge dispute create, remind and resolve events are recorded against the stored payment reference. They set reconciliationStatus to REVIEW_REQUIRED and write a durable audit record in the same transaction as the processed-event claim. These events do not prove that a chargeback settled, do not populate settledChargebackMinor, do not mark a payment refunded, and do not automatically suspend a subscription. A finance operator must reconcile the provider dispute outcome and authoritative settlement evidence before changing financial balances or entitlements. Unknown references are acknowledged as ignored and audited; malformed references are rejected for provider retry.
+
+
+## Asynchronous refund currency control
+
+Provider refund settlement must match both the reserved refund amount in minor units and, when the provider supplies it, the reserved refund currency. A currency mismatch is recorded as UNCONFIRMED reconciliation evidence and leaves the refund in REQUESTED/PENDING_PROVIDER; it must not advance refunded totals, release the reservation, or change payment entitlement. Paystack refund webhooks now carry their provider-reported currency into the common refund resolver. Providers that do not include currency remain subject to amount matching and require independent reconciliation evidence for currency assurance.
