@@ -712,6 +712,10 @@ function createFallbackPrisma(): any {
     providerSettlementTransactionEvidence: emptyModel(),
     bankStatementImportBatch: emptyModel(),
     bankStatementCreditEvidence: emptyModel(),
+    // Product lifecycle execution ledger. Offline reads are empty and writes refuse.
+    productLifecycleExecutionRun: emptyModel(),
+    productLifecycleExecutionTask: emptyModel(),
+    productLifecycleExecutionEvent: emptyModel(),
   };
   return stub;
 }
