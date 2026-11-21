@@ -26,5 +26,5 @@ This module persists lifecycle work and its execution evidence. It is not an ent
 3. Concurrent claim test proving no duplicate claim under simultaneous worker transactions.
 4. Stale-token fencing after lease reclamation, exact lease-expiry boundary rejection, retry backoff and reclaim, attempt-limit dead-lettering, manual-review transition, run-finalization guard and enqueue-after-finalization rejection.
 5. Append-only trigger tests for UPDATE and DELETE. Synthetic event fixtures remain in the disposable database because the ledger intentionally rejects DELETE.
-5. Exact-head CI green, plus reconciliation of all repository-wide release blockers.
-6. Separate authorization for migration, worker route, scheduler and any future customer-access policy.
+6. Exact-head CI green, plus reconciliation of all repository-wide release blockers.
+7. Separate authorization for migration, worker route, scheduler and any future customer-access policy.
