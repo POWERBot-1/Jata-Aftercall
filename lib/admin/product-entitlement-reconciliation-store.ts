@@ -27,10 +27,8 @@ type EntitlementRow = {
 
 function corePlanProduct(key: string): ProductKey | null {
   const normalized = key.trim().toUpperCase();
-  if (["BUSINESS_PAGE", "BUSINESS_PAGE_MONTHLY", "BUSINESS_PAGE_ANNUAL"].includes(normalized)) return "BUSINESS_PAGE";
-  if (["AI_FRONT_DESK", "AI_BUSINESS_FRONT_DESK", "AI_FRONT_DESK_MONTHLY"].includes(normalized)) return "AI_FRONT_DESK";
-  // Website Studio intentionally remains excluded until its own subscription/entitlement
-  // provenance is confirmed from its dedicated workspace and billing schema.
+  if (normalized === "INTERACTIVE_BUSINESS") return "WEBSITE_STUDIO";
+  if (["AI_BUSINESS_FRONT_DESK", "AI_FRONT_DESK_STANDARD", "AI_FRONT_DESK_PRO", "AI_FRONT_DESK_VOICE"].includes(normalized)) return "AI_FRONT_DESK";
   return null;
 }
 
@@ -64,7 +62,7 @@ export async function loadProductEntitlementLifecycleReport() {
   ];
 
   const entitlements: EntitlementRow[] = [
-    ...interactive.map((row) => ({ product: "BUSINESS_PAGE" as const, businessId: row.businessId, id: row.id, status: row.status })),
+    ...interactive.map((row) => ({ product: "WEBSITE_STUDIO" as const, businessId: row.businessId, id: row.id, status: row.status })),
     ...ai.map((row) => ({ product: "AI_FRONT_DESK" as const, businessId: row.businessId, id: row.id, status: row.status })),
     ...posEnts.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, status: row.status })),
     ...autopilotEnts.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, status: row.status })),
@@ -119,5 +117,5 @@ export async function loadProductEntitlementLifecycleReport() {
     }
   }
 
-  return summarizeProductEntitlementLifecycle(evidence, ["WEBSITE_STUDIO", "LEGACY_ERP"]);
+  return summarizeProductEntitlementLifecycle(evidence, ["BUSINESS_PAGE", "LEGACY_ERP"]);
 }
