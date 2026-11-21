@@ -42,6 +42,8 @@ export async function loadSubscriptionPaymentLifecycleReport() {
             environment: true,
             reconciliationStatus: true,
             providerSettledAt: true,
+            providerSettlementReference: true,
+            currency: true,
             settledRefundMinor: true,
             settledChargebackMinor: true,
           },
