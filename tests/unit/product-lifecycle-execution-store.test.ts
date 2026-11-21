@@ -9,6 +9,7 @@ describe("transaction-backed product lifecycle persistence contract", () => {
   it("enqueues within a transaction and relies on the unique idempotency key", () => {
     expect(source).toContain("prisma.$transaction(async (tx");
     expect(source).toContain("createMany({ data: rows, skipDuplicates: true })");
+    expect(source).toContain("where: { runId, idempotencyKey: { in: rows.map");
     expect(source).toContain("lifecycleIdempotencyKey");
     expect(source).toContain("lockActiveRun(tx, runId)");
     expect(source).toContain('rows[0].status === "RUNNING"');
