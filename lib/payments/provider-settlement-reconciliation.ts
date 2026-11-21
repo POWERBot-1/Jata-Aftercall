@@ -52,6 +52,9 @@ export function validateProviderSettlementEvidence(
   input: ProviderSettlementEvidence,
 ): SettlementArithmeticResult {
   const settlementReference = reference(input.settlementReference);
+  if (typeof input.provider !== "string" || !/^[A-Z0-9_-]{2,40}$/i.test(input.provider.trim())) {
+    return { status: "INVALID", reason: "INVALID_REFERENCE" };
+  }
   if (!settlementReference) return { status: "INVALID", reason: "INVALID_REFERENCE" };
   if (!currencyCode(input.currency)) return { status: "INVALID", reason: "INVALID_CURRENCY" };
   if (!safeMinor(input.grossMinor) || !safeMinor(input.netMinor)) {
@@ -103,6 +106,7 @@ export function matchProviderSettlementToBankCredit(
   if (candidates.length === 0) return { status: "UNMATCHED", reason: "NO_BANK_CREDIT" };
 
   const bankCredit = candidates[0];
+  if (!reference(bankCredit.statementLineId)) return { status: "UNMATCHED", reason: "NO_BANK_CREDIT" };
   if (
     currencyCode(bankCredit.currency) !== currencyCode(settlement.currency) ||
     !safeMinor(bankCredit.creditMinor) ||
