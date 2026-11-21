@@ -156,7 +156,10 @@ export async function claimLifecycleTasks(input: {
   const leaseUntil = new Date(now.getTime() + leaseMs);
 
   return prisma.$transaction(async (tx: Tx) => {
-    if (!await lockActiveRun(tx, runId)) throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
+    const run = await tx.productLifecycleExecutionRun.findUnique({
+      where: { id: runId }, select: { id: true, status: true },
+    });
+    if (!run || run.status !== "RUNNING") throw new Error("LIFECYCLE_RUN_NOT_ACTIVE");
 
     // Exhausted work is moved to a terminal review queue with evidence, never silently discarded.
     const exhausted = await tx.$queryRaw`
