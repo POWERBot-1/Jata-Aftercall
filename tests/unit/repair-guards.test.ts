@@ -196,6 +196,14 @@ describe("runtime and schema guards", () => {
       // after every released migration so fresh-database order equals production application order.
       "20261202000000_mjengo_isolated_entitlements",
       "20261203000000_financial_evidence_contract",
+      // Financial evidence ledger: immutable provider settlement snapshots, paginated transaction
+      // evidence and canonical bank-statement credits. Additive tables/columns/indexes/constraints;
+      // historical applied migration checksum is preserved by a separate forward-only hardening migration.
+      "20261204000000_financial_evidence_ledger",
+      // Forward-only evidence hardening: actor attribution, source pagination provenance and
+      // append-only TRUNCATE guards. Nullable attribution fields and fail-closed checks preserve
+      // existing rows; no production financial records are rewritten.
+      "20261205000000_financial_evidence_ledger_hardening",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
