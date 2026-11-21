@@ -63,7 +63,21 @@ export async function readEvidenceGatedMrr(
   // PlanConfig.key is the authoritative product discriminator for the shared row.
   // Only MONTHLY and ANNUAL are Business Page; Front Desk and Website Studio are excluded.
   const sharedRows = await sharedDelegate.findMany({
-    select: { ...SUBSCRIPTION_SELECT, plan: { select: { key: true } } },
+    select: {
+      businessId: true,
+      planId: true,
+      status: true,
+      startAt: true,
+      expiresAt: true,
+      recurringAmountKES: true,
+      recurringDiscountKES: true,
+      recurringCurrency: true,
+      recurringIntervalDays: true,
+      recurringPriceEffectiveAt: true,
+      paymentId: true,
+      paymentReference: true,
+      plan: { select: { key: true } },
+    },
   });
   const sharedSubscriptions: RecurringSubscriptionEvidence[] = [];
   const sharedExclusions: RecurringRevenueResult["exclusions"] = [];
