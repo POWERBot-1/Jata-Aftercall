@@ -6,7 +6,8 @@ import {
 } from "@/lib/payments/recurring-revenue";
 
 const SUBSCRIPTION_SOURCES = [
-  ["subscription", "BUSINESS_PAGE"],
+  // The shared Subscription model also serves AI Front Desk tiers. Until a canonical,
+  // audited plan-key allowlist separates Business Page from Front Desk, omit it entirely.
   ["posSubscription", "BUSINESS_POS"],
   ["autopilotSubscription", "AUTOPILOT"],
   ["mjengoSubscription", "MJENGO_OS"],
