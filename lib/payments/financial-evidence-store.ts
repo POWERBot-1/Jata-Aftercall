@@ -24,7 +24,7 @@ function sha256(value: string): string {
 function safeActorId(value: string | undefined): string | null {
   if (typeof value !== "string") return null;
   const actorId = value.trim();
-  return actorId.length >= 1 && actorId.length <= 128 && !/[\\u0000-\\u001f\\u007f]/.test(actorId)
+  return actorId.length >= 1 && actorId.length <= 128 && !/[\u0000-\u001f\u007f]/.test(actorId)
     ? actorId
     : null;
 }
@@ -172,7 +172,7 @@ export async function persistPaystackSettlementTransactions(
       throw new Error("FINANCIAL_EVIDENCE_INVALID_TRANSACTION_ID");
     }
     if (record.reference !== null && (record.reference.length < 1 || record.reference.length > 128 ||
-        /[\\u0000-\\u001f\\u007f]/.test(record.reference))) {
+        /[\u0000-\u001f\u007f]/.test(record.reference))) {
       throw new Error("FINANCIAL_EVIDENCE_INVALID_PAYMENT_REFERENCE");
     }
     if (record.status !== null && (record.status.trim().length === 0 || record.status.length > 40)) {
