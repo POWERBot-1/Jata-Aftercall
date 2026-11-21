@@ -236,12 +236,12 @@ describe("Paystack webhook", () => {
     expect(mocks.subscriptionUpdateMany).not.toHaveBeenCalled();
   });
 
-  it("acknowledges an unknown refund reference without changing any payment", async () => {
+  it("keeps unknown refund references retryable without consuming the event ID", async () => {
     mocks.paymentFind.mockResolvedValue(null);
     const response = await POST(request(partialRefund));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: "ignored" });
-    expect(mocks.webhookUpsert).toHaveBeenCalledWith({ where: { id: "1234" }, update: {}, create: { id: "1234" } });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Refund payment reference is not yet available; Paystack may retry." });
+    expect(mocks.webhookUpsert).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
