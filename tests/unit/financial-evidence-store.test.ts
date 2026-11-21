@@ -199,8 +199,8 @@ describe("financial evidence persistence", () => {
 
   it("rejects control characters in importer identity before touching the database", async () => {
     await expect(importCanonicalBankStatement(
-      "statement_line_id,booking_date,reference,currency,credit_minor\\nline-1,2026-11-20,STL-001,KES,98500\\n",
-      "finance-user-1\\nforged",
+      "statement_line_id,booking_date,reference,currency,credit_minor\nline-1,2026-11-20,STL-001,KES,98500\n",
+      "finance-user-1\nforged",
     )).rejects.toThrow("FINANCIAL_EVIDENCE_ACTOR_REQUIRED");
     expect(mocks.prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -210,7 +210,7 @@ describe("financial evidence persistence", () => {
       records: [{
         provider: "PAYSTACK",
         providerTransactionId: "2067030515",
-        reference: "jata-ref-\\u0000-1",
+        reference: "jata-ref-\u0000-1",
         status: "success",
         amountMinor: 10_000,
         currency: "KES",
