@@ -82,7 +82,7 @@ describe("calculateEvidenceGatedMrr", () => {
     ["LIVE", "UNRECONCILED", "PAID", "LIVE", "PAYMENT_NOT_ELIGIBLE"],
     ["LIVE", "MATCHED", "PENDING", "LIVE", "PAYMENT_NOT_ELIGIBLE"],
     ["LIVE", "MATCHED", "PAID", "UNKNOWN", "PAYMENT_NOT_ELIGIBLE"],
-  ])("excludes non-eligible payment evidence", (environment, reconciliationStatus, status, _providerMode, reason) => {
+  ])("excludes non-eligible payment evidence", (environment, reconciliationStatus, status, _unused, reason) => {
     const result = calculateEvidenceGatedMrr(
       [subscription()],
       [payment({ environment, reconciliationStatus, status })],
@@ -136,6 +136,6 @@ describe("calculateEvidenceGatedMrr", () => {
       asOf,
     );
     expect(result.eligibleSubscriptions).toBe(0);
-    expect(result.exclusions[0].reason).toBe("PAYMENT_CURRENCY_MISMATCH");
+    expect(result.exclusions[0].reason).toBe("UNSUPPORTED_CURRENCY");
   });
 });
