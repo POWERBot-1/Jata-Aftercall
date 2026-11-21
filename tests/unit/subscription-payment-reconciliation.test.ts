@@ -25,8 +25,8 @@ const row = (overrides: Partial<SubscriptionPaymentEvidence> = {}): Subscription
     providerSettledAt: new Date("2026-11-22T10:00:00.000Z"),
     providerSettlementReference: "ref-1",
     currency: "KES",
-    settledRefundMinor: 0n,
-    settledChargebackMinor: 0n,
+    settledRefundMinor: BigInt(0),
+    settledChargebackMinor: BigInt(0),
   },
   ...overrides,
 });
@@ -81,8 +81,8 @@ describe("subscription/payment reconciliation inventory", () => {
 
   it("flags active subscriptions whose linked payment has settled refunds or chargebacks", () => {
     const report = summarizeSubscriptionPaymentLifecycle([
-      row({ payment: { ...row().payment!, settledRefundMinor: 100n } }),
-      row({ subscriptionId: "sub-chargeback", payment: { ...row().payment!, settledChargebackMinor: 50n } }),
+      row({ payment: { ...row().payment!, settledRefundMinor: 10BigInt(0) } }),
+      row({ subscriptionId: "sub-chargeback", payment: { ...row().payment!, settledChargebackMinor: 5BigInt(0) } }),
     ]);
     expect(report.counts.ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK).toBe(2);
   });
