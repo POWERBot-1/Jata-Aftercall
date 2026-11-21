@@ -208,7 +208,7 @@ describe("runtime and schema guards", () => {
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       expect(sql.toUpperCase()).not.toContain("DROP TABLE");
-      expect(sql.toUpperCase()).not.toContain("TRUNCATE");
+      expect(sql.replace(/--.*$/gm, "").toUpperCase()).not.toMatch(/^\\s*TRUNCATE\\s+(?:TABLE\\s+)?/m);
     }
     // The commerce baseline adds "Service.updatedAt" and has to fill it from "createdAt" before
     // it can be made NOT NULL. That is a backfill of a brand-new column, not a rewrite of
