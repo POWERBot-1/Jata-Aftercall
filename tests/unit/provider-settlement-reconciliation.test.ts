@@ -51,6 +51,13 @@ describe("validateProviderSettlementEvidence", () => {
     });
   });
 
+  it("rejects an invalid provider identity", () => {
+    expect(validateProviderSettlementEvidence({ ...settlement, provider: " " })).toEqual({
+      status: "INVALID",
+      reason: "INVALID_PROVIDER",
+    });
+  });
+
   it("rejects unsafe and negative monetary values", () => {
     expect(validateProviderSettlementEvidence({ ...settlement, feeMinor: -1 })).toEqual({
       status: "INVALID",
