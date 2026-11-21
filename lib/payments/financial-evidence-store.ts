@@ -226,37 +226,53 @@ export async function importCanonicalBankStatement(
   const sourceFileSha256 = sha256(csvText);
   const credits = parsed.rows as CanonicalBankCredit[];
 
-  return prisma.$transaction(async (tx: any) => {
-    const existing = await tx.bankStatementImportBatch.findUnique({
-      where: { sourceFileSha256 },
-      select: { id: true, rowCount: true },
-    });
-    if (existing) {
-      if (existing.rowCount !== credits.length) {
-        throw new Error("FINANCIAL_EVIDENCE_IMPORT_HASH_CONFLICT");
+  try {
+    return await prisma.$transaction(async (tx: any) => {
+      const existing = await tx.bankStatementImportBatch.findUnique({
+        where: { sourceFileSha256 },
+        select: { id: true, rowCount: true },
+      });
+      if (existing) {
+        if (existing.rowCount !== credits.length) {
+          throw new Error("FINANCIAL_EVIDENCE_IMPORT_HASH_CONFLICT");
+        }
+        return { importBatchId: existing.id, rowCount: existing.rowCount, inserted: false };
       }
-      return { importBatchId: existing.id, rowCount: existing.rowCount, inserted: false };
-    }
 
-    const batch = await tx.bankStatementImportBatch.create({
-      data: {
-        sourceFileSha256,
-        schemaVersion: "canonical-v1",
-        importedByActorId: actorId,
-        rowCount: credits.length,
-      },
-      select: { id: true },
+      const batch = await tx.bankStatementImportBatch.create({
+        data: {
+          sourceFileSha256,
+          schemaVersion: "canonical-v1",
+          importedByActorId: actorId,
+          rowCount: credits.length,
+        },
+        select: { id: true },
+      });
+      await tx.bankStatementCreditEvidence.createMany({
+        data: credits.map((credit) => ({
+          importBatchId: batch.id,
+          statementLineId: credit.statementLineId,
+          bookingDate: new Date(credit.bookingDate),
+          reference: credit.reference,
+          currency: credit.currency,
+          creditMinor: BigInt(credit.creditMinor),
+        })),
+      });
+      return { importBatchId: batch.id, rowCount: credits.length, inserted: true };
     });
-    await tx.bankStatementCreditEvidence.createMany({
-      data: credits.map((credit) => ({
-        importBatchId: batch.id,
-        statementLineId: credit.statementLineId,
-        bookingDate: new Date(credit.bookingDate),
-        reference: credit.reference,
-        currency: credit.currency,
-        creditMinor: BigInt(credit.creditMinor),
-      })),
-    });
-    return { importBatchId: batch.id, rowCount: credits.length, inserted: true };
-  });
+  } catch (error) {
+    // A concurrent import of the same digest may win the unique-key race. Re-read only after
+    // the failed transaction has rolled back; never attempt to update the existing evidence.
+    if (typeof error === "object" && error !== null && "code" in error &&
+        (error as { code?: unknown }).code === "P2002") {
+      const existing = await prisma.bankStatementImportBatch.findUnique({
+        where: { sourceFileSha256 },
+        select: { id: true, rowCount: true },
+      });
+      if (existing && existing.rowCount === credits.length) {
+        return { importBatchId: existing.id, rowCount: existing.rowCount, inserted: false };
+      }
+    }
+    throw error;
+  }
 }
