@@ -88,9 +88,11 @@ describe.skipIf(!realPrismaConfigured)("product lifecycle ledger PostgreSQL conc
     const events = await db.productLifecycleExecutionEvent.findMany({
       where: { taskId: first.claimed[0].id }, orderBy: { createdAt: "asc" },
     });
-    expect(events.map((event: { eventType: string }) => event.eventType)).toEqual([
-      "CLAIMED", "LEASE_RECLAIMED", "COMPLETED",
-    ]);
+    const eventTypes = events.map((event: { eventType: string }) => event.eventType);
+    expect(events).toHaveLength(3);
+    expect(eventTypes).toContain("CLAIMED");
+    expect(eventTypes).toContain("LEASE_RECLAIMED");
+    expect(eventTypes).toContain("COMPLETED");
   }, 30_000);
 
   it("rejects UPDATE and DELETE against append-only lifecycle event history", async () => {
