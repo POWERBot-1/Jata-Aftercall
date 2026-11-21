@@ -97,3 +97,23 @@ export function summarizePersistedFinancialEvidence(
     scope: "EVIDENCE_INVENTORY_ONLY",
   };
 }
+
+import prisma from "@/lib/db";
+
+/** Read the three persisted evidence sources. Query failure rejects the report (no partial totals). */
+export async function readPersistedFinancialEvidenceSummary(client: any = prisma) {
+  const [snapshots, transactions, bankCredits] = await Promise.all([
+    client.providerSettlementSnapshot.findMany({
+      select: { id: true, provider: true, providerSettlementId: true, status: true, currency: true,
+        grossProcessedMinor: true, providerFeeMinor: true, effectiveNetMinor: true, deductionsMinor: true,
+        sourceSnapshotHash: true },
+    }),
+    client.providerSettlementTransactionEvidence.findMany({
+      select: { snapshotId: true, paymentReference: true, status: true },
+    }),
+    client.bankStatementCreditEvidence.findMany({
+      select: { reference: true, currency: true, creditMinor: true },
+    }),
+  ]);
+  return summarizePersistedFinancialEvidence(snapshots, transactions, bankCredits);
+}
