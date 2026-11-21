@@ -161,7 +161,7 @@ describe("financial evidence persistence", () => {
       currency: "KES",
       creditMinor: 98_500n,
     })]);
-    expect(JSON.stringify(credits)).not.toContain(csv);
+    expect(JSON.stringify(credits, (_key, value) => typeof value === "bigint" ? value.toString() : value)).not.toContain(csv);
   });
 
   it("returns an existing batch without duplicating credits when the file digest repeats", async () => {
