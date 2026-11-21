@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { paymentRecoveryRetryDelayMs } from "@/lib/payments/payment-recovery-queue";
+import { paymentRecoveryRetryDelayMs } from "@/lib/payments/payment-recovery-policy";
 
 describe("durable payment recovery queue retry policy", () => {
   it("uses bounded exponential backoff", () => {
