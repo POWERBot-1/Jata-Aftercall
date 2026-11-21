@@ -69,3 +69,8 @@ Signed Paystack charge dispute create, remind and resolve events are recorded ag
 ## Asynchronous refund currency control
 
 Provider refund settlement must match both the reserved refund amount in minor units and, when the provider supplies it, the reserved refund currency. A currency mismatch is recorded as UNCONFIRMED reconciliation evidence and leaves the refund in REQUESTED/PENDING_PROVIDER; it must not advance refunded totals, release the reservation, or change payment entitlement. Paystack refund webhooks now carry their provider-reported currency into the common refund resolver. Providers that do not include currency remain subject to amount matching and require independent reconciliation evidence for currency assurance.
+
+
+## Provider fee evidence (Paystack)
+
+For authenticated Paystack `charge.success` events and successful transaction verification responses, JATA captures Paystack's explicit `fees` integer as `providerFeeMinor` in the sanitized immutable payment-event payload. The value is accepted only as a non-negative safe integer in provider minor units. Missing, malformed, negative, fractional or unsafe values remain unknown; an explicit numeric zero remains a valid provider-reported value. This is evidence capture, not a fee ledger or a bank-settlement assertion. Paystack's `fees` field is not split into tax unless the provider supplies a separately authoritative tax field with documented semantics. JATA must not infer tax from the fee, a percentage, gross amount or net amount. The current implementation does not yet post fee/tax journal entries or reconcile Paystack net settlements against bank statements.
