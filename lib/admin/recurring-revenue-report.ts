@@ -53,7 +53,7 @@ const PAYMENT_SELECT = {
  * report so the admin surface can render Unavailable rather than a partial total.
  */
 export async function readEvidenceGatedMrr(
-  client: Record<string, any>,
+  client: any,
   asOf: Date = new Date(),
 ): Promise<RecurringRevenueResult> {
   const sourceRows = await Promise.all(SUBSCRIPTION_SOURCES.map(async ([model, product]) => {
