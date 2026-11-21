@@ -63,10 +63,17 @@ function canonicalJson(value: unknown): string {
 }
 
 function normalizeFilters(filters: PaystackSettlementQuery) {
+  const from = filters.from ?? null;
+  const to = filters.to ?? null;
+  if ((from && !Number.isFinite(new Date(from).getTime())) ||
+      (to && !Number.isFinite(new Date(to).getTime())) ||
+      (from && to && new Date(from).getTime() > new Date(to).getTime())) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_DATE_FILTER");
+  }
   return {
     status: filters.status ?? null,
-    from: filters.from ?? null,
-    to: filters.to ?? null,
+    from,
+    to,
   };
 }
 
@@ -86,6 +93,9 @@ export async function persistPaystackSettlementSummaries(
   fetchedByActorId?: string,
 ): Promise<PersistedSettlementPageResult> {
   const actorId = safeActorId(fetchedByActorId);
+  if (fetchedByActorId !== undefined && !actorId) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_FETCH_ACTOR");
+  }
   assertPageMeta(page);
   if (filters.status && !["success", "processing", "pending", "failed"].includes(filters.status)) {
     throw new Error("FINANCIAL_EVIDENCE_INVALID_STATUS");
@@ -155,6 +165,9 @@ export async function persistPaystackSettlementTransactions(
 
   const data = page.records.map((record) => {
     if (record.provider !== "PAYSTACK") throw new Error("FINANCIAL_EVIDENCE_INVALID_PROVIDER");
+    if (!record.providerTransactionId && !record.reference) {
+      throw new Error("FINANCIAL_EVIDENCE_MISSING_TRANSACTION_IDENTITY");
+    }
     if (record.providerTransactionId !== null && !/^[0-9]{1,20}$/.test(record.providerTransactionId)) {
       throw new Error("FINANCIAL_EVIDENCE_INVALID_TRANSACTION_ID");
     }
@@ -162,7 +175,7 @@ export async function persistPaystackSettlementTransactions(
         /[\\u0000-\\u001f\\u007f]/.test(record.reference))) {
       throw new Error("FINANCIAL_EVIDENCE_INVALID_PAYMENT_REFERENCE");
     }
-    if (record.status !== null && record.status.length > 40) {
+    if (record.status !== null && (record.status.trim().length === 0 || record.status.length > 40)) {
       throw new Error("FINANCIAL_EVIDENCE_INVALID_TRANSACTION_STATUS");
     }
     assertMinor(record.amountMinor, "transaction_amount");
