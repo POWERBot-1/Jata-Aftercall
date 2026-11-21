@@ -4994,6 +4994,8 @@ model ProviderSettlementTransactionEvidence {
   providerFeeMinor      BigInt?
   paidAt                DateTime?
   sourceRowHash         String
+  sourcePage            Int
+  sourcePerPage         Int
   createdAt             DateTime @default(now())
 
   @@unique([snapshotId, sourceRowHash])
