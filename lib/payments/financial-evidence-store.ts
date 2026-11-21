@@ -75,12 +75,16 @@ export type PersistedPageResult = {
   inserted: number;
 };
 
+export type PersistedSettlementPageResult = PersistedPageResult & {
+  snapshots: Array<{ id: string; providerSettlementId: string; sourceSnapshotHash: string }>;
+};
+
 /** Persist normalized settlement summaries only. Duplicate source snapshots are idempotently skipped. */
 export async function persistPaystackSettlementSummaries(
   page: PaystackSettlementPage<PaystackSettlementRecord>,
   filters: PaystackSettlementQuery = {},
   fetchedByActorId?: string,
-): Promise<PersistedPageResult> {
+): Promise<PersistedSettlementPageResult> {
   const actorId = safeActorId(fetchedByActorId);
   assertPageMeta(page);
   if (filters.status && !["success", "processing", "pending", "failed"].includes(filters.status)) {
@@ -126,11 +130,16 @@ export async function persistPaystackSettlementSummaries(
     };
   });
 
-  if (data.length === 0) return { received: 0, inserted: 0 };
-  const result = await prisma.$transaction((tx: any) =>
-    tx.providerSettlementSnapshot.createMany({ data, skipDuplicates: true }),
-  );
-  return { received: data.length, inserted: result.count };
+  if (data.length === 0) return { received: 0, inserted: 0, snapshots: [] };
+  const result = await prisma.$transaction(async (tx: any) => {
+    const inserted = await tx.providerSettlementSnapshot.createMany({ data, skipDuplicates: true });
+    const snapshots = await tx.providerSettlementSnapshot.findMany({
+      where: { sourceSnapshotHash: { in: data.map((row) => row.sourceSnapshotHash) } },
+      select: { id: true, providerSettlementId: true, sourceSnapshotHash: true },
+    });
+    return { inserted: inserted.count, snapshots };
+  });
+  return { received: data.length, inserted: result.inserted, snapshots: result.snapshots };
 }
 
 /** Attach one normalized transaction page to the exact persisted settlement snapshot. */
