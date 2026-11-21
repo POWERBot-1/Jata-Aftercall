@@ -81,8 +81,8 @@ describe("subscription/payment reconciliation inventory", () => {
 
   it("flags active subscriptions whose linked payment has settled refunds or chargebacks", () => {
     const report = summarizeSubscriptionPaymentLifecycle([
-      row({ payment: { ...row().payment!, settledRefundMinor: 10BigInt(0) } }),
-      row({ subscriptionId: "sub-chargeback", payment: { ...row().payment!, settledChargebackMinor: 5BigInt(0) } }),
+      row({ payment: { ...row().payment!, settledRefundMinor: BigInt(10) } }),
+      row({ subscriptionId: "sub-chargeback", payment: { ...row().payment!, settledChargebackMinor: BigInt(5) } }),
     ]);
     expect(report.counts.ACTIVE_SUBSCRIPTION_WITH_REFUND_OR_CHARGEBACK).toBe(2);
   });
