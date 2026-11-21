@@ -60,6 +60,14 @@ describe("product entitlement reconciliation", () => {
     expect(report.counts.PAYMENT_TENANT_OR_OWNER_MISMATCH).toBe(1);
   });
 
+  it("fails closed when payment tenant or owner identity is missing", () => {
+    const report = summarizeProductEntitlementLifecycle([
+      row({ paymentBusinessId: null }),
+      row({ businessId: "biz-2", paymentUserId: null }),
+    ]);
+    expect(report.counts.PAYMENT_TENANT_OR_OWNER_MISMATCH).toBe(2);
+  });
+
   it("rejects duplicate product/business lifecycle rows", () => {
     const report = summarizeProductEntitlementLifecycle([row(), row()]);
     expect(report.counts.DUPLICATE_PRODUCT_LIFECYCLE).toBe(1);
