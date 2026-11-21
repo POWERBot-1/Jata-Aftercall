@@ -49,6 +49,12 @@ describe("product entitlement reconciliation", () => {
     expect(report.counts.ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT).toBe(1);
   });
 
+  it("detects dangling payment references separately from unpaid payments", () => {
+    const report = summarizeProductEntitlementLifecycle([row({ paymentStatus: null })]);
+    expect(report.counts.LINKED_PAYMENT_RECORD_NOT_FOUND).toBe(1);
+    expect(report.counts.ACTIVE_SUBSCRIPTION_WITHOUT_PAID_PAYMENT).toBe(1);
+  });
+
   it("detects payment tenant and owner mismatch", () => {
     const report = summarizeProductEntitlementLifecycle([row({ paymentBusinessId: "biz-other" })]);
     expect(report.counts.PAYMENT_TENANT_OR_OWNER_MISMATCH).toBe(1);
