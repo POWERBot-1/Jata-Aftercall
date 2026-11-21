@@ -77,7 +77,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U jata_ci -d postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -654,3 +654,105 @@ jobs:
             /tmp/d2-*.err
           if-no-files-found: warn
           retention-days: 14
+
+
+  # Full logical backup/restore acceptance is separate from migration rollback:
+  # it proves that schema, data and the migration ledger survive a real dump/restore.
+  # This job uses only its own disposable PostgreSQL 18 service.
+  backup-restore:
+    name: "Full logical backup/restore on disposable PostgreSQL 18"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: jata_ci
+          POSTGRES_PASSWORD: jata_ci_pw
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CI: "true"
+      AUTH_SECRET: disposable-backup-restore-only-secret
+      DATABASE_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recovery?schema=public
+      DIRECT_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/jata_recovery?schema=public
+      PG_ADMIN_URL: postgresql://jata_ci:jata_ci_pw@localhost:5432/postgres
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || inputs.candidate_commit }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          path: candidate
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - name: Prepare PostgreSQL 18 client wrappers
+        run: |
+          set -euo pipefail
+          docker pull postgres:18
+          for tool in psql pg_dump pg_restore; do
+            cat > "$RUNNER_TEMP/$tool" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          tool="$(basename "$0")"
+          exec docker run --rm --network host -v "$RUNNER_TEMP:$RUNNER_TEMP" postgres:18 "$tool" "$@"
+          SH
+            chmod +x "$RUNNER_TEMP/$tool"
+          done
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pg_dump" --version
+          "$RUNNER_TEMP/pg_restore" --version
+      - name: Install candidate dependencies and generate Prisma Client
+        run: |
+          set -euo pipefail
+          cd candidate
+          npm ci
+          test -f node_modules/.prisma/client/index.js
+      - name: Create disposable database and apply candidate migrations
+        run: |
+          set -euo pipefail
+          cd candidate
+          psql "$PG_ADMIN_URL" -X -v ON_ERROR_STOP=1 -q -c 'CREATE DATABASE "jata_recovery"'
+          bash scripts/lib/prisma-cli.sh migrate deploy
+      - name: Generate and mask ephemeral fixture password
+        run: |
+          set -euo pipefail
+          fixture_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+          echo "::add-mask::$fixture_password"
+          printf 'DEMO_FIXTURE_PASSWORD=%s\n' "$fixture_password" >> "$GITHUB_ENV"
+      - name: Seed only synthetic records
+        env:
+          JATA_ALLOW_FIXTURE_SEED: "true"
+        run: |
+          set -euo pipefail
+          cd candidate
+          npm run seed
+      - name: Rehearse complete backup and restore
+        run: |
+          set -euo pipefail
+          cd candidate
+          bash scripts/ci/rehearse-disposable-backup-restore.sh
+      - name: Publish non-sensitive recovery verdict
+        if: always()
+        run: |
+          {
+            echo "### Disposable PostgreSQL 18 backup/restore"
+            echo
+            if [ -f "$RUNNER_TEMP/jata-source-counts.txt" ] && [ -f "$RUNNER_TEMP/jata-restored-counts.txt" ]; then
+              echo "Source and restored row-count manifests were captured."
+              echo "Source tables: $(wc -l < "$RUNNER_TEMP/jata-source-counts.txt")"
+              echo "Restored tables: $(wc -l < "$RUNNER_TEMP/jata-restored-counts.txt")"
+            else
+              echo "The rehearsal did not reach row-count comparison."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -47,6 +47,14 @@ const DECLARED_CAPABILITIES: ProviderCapability[] = [
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
+/**
+ * Paystack reports transaction fees in the transaction currency's minor units.
+ * Missing, malformed or negative values remain unknown; never coerce them to zero.
+ */
+export function readPaystackFeeMinor(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 function secret(config: PaystackConnectorConfig): string {
   if (!config.secretKey) throw new Error("PAYSTACK_NOT_CONFIGURED");
   return config.secretKey;
@@ -113,8 +121,9 @@ export async function verifyPaystackReference(reference: string, ctx: AdapterCon
     const status = typeof data.status === "string" ? data.status : "";
     const amountMinor = typeof data.amount === "number" && Number.isSafeInteger(data.amount) ? data.amount : null;
     const currency = typeof data.currency === "string" ? data.currency : null;
+    const providerFeeMinor = readPaystackFeeMinor(data.fees);
     const providerTransactionId = data.id == null ? null : String(data.id);
-    if (status === "success") return { status: "CONFIRMED", amountMinor, currency, providerTransactionId, message: null };
+    if (status === "success") return { status: "CONFIRMED", amountMinor, currency, providerTransactionId, providerFeeMinor, message: null };
     if (["failed", "abandoned", "reversed"].includes(status)) {
       return { status: "FAILED", amountMinor, currency, providerTransactionId, message: typeof data.gateway_response === "string" ? data.gateway_response : null };
     }
@@ -282,12 +291,15 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
       const providerTransactionId = data.id == null ? null : String(data.id);
       const amountMinor = typeof data.amount === "number" && Number.isSafeInteger(data.amount) ? data.amount : null;
       const currency = typeof data.currency === "string" ? data.currency : "KES";
+      const providerFeeMinor = typeof data.fees === "number" && Number.isSafeInteger(data.fees) && data.fees >= 0 ? data.fees : null;
       const sanitized: Record<string, unknown> = {
         type: eventType,
         reference: reference || null,
         providerTransactionId,
         amountMinor,
         currency,
+        providerFeeMinor,
+        providerFeeEvidence: providerFeeMinor === null ? "NOT_SUPPLIED" : "PAYSTACK_TRANSACTION_FEES",
         status: typeof data.status === "string" ? data.status : null,
         channel: typeof data.channel === "string" ? data.channel : null,
       };
@@ -325,6 +337,7 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
             providerTransactionId: verified.providerTransactionId ?? providerTransactionId,
             amountMinor: verified.amountMinor ?? amountMinor,
             currency: verified.currency ?? currency,
+            providerFeeMinor: verified.providerFeeMinor ?? providerFeeMinor,
             destination: { kind: "PAYSTACK", providerDestinationId: null, providerAccountRef: null },
             method: "PAYSTACK_CHECKOUT",
             customerName: null,
@@ -339,6 +352,7 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
           providerTransactionId,
           amountMinor,
           currency,
+          providerFeeMinor,
           destination: { kind: "PAYSTACK", providerDestinationId: null, providerAccountRef: null },
           method: "PAYSTACK_CHECKOUT",
           customerName: null,
@@ -364,6 +378,7 @@ export function createPaystackAdapter(): PaymentProviderAdapter {
           providerReference: refundId,
           providerTransactionId: typeof data.transaction_reference === "string" ? data.transaction_reference : null,
           amountMinor: amountMinor ?? 0,
+          currency: typeof data.currency === "string" ? data.currency : null,
           reason: "Paystack refund processed",
           sanitized,
         };

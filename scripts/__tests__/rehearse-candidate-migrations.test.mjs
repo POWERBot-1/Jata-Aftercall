@@ -83,6 +83,12 @@ test("the additive media and recovery migration fixtures are recognised as addit
   assert.deepEqual(scanForDestructiveStatements(ADDITIVE_RESET), []);
 });
 
+test("a BEFORE TRUNCATE trigger is protection, not a destructive TRUNCATE statement", () => {
+  const trigger = 'CREATE TRIGGER "evidence_no_truncate" BEFORE TRUNCATE ON "Evidence" FOR EACH STATEMENT EXECUTE FUNCTION guard();';
+  assert.deepEqual(scanForDestructiveStatements(trigger), []);
+  assert.deepEqual(scanForDestructiveStatements('TRUNCATE TABLE "Evidence";'), ['TRUNCATE: TRUNCATE TABLE "Evidence"']);
+});
+
 test("a cascading foreign key is not mistaken for a DELETE statement", () => {
   // The single most likely false positive: ON DELETE CASCADE is part of a
   // constraint, not a data-removing statement.

@@ -98,19 +98,48 @@ export type PaystackConnectorConfig = {
   missing: string[];
 };
 
+/** Select the provider credential by deployment, not by the shared legacy env var. */
+export function getPaystackSecretKey(): string {
+  return envValue(envValue("VERCEL_ENV").toLowerCase() === "preview" ? "PAYSTACK_TEST_SECRET_KEY" : "PAYSTACK_SECRET_KEY");
+}
+
+export function getPaystackPublicKey(): string {
+  return envValue(envValue("VERCEL_ENV").toLowerCase() === "preview" ? "PAYSTACK_TEST_PUBLIC_KEY" : "PAYSTACK_PUBLIC_KEY");
+}
+
 export function readPaystackConfig(): PaystackConnectorConfig {
-  const secretKey = envValue("PAYSTACK_SECRET_KEY");
-  const publicKey = envValue("PAYSTACK_PUBLIC_KEY");
-  const mode: PaystackConnectorConfig["mode"] = !secretKey ? "NONE" : secretKey.startsWith("sk_live_") ? "LIVE" : "TEST";
+  // Never let a Preview deployment inherit the shared production/live key. Preview has a
+  // dedicated test-key namespace; production continues to use the existing production keys.
+  const deployment = envValue("VERCEL_ENV").toLowerCase();
+  const preview = deployment === "preview";
+  const requiredMode: "TEST" | "LIVE" | null = preview ? "TEST" : deployment === "production" ? "LIVE" : null;
+  const secretKey = getPaystackSecretKey();
+  const publicKey = getPaystackPublicKey();
+  const secretMode: PaystackConnectorConfig["mode"] = secretKey.startsWith("sk_live_")
+    ? "LIVE"
+    : secretKey.startsWith("sk_test_")
+      ? "TEST"
+      : "NONE";
+  const publicMode = publicKey.startsWith("pk_live_")
+    ? "LIVE"
+    : publicKey.startsWith("pk_test_")
+      ? "TEST"
+      : "NONE";
+  const keyPairMismatch = Boolean(secretKey && publicKey) && (secretMode === "NONE" || publicMode !== secretMode);
+  const deploymentMismatch = requiredMode !== null && secretMode !== requiredMode;
+  const mode: PaystackConnectorConfig["mode"] = keyPairMismatch || deploymentMismatch ? "NONE" : secretMode;
   const missing: string[] = [];
-  if (!secretKey) missing.push("PAYSTACK_SECRET_KEY");
+  if (!secretKey) missing.push(preview ? "PAYSTACK_TEST_SECRET_KEY" : "PAYSTACK_SECRET_KEY");
+  else if (secretMode === "NONE") missing.push(preview ? "PAYSTACK_TEST_SECRET_KEY_PREFIX" : "PAYSTACK_SECRET_KEY_PREFIX");
+  if (deploymentMismatch && secretKey) missing.push(preview ? "PAYSTACK_TEST_SECRET_KEY_REQUIRED" : "PAYSTACK_LIVE_SECRET_KEY_REQUIRED");
+  if (keyPairMismatch) missing.push("PAYSTACK_KEY_MODE_MISMATCH");
   return {
     secretKey,
     publicKey,
     mode,
     // Paystack signs every event with the same secret; no separate webhook secret exists.
-    webhookConfigured: Boolean(secretKey),
-    ready: Boolean(secretKey),
+    webhookConfigured: mode !== "NONE",
+    ready: mode !== "NONE",
     missing,
   };
 }

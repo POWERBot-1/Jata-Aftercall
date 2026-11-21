@@ -644,6 +644,10 @@ function createFallbackPrisma(): any {
     erpConfiguration: emptyModel(),
     erpSubscription: emptyModel(),
     erpEntitlement: emptyModel(),
+    erpProSubscription: emptyModel(),
+    erpProEntitlement: emptyModel(),
+    mjengoSubscription: emptyModel(),
+    mjengoEntitlement: emptyModel(),
     erpSequence: emptyModel(),
     erpAuditEvent: emptyModel(),
     erpIdempotencyRecord: emptyModel(),
@@ -704,6 +708,10 @@ function createFallbackPrisma(): any {
     loyaltyReward: emptyModel(),
     loyaltyRewardRedemption: emptyModel(),
     businessHubActivity: emptyModel(),
+    providerSettlementSnapshot: emptyModel(),
+    providerSettlementTransactionEvidence: emptyModel(),
+    bankStatementImportBatch: emptyModel(),
+    bankStatementCreditEvidence: emptyModel(),
   };
   return stub;
 }

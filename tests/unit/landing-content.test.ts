@@ -243,7 +243,7 @@ describe("the owner-only POS stays owner-only", () => {
 
   it("is still gated by the existing server-side sign-in redirect", () => {
     const route = readFileSync(path.join(root, "app/dashboard/pos/page.tsx"), "utf8");
-    expect(route).toContain('if (!session) redirect("/login")');
+    expect(route).toContain("if (!session) await redirectToDashboardLogin();");
     expect(route).toContain("getOwnedBusinessIds");
   });
 
@@ -277,7 +277,7 @@ describe("the owner-only JATA Autopilot stays owner-only", () => {
 
   it("is still gated by the existing server-side sign-in redirect", () => {
     const route = readFileSync(path.join(root, "app/dashboard/autopilot/page.tsx"), "utf8");
-    expect(route).toContain('if (!session) redirect("/login")');
+    expect(route).toContain("if (!session) await redirectToDashboardLogin();");
   });
 
   it("keeps the card copy inside verified capability and separate from the page plans", () => {

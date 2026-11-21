@@ -277,7 +277,7 @@ export const CANDIDATE_EXPECTATIONS = [
 // accepted a DROP would be worthless.
 const DESTRUCTIVE = [
   { label: "DROP", pattern: /\bDROP\s+(TABLE|COLUMN|CONSTRAINT|INDEX|SCHEMA|TYPE|EXTENSION)\b/i },
-  { label: "TRUNCATE", pattern: /\bTRUNCATE\b/i },
+  { label: "TRUNCATE", pattern: /^\s*TRUNCATE\s+(?:TABLE\s+)?/i },
   { label: "UPDATE", pattern: /^\s*UPDATE\s/i },
   { label: "DELETE FROM", pattern: /^\s*DELETE\s+FROM\s/i },
   { label: "ALTER COLUMN TYPE", pattern: /\bALTER\s+COLUMN\b[^;]*\bTYPE\b/i },

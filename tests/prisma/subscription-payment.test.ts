@@ -65,7 +65,13 @@ describe.skipIf(!realPrismaConfigured)("real Prisma: subscription payments", () 
     const res = await webhook(signedWebhook("charge.success", { reference, id: 7001, amount: payment.amount, currency: "KES", status: "success" }));
     expect(res.status).toBe(200);
     expect((await p.payment.findUnique({ where: { id: payment.id }, select: { status: true } }))?.status).toBe("PAID");
-    expect((await p.subscription.findUnique({ where: { businessId: biz.id }, select: { status: true } }))?.status).toBeTruthy();
+    const subscription = await p.subscription.findUnique({
+      where: { businessId: biz.id },
+      select: { status: true, paymentId: true, paymentReference: true },
+    });
+    expect(subscription?.status).toBeTruthy();
+    expect(subscription?.paymentId).toBe(payment.id);
+    expect(subscription?.paymentReference).toBe(reference);
   });
 
   it("a verified charge.success after charge.failed settles the payment and activates the subscription", async () => {

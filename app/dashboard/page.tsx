@@ -4,9 +4,9 @@ import { getBusinessMetrics, EMPTY_METRICS } from "@/lib/analytics";
 import { getBusinessUrl } from "@/lib/url";
 import DashboardClient from "@/components/DashboardClient";
 import { ensureReferralCode, referralLink } from "@/lib/referral";
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getTeamAccessStatus } from "@/lib/team-access";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 
 export const metadata: Metadata = { title: "Workspace" };
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   const session = await getSession();
   // Only owners and members can see a workspace; an anonymous request goes to sign-in rather
   // than rendering a blank page (the shell performs the same check for every other route).
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
 
   const businesses = await prisma.business.findMany({
     where: session.role === "ADMIN" ? {} : { ownerId: session.userId },

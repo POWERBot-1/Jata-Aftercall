@@ -34,7 +34,7 @@ vi.mock("@/lib/db", () => ({
     planConfig: { findMany: vi.fn(async () => state.plans) },
     payment: { findMany: vi.fn(async () => state.payments) },
     posSubscription: { findUnique: vi.fn(async ({ where }: { where: { businessId: string } }) => state.posSub) },
-    erpSubscription: {
+    erpProSubscription: {
       findUnique: vi.fn(async ({ where }: { where: { businessId: string } }) => {
         state.lastErpLookup = where.businessId;
         return state.erpSub;

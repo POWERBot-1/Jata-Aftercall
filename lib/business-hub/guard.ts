@@ -32,7 +32,8 @@ export type OwnerGuardResult =
 
 export async function authorizeOwner(
   businessId: string | null | undefined,
-  action: RolePermissionLevel = "read",
+  // Required (R-TI-03): a write must never inherit a read-level default.
+  action: RolePermissionLevel,
 ): Promise<OwnerGuardResult> {
   if (!businessId) return { ok: false, status: 400, error: "Choose a business first." };
   const session = await getSession();

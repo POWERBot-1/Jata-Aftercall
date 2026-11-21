@@ -11,6 +11,7 @@
  */
 
 import { isProviderTransactionId, subscriptionWindow } from "../paymentVerification";
+import { providerSettlementEvidenceFields } from "../payments/provider-settlement-evidence";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "../media/persistence-policy";
 import { provisionAfterPayment } from "./provisioning";
 import { recordPosPublicationResolution } from "./publication-policy";
@@ -51,7 +52,10 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
 
   const current = await tx.posSubscription.findUnique({ where: { businessId: payment.businessId } });
 
-  if (payment.status === "PAID" && current?.status === "ACTIVE") {
+  // A PAID payment is idempotent only when this exact payment already activated the current
+  // subscription. An active subscription paid by an earlier payment must not swallow a new
+  // verified payment or a legacy orphan-payment repair.
+  if (payment.status === "PAID" && current?.status === "ACTIVE" && current.paymentId === payment.id) {
     if (eventId) await tx.processedWebhook.create({ data: { id: eventId } });
     return { subscription: current, alreadySettled: true, posSubscription: true };
   }
@@ -84,6 +88,7 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
       where: { id: payment.id, status: payment.status },
       data: {
         status: "PAID",
+        ...providerSettlementEvidenceFields({ reference: payment.reference, providerConfirmedAt: verification?.providerConfirmedAt }),
         ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
         ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
@@ -115,6 +120,9 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference,
+      recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+      recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: now,
       cancelledAt: null,
     },
     create: {
@@ -128,6 +136,9 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference,
+      recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+      recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: now,
     },
   });
 

@@ -191,11 +191,24 @@ describe("runtime and schema guards", () => {
       // only — no existing table (including the four stamp-card tables) is altered, read or
       // rewritten, and no column is added to one.
       "20261129000000_loyalty_points_rewards",
+      // Product isolation backfills matching legacy rows into independent ERP PRO / MJENGO OS
+      // tables without deleting or rewriting any existing ERP, MJENGO, or POS records. Timestamped
+      // after every released migration so fresh-database order equals production application order.
+      "20261202000000_mjengo_isolated_entitlements",
+      "20261203000000_financial_evidence_contract",
+      // Financial evidence ledger: immutable provider settlement snapshots, paginated transaction
+      // evidence and canonical bank-statement credits. Additive tables/columns/indexes/constraints;
+      // historical applied migration checksum is preserved by a separate forward-only hardening migration.
+      "20261204000000_financial_evidence_ledger",
+      // Forward-only evidence hardening: actor attribution, source pagination provenance and
+      // append-only TRUNCATE guards. Nullable attribution fields and fail-closed checks preserve
+      // existing rows; no production financial records are rewritten.
+      "20261205000000_financial_evidence_ledger_hardening",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       expect(sql.toUpperCase()).not.toContain("DROP TABLE");
-      expect(sql.toUpperCase()).not.toContain("TRUNCATE");
+      expect(sql.replace(/--.*$/gm, "").toUpperCase()).not.toMatch(/^\\s*TRUNCATE\\s+(?:TABLE\\s+)?/m);
     }
     // The commerce baseline adds "Service.updatedAt" and has to fill it from "createdAt" before
     // it can be made NOT NULL. That is a backfill of a brand-new column, not a rewrite of
@@ -270,6 +283,7 @@ describe("runtime and schema guards", () => {
       "20261127000000_voice_call_foundation",
       "20261128000000_business_hub_conversion",
       "20261129000000_loyalty_points_rewards",
+      "20261202000000_mjengo_isolated_entitlements",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

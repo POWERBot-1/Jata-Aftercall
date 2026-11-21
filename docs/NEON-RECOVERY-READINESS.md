@@ -250,3 +250,58 @@ R2, R3 and R5 cannot be closed from the review environment: no Neon connector, n
 resolution of `api.neon.tech`, and no credential. This is a capability boundary,
 not an omission. Any line ticked above must carry the operator's name and a
 timestamp, or it is not evidence.
+
+
+---
+
+## Addendum — 2026-11-20 live Neon metadata inspection (read-only)
+
+The earlier 2026-10-21 statement that no Neon connector was available was accurate for that review session only. It is superseded for current metadata inspection by this read-only Neon API inspection. No database connection string, password, production SQL, snapshot creation, restore, branch mutation, plan change or paid activation was used.
+
+### Production project
+
+| Field | Observed value | Evidence label |
+|---|---|---|
+| Project | `jata-aftercall` (`damp-forest-92941163`) | PASS — project metadata read |
+| Plan / region / engine | Free / `aws-us-east-2` / PostgreSQL 18 | PASS — project metadata read |
+| History retention | 21,600 seconds (6 hours) | PASS — current project metadata |
+| Production branch | `production`, ID `br-cold-snow-ax606swa` | PASS — branch metadata |
+| Root/default | `parent_id` absent; `default=true`, `primary=true` | PASS — root/default confirmed |
+| Branch protection | `protected=false` | FINDING — production branch is not marked protected |
+| Logical size | 54,935,552 bytes | PASS — provider-reported metadata |
+| Branch state | `ready` | PASS — branch metadata only |
+| Compute | endpoint state `idle`; compute suspended at 2026-11-20 13:59:16 UTC; suspend timeout 0 seconds | OBSERVED — not a database query or application health check |
+| Manual snapshots | none returned by snapshot inventory | BLOCKED — no manual snapshot exists in the returned inventory |
+| Automatic snapshot schedule | empty schedule | BLOCKED — no automated schedule configured |
+| Actual restorable timestamp range | not returned by the available metadata calls | BLOCKED — do not infer from six-hour retention |
+| Provider-native restore rehearsal | not performed | NOT TESTED |
+
+### Preview/staging projects and failed Vercel build
+
+The Vercel Preview deployment for candidate `165ef68c2dda52f2d266445690e712b75623f5ec` is [`dpl_8ig7KWWaobbz1U5r4LYPmFZeRGNY`](https://vercel.com/powerbot-1/jata-aftercall/8ig7KWWaobbz1U5r4LYPmFZeRGNY). Its build log shows:
+
+1. Preview isolation validation passed.
+2. Direct-vs-pooled URL validation passed.
+3. Migration target guard identified the target as Preview.
+4. Prisma `migrate deploy` failed with `P1001` because the staging PostgreSQL host was unreachable; the build correctly aborted.
+
+Read-only Neon metadata identifies the endpoint as the branch of project `jata-aftercall-staging-pr125` (`restless-term-08110008`), branch `pr125-preview-staging` (`br-spring-art-bevrvkt0`). Its endpoint is suspended; the project reports Free-plan active-time quota 3,600 seconds and consumed active time 4,288 seconds, with quota reset 2026-12-01. Compute-time use is 1,081 seconds against a 1,800-second allowance. This is consistent with the unavailable staging endpoint and the deployment's P1001. The separate `jata-aftercall-staging` project also reports active time 5,232 seconds against a 3,600-second allowance and suspended computes.
+
+Both staging projects' snapshot inventories and automatic schedules are empty. No paid upgrade, quota change, compute start or alternative endpoint was attempted. Do not bypass the Preview migration gate: the failure is an unavailable isolated database dependency, not proof that the migration should be skipped.
+
+### Candidate logical backup evidence — separate from Neon
+
+[Candidate migration rehearsal run 44749405508](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44749405508) passed on disposable PostgreSQL 18, including a full logical backup restored into a separate empty database, schema/constraint comparison, row counts across 194 user tables, and migration-ledger comparison. This is **PASS for disposable logical backup/restore only**; it does not prove Neon PITR, production snapshots, production RPO/RTO, or production recovery.
+
+### Updated labels and decisions
+
+- R1 root/default production branch: **PASS** (current provider metadata).
+- R2 actual restorable range/PITR reachability: **BLOCKED** (not returned by current metadata inspection).
+- R3 manual snapshot: **BLOCKED** (inventory empty).
+- R4 history retention: **PASS — 6 hours** (current provider metadata).
+- R5 provider-native scratch restore: **NOT TESTED**.
+- Production branch protection: **FINDING** (`protected=false`).
+- Production snapshot schedule: **FINDING** (empty).
+- Owner recovery targets remain RPO ≤ 15 minutes for authoritative financial data and RTO ≤ 4 hours for core service; neither target is demonstrated by the disposable CI rehearsal.
+
+No production recovery operation or configuration change is authorized by this addendum. A manual snapshot could incur storage cost; automated schedules or additional compute may require a paid plan. Any such action remains outside the existing no-spend authorization and requires a separate owner decision.

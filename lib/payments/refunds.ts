@@ -419,6 +419,7 @@ export async function resolvePendingProviderRefund(params: {
   providerReference: string;
   succeeded: boolean;
   amountMinor?: number | null;
+  currency?: string | null;
   failureReason?: string | null;
   client?: PaymentClient;
 }): Promise<
@@ -460,11 +461,14 @@ export async function resolvePendingProviderRefund(params: {
       return { matched: true as const, kind: "exception" as const, transactionId: transaction.id, businessId: transaction.businessId, reason: "REFUND_NOT_PENDING" };
     }
 
-    if (params.succeeded && Number(params.amountMinor ?? 0) !== Number(refund.amountMinor)) {
+    const currencyMismatch = typeof params.currency === "string" && params.currency.trim().toUpperCase() !== refund.currency.toUpperCase();
+    if (params.succeeded && (Number(params.amountMinor ?? 0) !== Number(refund.amountMinor) || currencyMismatch)) {
       const received = params.amountMinor == null ? null : Number(params.amountMinor);
-      const notes = received === null
-        ? "The provider reported a successful reversal without an amount that can be matched to the refund reservation. The reservation remains pending for review."
-        : "The provider's reversal amount did not match the reserved refund amount. The reservation remains pending for review.";
+      const notes = currencyMismatch
+        ? "The provider reported a refund currency that did not match the reserved refund currency. The reservation remains pending for review."
+        : received === null
+          ? "The provider reported a successful reversal without an amount that can be matched to the refund reservation. The reservation remains pending for review."
+          : "The provider's reversal amount did not match the reserved refund amount. The reservation remains pending for review.";
       await recordReconciliationException({
         businessId: transaction.businessId,
         transactionId: transaction.id,
@@ -473,6 +477,7 @@ export async function resolvePendingProviderRefund(params: {
         result: "UNCONFIRMED",
         expectedAmountMinor: refund.amountMinor,
         receivedAmountMinor: received,
+        currency: typeof params.currency === "string" ? params.currency : refund.currency,
         notes,
       }, tx);
       await logPaymentAudit({

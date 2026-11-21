@@ -11,6 +11,7 @@ import {
   serializeJsonWithoutInlineImageData,
 } from "@/lib/media/persistence-policy";
 import { isProviderTransactionId } from "@/lib/paymentVerification";
+import { providerSettlementEvidenceFields } from "@/lib/payments/provider-settlement-evidence";
 import {
   AUTOPILOT_GRACE_DAYS,
   assertAutopilotPlanPricing,
@@ -111,6 +112,7 @@ export async function settleAutopilotPayment(
       where: { id: payment.id, status: settledFrom },
       data: {
         status: "PAID",
+        ...providerSettlementEvidenceFields({ reference: payment.reference, providerConfirmedAt: verification?.providerConfirmedAt }),
         ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
         ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
@@ -154,6 +156,9 @@ export async function settleAutopilotPayment(
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference,
+      recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+      recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: now,
       cancelledAt: null,
     },
     create: {
@@ -167,6 +172,9 @@ export async function settleAutopilotPayment(
       graceUntil,
       paymentId: payment.id,
       paymentReference: payment.reference,
+      recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
+      recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
+      recurringPriceEffectiveAt: now,
     },
   });
 

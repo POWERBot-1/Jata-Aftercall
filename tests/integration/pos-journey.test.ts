@@ -356,7 +356,7 @@ describe("step 5–7: choose plan, pay, provision (§43, §44, §45)", () => {
   it("cannot be activated twice by a replayed webhook (§75)", async () => {
     await saveDraft({ businessId: "bizA", answers: restaurantAnswers, actorId: "userA" });
     fake().rows("payment").push({ id: "pay_1", businessId: "bizA", userId: "userA", planId: "plan_pos", amount: 49900, currency: "KES", status: "PAID", reference: "jata-pos-1" });
-    fake().rows("posSubscription").push({ id: "sub_1", businessId: "bizA", status: "ACTIVE", planKey: POS_PLAN_KEY, expiresAt: new Date(Date.now() + 86_400_000) });
+    fake().rows("posSubscription").push({ id: "sub_1", businessId: "bizA", status: "ACTIVE", planKey: POS_PLAN_KEY, paymentId: "pay_1", expiresAt: new Date(Date.now() + 86_400_000) });
 
     const replay = await prisma.$transaction(async (tx: any) =>
       settlePosPayment(tx, {

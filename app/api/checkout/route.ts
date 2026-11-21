@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { assertBusinessOwnership, assertBusinessRole, TenantError } from "@/lib/tenant";
 import { initializeTransaction, toKobo } from "@/lib/paystack";
+import { getPaystackSecretKey } from "@/lib/payments/config";
 import { getBaseUrl } from "@/lib/url";
 import { generatePaymentReference } from "@/lib/paymentReference";
 import { PAYMENT_CURRENCY } from "@/lib/paymentCurrency";
@@ -14,6 +15,7 @@ import { MJENGO_PLAN_KEY } from "@/lib/mjengo/entitlement";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
 import { isFrontDeskTierKey, assertFrontDeskTierPricing, AI_FRONT_DESK_VOICE_KEY } from "@/lib/frontDeskTiers";
 import { getVoiceReadiness } from "@/lib/telnyx/voice-readiness";
+import { readPaystackConfig } from "@/lib/payments/config";
 
 type PlanRow = {
   id: string;
@@ -198,7 +200,7 @@ export async function POST(req: Request) {
     const reference = generatePaymentReference();
     const amount = toKobo(plan.priceKES);
     const payment = await prisma.payment.create({
-      data: { reference, businessId, userId: session.userId, planId: plan.id, amount, currency: PAYMENT_CURRENCY, status: "PENDING" },
+      data: { reference, businessId, userId: session.userId, planId: plan.id, amount, currency: PAYMENT_CURRENCY, status: "PENDING", environment: readPaystackConfig().mode === "LIVE" ? "LIVE" : readPaystackConfig().mode === "TEST" ? "TEST" : "UNKNOWN" },
       select: { id: true, reference: true, amount: true, currency: true, status: true, createdAt: true },
     });
 
@@ -229,7 +231,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.PAYSTACK_SECRET_KEY) {
+    if (!getPaystackSecretKey()) {
       if (process.env.NODE_ENV === "production") {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
         return fail(

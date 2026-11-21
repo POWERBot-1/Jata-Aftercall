@@ -22,7 +22,7 @@ Consequence: steps 3–4 of the flow (test-mode charge and Paystack-originated w
 
 1. **Vercel access** — authenticate the Vercel CLI in the execution environment as `powerbot-1` (`vercel login`, or provide a `VERCEL_TOKEN` scoped to project `powerbot-1/jata-aftercall`).
 2. **Isolated test database** — provision a fresh Postgres database (e.g. a new Neon branch/database, separate from production) and expose its `DATABASE_URL` **only** as a Vercel Preview environment variable. Never reuse the production `DATABASE_URL`.
-3. **Paystack test keys** — set `PAYSTACK_SECRET_KEY=sk_test_…` and `PAYSTACK_PUBLIC_KEY=pk_test_…` as **Preview-only** environment variables in the Vercel dashboard (never in chat, never in Git).
+3. **Paystack test keys** — set `PAYSTACK_TEST_SECRET_KEY=sk_test_…` and `PAYSTACK_TEST_PUBLIC_KEY=pk_test_…` as **Preview-only, branch-scoped** environment variables in the Vercel dashboard (never in chat, never in Git). The current payment adapter deliberately ignores shared `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` in Preview and requires the dedicated test-only pair; Production requires the live pair. Confirm Vercel's `VERCEL_ENV=preview` and `VERCEL_GIT_COMMIT_REF=arena/financial-evidence-candidate-2` for the deployment.
 4. **Webhook registration** — in the Paystack dashboard (test mode, merchant JATA ATLAS 2006074): Settings → Webhooks → add `https://<preview-domain>/api/paystack/webhook` pointing at the preview deployment.
 5. **Charge authorization** — the Paystack test checkout (authorization_url) must be completed in a browser with Paystack's test card `4084 0840 8408 4081` (any future expiry / CVV / OTP). This is a Paystack-hosted page and cannot be driven headlessly from this sandbox.
 

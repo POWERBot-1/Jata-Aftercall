@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { formatKES } from "@/lib/format";
-import { getSession } from "@/lib/auth";
 import { getMjengoOsPlan } from "@/lib/pricing";
 import { MJENGO_PLAN_DURATION_DAYS, MJENGO_PLAN_PRICE_KES } from "@/lib/mjengo/entitlement";
 import { mjengoCheckoutRefusal } from "@/lib/mjengo/settlement";
@@ -75,7 +74,6 @@ const problems = [
 ];
 
 export default async function MjengoOsProductPage() {
-  const session = await getSession();
   const plan = await getMjengoOsPlan().catch(() => null);
   const refusal = mjengoCheckoutRefusal(plan);
   const validPlan = Boolean(plan && plan.key === "MJENGO_OS" && Number(plan.priceKES) === MJENGO_PLAN_PRICE_KES && Number(plan.durationDays) === MJENGO_PLAN_DURATION_DAYS);
@@ -83,9 +81,13 @@ export default async function MjengoOsProductPage() {
     ? `${formatKES(Number(plan.priceKES))} / ${plan.durationDays} days`
     : "Pricing currently unavailable";
 
-  // Determine the checkout entry target: authenticated users go to subscription
-  // management to select their business; unauthenticated users go to login.
-  const checkoutTarget = session ? "/dashboard/subscription" : "/login";
+  // Every "Get MJENGO OS" CTA enters through /mjengo (R-MJ-09, R-MJ-11). That public entry sits
+  // outside the /dashboard layout, so it decides before the layout's bare /login redirect can drop
+  // the intent: signed-out visitors go to /login?next=mjengo and return to MJENGO OS after sign-in;
+  // owners go to /dashboard/mjengo, their business workspace, where an unpaid business is offered
+  // the stored-plan checkout. The previous hero target sent signed-out visitors to a bare /login
+  // and signed-in owners to /dashboard/subscription, which by design never sells MJENGO OS.
+  const checkoutTarget = "/mjengo";
 
   return (
     <MarketingLayout
@@ -160,7 +162,7 @@ export default async function MjengoOsProductPage() {
           {refusal ? <p>{refusal}</p> : null}
         </div>
         <div className="mk-btn-row">
-          <Link href="/dashboard/mjengo" className="mk-btn">Get MJENGO OS</Link>
+          <Link href="/mjengo" className="mk-btn">Get MJENGO OS</Link>
           <Link href="/pricing" className="mk-btn mk-btn--ghost">Compare JATA plans</Link>
         </div>
       </MarketingSection>
@@ -184,7 +186,7 @@ export default async function MjengoOsProductPage() {
           <p>Manage sales, materials, procurement, customers and business records with greater operational visibility.</p>
         </div>
         <div className="mk-btn-row">
-          <Link href="/dashboard/mjengo" className="mk-btn">Get MJENGO OS</Link>
+          <Link href="/mjengo" className="mk-btn">Get MJENGO OS</Link>
           <Link href="/products" className="mk-btn mk-btn--ghost">Explore all JATA products</Link>
         </div>
       </MarketingSection>

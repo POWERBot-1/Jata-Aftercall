@@ -194,3 +194,56 @@ The sole failed check is `programme-completeness` ([41257217130](https://github.
 - Added `docs/audits/REQUIREMENT_TRACEABILITY_43.md`, mapping all 43 canonical instruction IDs to affected surfaces, root cause/gap, tests/evidence and status. The strict manifest was not changed. Re-running `node scripts/admin/check-programme-readiness.mjs` exits 1 with `NOT READY (43)` and every ID `NOT_TESTED`; the fail-closed result is preserved. `node scripts/admin/check-building-instructions.mjs` exits 1 because this clone is shallow and cannot verify first introduction/append-only history.
 - Local checks on the uncommitted worktree: `npx vitest run tests/unit/seeded-account-audit.test.ts` **16/16 PASS**; ESLint on changed TypeScript **PASS**; all 10 workflow YAML files parse; `git diff --check` **PASS**. Direct `npx tsx prisma/seed.ts` invocations with `NODE_ENV=production` and with `VERCEL_ENV=production` returned the expected refusal before dynamically importing or constructing Prisma, with no database URL set. `npm run typecheck` remains blocked by absent generated Prisma Client declarations. No full suite, browser run or current-head CI has been performed for this batch; no commit or push has occurred.
 - Current exact worktree acceptance remains **NOT TESTED**; release is **NOT READY**. No gate was weakened and no production configuration, database, provider, payment, DNS, mail, migration, deployment or merge occurred.
+
+### Whole-platform remediation batch 1 — `arena/a3de1985-jata-aftercall` (2026-11-17)
+
+Full traceability matrix: `docs/audits/WHOLE_PLATFORM_REMEDIATION_2026-11-17.md`. Base: main `09a4aa0`, plus PR #125 `ed3d561`, #117 `eb7d507` and #112 `3214fc5` (merged with a migration-order fix). **Release verdict: NOT READY.** No Production mutation, merge or deploy.
+
+| ID | Pri | Finding | Fix commit | Regression test | Status / evidence |
+|---|---|---|---|---|---|
+| R-OTP-01 | P0 | Concurrent correct OTP reported failure instead of `already` (PG18 CI) | `2fbe9aa` | `agent-phone-verification-race` | IMPLEMENTED · local PASS · PG18 CI pending |
+| R-MAN-01 | P0 | Evidence manifest stale after readiness edit | regenerated last | `verify-evidence-manifest` | IMPLEMENTED · CI pending |
+| R-CAP-01 | P1 | Motion queue capture timed out (17 vs 18 targets, off-screen targets, animations counted instead of elements) | `51d9d37` | capture harness | IMPLEMENTED · local Chromium 3/3 PASS · CI pending |
+| R-WS-01 | P1 | Editorial/cardless headings 1.1:1 on dark themes (regression from `276756e`) | `ab4d905` | `storefront-contrast-and-specificity` | IMPLEMENTED · 240-render local sweep |
+| R-MJ-01/02 | P0/P1 | #115 settlement/storage isolation; migration sorted before applied history | `b0cd8dc` | settlement, storage-isolation, repair-guards | IMPLEMENTED · DB CI pending |
+| R-MJ-03..07 | P0/P1 | MJENGO journey: destination dropped, 403 dead end, always-"configured", ids shown, APIs not entitlement-gated | `713f750`, `6b45b45`, `b75da0a`, `d982863` | customer-journey, configured-lifecycle, branding-and-journal | IMPLEMENTED · local PASS |
+| R-DEP-01 | P0 | 7 moderate advisories | `e08e585` (override removed) | release-validation audit | IMPLEMENTED · full tree 0 moderate · prod 0 |
+| R-DEP-02 | P0 | picomatch GHSA-fc5q-39xc-vjpf (16 high, dev-only), no upstream patch | — | — | **BLOCKED (upstream)** |
+
+Local full unit suite at `6b45b45`: 404 files / 4,737 tests PASS, 0 FAIL, 343 skipped (DB-only). The 79 unhandled errors are the sandbox's missing Prisma engine (download blocked) and are not CI evidence. `tsc --noEmit` PASS (types from an offline client generation, never generation evidence). ESLint: 0 errors.
+
+**Exact-head CI update — `358afc0` (draft PR #126):**
+- All technical gates PASS. That covers Static/audit, PG18 migrations + idempotent re-deploy + full suite, exact-candidate rehearsal, backup/restore, real-DB journey, POS/ERP PostgreSQL suite, six-viewport capture, motion capture 48/48 with queue stress PASS, full-suite, and the Release gate aggregate.
+- An intermediate head `9c631be` failed the ERP re-run gate. That was the plain-DDL regression, corrected in `ec40f37` (re-runnable migration + shape guard).
+- Red, not code defects: `programme-completeness` (fail-closed by design) and Vercel Preview (isolation guard; branch-scoped Preview env missing — owner action).
+- MOTION-015 stays BLOCKED, with exact-head queue evidence appended. Verdict: **NOT READY**.
+
+**Batch 2 — MJENGO real-DB and real-browser evidence (exact head `66d8b08`, draft PR #126):**
+
+| ID | Pri | Finding | Fix commit | Regression test | Status / evidence |
+|---|---|---|---|---|---|
+| R-CI-01 | P1 | programme-completeness red: `NOT READY (24)` (21 BLOCKED, 3 NOT_TESTED) | — (fail-closed by design) | `check-programme-readiness.mjs` | **BLOCKED** (owner/external) |
+| R-MJ-08 | P1 | Refunded workspace offered a second checkout (402) instead of SUSPENDED 403 | `0e666c1` | `tests/prisma/mjengo-journey-postgres.test.ts` (11) | IMPLEMENTED · CI PASS on PG18 |
+| R-MJ-09 | P1 | Hero CTA sent owners to `/dashboard/subscription` and visitors to a bare `/login` | `eedacca`, `66d8b08` | `mjengo-public-cta` | IMPLEMENTED · local PASS |
+| R-MJ-10 | P1 | No authenticated browser evidence for MJENGO | `6f79353`, `1244caf`, `66d8b08` | `mjengo-browser-guard` (14) | IMPLEMENTED · **CI PASS** real Chrome (run 44249281884) |
+| R-MJ-11 | P1 | Dashboard layout's bare `/login` redirect dropped `?next=mjengo` (found in real Chrome, run 44247022065) | `66d8b08` (`app/mjengo` entry + MJENGO-only `proxy.ts`) | `mjengo-entry-route` (6) | IMPLEMENTED · **CI PASS** real Chrome |
+
+CI at `66d8b08`: 21 pass / 2 fail / 1 skipped. Every technical gate passes. Red: programme-completeness (fail-closed) and Vercel Preview (isolation guard, 7 branch-scoped variables missing; owner action). Residual: a stale or forged cookie on a `/dashboard/mjengo` deep link falls back to a bare `/login`, though access is still refused. Details in `WHOLE_PLATFORM_REMEDIATION_2026-11-17.md` §7. Verdict: **NOT READY**.
+
+**Batches 3–4 — return paths, two-tenant authorization, admin reporting (draft PR #126):** full detail in `WHOLE_PLATFORM_REMEDIATION_2026-11-17.md` §8.
+
+| ID | Pri | Finding | Fix commit | Regression test | Status / evidence |
+|---|---|---|---|---|---|
+| R-RT-01 | P1 | Every `/dashboard/*` deep link lost its destination on sign-in (layout bare redirect; ignored `callbackUrl`) | `d36f119` | `dashboard-return-path`, Chrome A–E | **PASS** unit + real Chrome A–E (`275e117`, run 44275702188) |
+| R-RT-02 | P2 | Owner AI-page preview used an ignored `callbackUrl` | `cc33999` | unit, Chrome F/G | **PASS** unit + real Chrome F/G (`275e117`) |
+| R-TI-01 | P0 | No platform-wide two-tenant proof | `d36f119` | `tenant-isolation-matrix-postgres` | **PASS** PG18 native (187 routes, 979 calls) |
+| R-TI-02 | P1 | Offer DELETE 500 cross-tenant | `d36f119` | matrix | **PASS** PG18 |
+| R-TI-03 | P0 | Membership-only writes: VIEWER could rename the business, redirect phone/WhatsApp, create products | `1230e3a` | `role-required-writes`, matrix phase 3 | **PASS** PG18 (run 44271000133) |
+| R-TI-04 | P1 | ERP `bootstrapWorkspaceAction` behind `WORKSPACE_READ` (any member) | `e94f2f3` | `erp-server-action-permissions` (58) | **PASS** unit (mocked session, real role matrix); CI full-suite |
+| R-ADM-01 | P1 | Admin tiles mixed revenue types and currencies; failed reads shown as 0 | `18d471e` | `admin-platform-figures` | IMPLEMENTED · PASS |
+| R-ADM-02 | P1 | Admin figures not reconciled with the DB | `18d471e` | `admin-reporting-reconciliation-postgres` | **PASS** PGlite + PG18 job |
+| R-ADM-03 | P1 | POS `activatedAt` reset on every request; denied requests rewrote A's entitlement row | `1230e3a` | `pos-entitlement-sync`, matrix | **PASS** |
+| R-CI-02 | P1 | Real-Chrome red `d36f119`..`e94f2f3`: stale MJENGO assertion vs R-RT-01, then return-path harness read the loading skeleton; later browser steps skipped | `e94f2f3`, `275e117` | `mjengo-authenticated.check.mjs`, `dashboard-return-path.check.mjs` | **PASS** real Chrome (run 44275702188) |
+
+CI at `275e117`: 21 pass / 1 fail (programme-completeness, fail-closed) / 1 skipped; Vercel `dpl_GMLr1xLGRgoxfTYSAbQ1tRzedhSH` failed on the isolation guard. Blocked: Vercel Preview (branch-scoped variables; owner), Paystack Preview acceptance, R2 durability, Neon native PITR, R-DEP-02 picomatch (upstream), R-CI-01. Verdict: **NOT READY**.
+
