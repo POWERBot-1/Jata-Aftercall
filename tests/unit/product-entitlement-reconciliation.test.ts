@@ -11,6 +11,11 @@ const row = (overrides: Partial<ProductLifecycleEvidence> = {}): ProductLifecycl
   subscriptionStatus: "ACTIVE",
   paymentId: "pay-1",
   paymentStatus: "PAID",
+  paymentPlanId: "plan-1",
+  paymentReference: "ref-1",
+  subscriptionPaymentReference: "ref-1",
+  paymentPurpose: "SUBSCRIPTION",
+  subscriptionPlanId: "plan-1",
   paymentBusinessId: "biz-1",
   paymentUserId: "user-1",
   subscriptionUserId: "user-1",
@@ -58,6 +63,19 @@ describe("product entitlement reconciliation", () => {
   it("detects payment tenant and owner mismatch", () => {
     const report = summarizeProductEntitlementLifecycle([row({ paymentBusinessId: "biz-other" })]);
     expect(report.counts.PAYMENT_TENANT_OR_OWNER_MISMATCH).toBe(1);
+  });
+
+  it("detects a linked paid payment from a different product plan", () => {
+    const report = summarizeProductEntitlementLifecycle([row({ paymentPlanId: "other-plan" })]);
+    expect(report.counts.PAYMENT_PROVENANCE_MISMATCH).toBe(1);
+  });
+
+  it("detects payment purpose and reference mismatches", () => {
+    const report = summarizeProductEntitlementLifecycle([
+      row({ paymentPurpose: "ORDER" }),
+      row({ businessId: "biz-2", paymentReference: "other-ref" }),
+    ]);
+    expect(report.counts.PAYMENT_PROVENANCE_MISMATCH).toBe(2);
   });
 
   it("fails closed when payment tenant or owner identity is missing", () => {
