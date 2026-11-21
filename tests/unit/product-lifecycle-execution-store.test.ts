@@ -36,5 +36,7 @@ describe("transaction-backed product lifecycle persistence contract", () => {
   it("keeps run completion conditional on RUNNING state", () => {
     expect(source).toContain('where: { id: input.runId, status: "RUNNING" }');
     expect(source).toContain('status: input.status');
+    expect(source).toContain('state: { in: ["READY", "CLAIMED", "RETRY"] }');
+    expect(source).toContain("if (pending > 0) return { updated: false, pending }");
   });
 });
