@@ -253,6 +253,7 @@ export async function activateSubscriptionForPayment(
       update: {
         userId: payment.userId, planId: plan.id, status: "ACTIVE", startAt, expiresAt,
         graceUntil: new Date(expiresAt.getTime() + 3 * 86400000),
+        paymentId: payment.id, paymentReference: payment.reference,
         recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
         recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
         recurringPriceEffectiveAt: now,
@@ -260,6 +261,7 @@ export async function activateSubscriptionForPayment(
       create: {
         businessId: payment.businessId, userId: payment.userId, planId: plan.id,
         status: "ACTIVE", startAt, expiresAt, graceUntil: new Date(expiresAt.getTime() + 3 * 86400000),
+        paymentId: payment.id, paymentReference: payment.reference,
         recurringAmountKES: plan.priceKES, recurringDiscountKES: 0,
         recurringCurrency: payment.currency, recurringIntervalDays: plan.durationDays,
         recurringPriceEffectiveAt: now,
