@@ -11,6 +11,7 @@
  */
 
 import { isProviderTransactionId, subscriptionWindow } from "../paymentVerification";
+import { providerSettlementEvidenceFields } from "../payments/provider-settlement-evidence";
 import { containsInlineImageDataUrl, serializeJsonWithoutInlineImageData } from "../media/persistence-policy";
 import { provisionAfterPayment } from "./provisioning";
 import { recordPosPublicationResolution } from "./publication-policy";
@@ -87,6 +88,7 @@ export async function settlePosPayment(tx: any, params: PosSettlementParams): Pr
       where: { id: payment.id, status: payment.status },
       data: {
         status: "PAID",
+        ...providerSettlementEvidenceFields({ reference: payment.reference, providerConfirmedAt: verification?.providerConfirmedAt }),
         ...(paystackIdForStorage ? { paystackId: paystackIdForStorage } : {}),
         ...(rawForStorage !== undefined ? { raw: rawForStorage } : {}),
       },
