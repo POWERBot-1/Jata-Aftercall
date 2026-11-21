@@ -57,7 +57,7 @@ export default async function AdminOverview() {
   ];
 
   return (
-    <AdminPage kicker="Platform admin" title="Admin overview" meta="PAID-status amounts are not cash revenue. MRR includes only active, effective subscriptions linked to exact LIVE, provider-settled, matched payments.">
+    <AdminPage kicker="Platform admin" title="Admin overview" meta="PAID-status amounts are not cash revenue. MRR includes Business Page MONTHLY/ANNUAL and dedicated products only when active, effective, and linked to exact LIVE, provider-settled, matched payments.">
       <WorkspacePanel title="Accounts and access" meta="Coverage, not growth">
         <div className="ws-stats ws-stats--5">
           {accounts.map(([label, value, hint]) => (
@@ -78,7 +78,7 @@ export default async function AdminOverview() {
           </p>
         ) : null}
         <p className="ws-muted ws-tiny">
-          The PAID-status totals above are record amounts, not verified net cash collected. MRR is a separate evidence-qualified projection: legacy subscriptions without exact payment links, non-LIVE payments, missing provider settlement timestamps, unreconciled payments, incomplete snapshots and unsupported currencies or terms are excluded. MRR is not statutory revenue or cash collected; ARR is not presented. There is no daily roll-up in the schema, so no trend line is drawn.
+          The PAID-status totals above are record amounts, not verified net cash collected. MRR is a separate evidence-qualified projection: legacy subscriptions without exact payment links, shared Subscription rows whose PlanConfig key is not MONTHLY/ANNUAL (including Front Desk and Website Studio), non-LIVE payments, missing provider settlement timestamps, unreconciled payments, incomplete snapshots and unsupported currencies or terms are excluded. MRR is not statutory revenue or cash collected; ARR is not presented. There is no daily roll-up in the schema, so no trend line is drawn.
         </p>
       </WorkspacePanel>
 
