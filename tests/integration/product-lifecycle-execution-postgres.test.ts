@@ -41,6 +41,22 @@ describe.skipIf(!realPrismaConfigured)("product lifecycle ledger PostgreSQL conc
     if (db) await db.$disconnect();
   });
 
+  it("deduplicates enqueue retries without returning a task owned by another run", async () => {
+    const run = await makeRun(1);
+    const original = await db.productLifecycleExecutionTask.findFirst({ where: { runId: run.id } });
+    const replay = await enqueueLifecycleTasks(run.id, [{
+      product: "AI_FRONT_DESK",
+      businessId: original.businessId,
+      subscriptionId: original.subscriptionId,
+      transitionKey: original.transitionKey,
+      payload: original.payload,
+    }]);
+    expect(replay.inserted).toBe(0);
+    expect(replay.tasks).toHaveLength(1);
+    expect(replay.tasks[0].id).toBe(original.id);
+    expect(replay.tasks[0].runId).toBe(run.id);
+  }, 30_000);
+
   it("skips rows locked by another transaction and claims the remaining tasks", async () => {
     const run = await makeRun(4);
     let lockedIds: string[] = [];
