@@ -44,6 +44,7 @@ describe.skipIf(!realPrismaConfigured)("product lifecycle ledger PostgreSQL conc
   it("deduplicates enqueue retries without returning a task owned by another run", async () => {
     const run = await makeRun(1);
     const original = await db.productLifecycleExecutionTask.findFirst({ where: { runId: run.id } });
+    if (!original) throw new Error("Expected lifecycle task fixture");
     const replay = await enqueueLifecycleTasks(run.id, [{
       product: "AI_FRONT_DESK",
       businessId: original.businessId,
@@ -115,6 +116,7 @@ describe.skipIf(!realPrismaConfigured)("product lifecycle ledger PostgreSQL conc
     const run = await makeRun(1);
     const claimed = await claimLifecycleTasks({ runId: run.id, limit: 1 });
     const event = await db.productLifecycleExecutionEvent.findFirst({ where: { taskId: claimed.claimed[0].id } });
+    if (!event) throw new Error("Expected lifecycle event fixture");
     await expect(db.$executeRaw`
       UPDATE "ProductLifecycleExecutionEvent" SET "reasonCode" = 'TAMPERED' WHERE "id" = ${event.id}
     `).rejects.toThrow();
