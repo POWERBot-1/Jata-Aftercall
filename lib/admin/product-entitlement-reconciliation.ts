@@ -149,8 +149,9 @@ export function summarizeProductEntitlementLifecycle(
     }
 
     if (row.paymentId && (
-      (row.paymentBusinessId !== null && row.paymentBusinessId !== row.businessId) ||
-      (row.paymentUserId !== null && row.subscriptionUserId !== null && row.paymentUserId !== row.subscriptionUserId)
+      // Null identity fields are unverified evidence, not a successful match.
+      row.paymentBusinessId !== row.businessId ||
+      row.paymentUserId !== row.subscriptionUserId
     )) {
       push({
         exception: "PAYMENT_TENANT_OR_OWNER_MISMATCH",
