@@ -5,7 +5,7 @@ const asOf = new Date("2026-11-21T12:00:00.000Z");
 const sub = {
   businessId: "biz-1",
   planId: "plan-1",
-  planKey: "BUSINESS_PAGE",
+  plan: { key: "MONTHLY" },
   status: "ACTIVE",
   startAt: new Date("2026-11-01T00:00:00.000Z"),
   expiresAt: new Date("2026-12-01T00:00:00.000Z"),
@@ -32,11 +32,11 @@ const pay = {
   reconciliationStatus: "MATCHED",
 };
 
-function client(baseSubscriptionRows: any[] = [sub], paymentRows: any[] = [pay]) {
+function client(sharedSubscriptionRows: any[] = [sub], paymentRows: any[] = [pay]) {
   const empty = () => ({ findMany: vi.fn().mockResolvedValue([]) });
   return {
-    subscription: empty(),
-    posSubscription: { findMany: vi.fn().mockResolvedValue(baseSubscriptionRows) },
+    subscription: { findMany: vi.fn().mockResolvedValue(sharedSubscriptionRows) },
+    posSubscription: empty(),
     autopilotSubscription: empty(),
     mjengoSubscription: empty(),
     erpSubscription: empty(),
@@ -54,11 +54,27 @@ describe("readEvidenceGatedMrr", () => {
     expect(db.payment.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: { in: ["pay-1"] } },
     }));
+    expect(db.subscription.findMany).toHaveBeenCalledWith({
+      select: expect.objectContaining({ plan: { select: { key: true } } }),
+    });
     expect(db.posSubscription.findMany).toHaveBeenCalledTimes(1);
     expect(db.autopilotSubscription.findMany).toHaveBeenCalledTimes(1);
     expect(db.mjengoSubscription.findMany).toHaveBeenCalledTimes(1);
     expect(db.erpSubscription.findMany).toHaveBeenCalledTimes(1);
     expect(db.erpProSubscription.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes only authoritative Business Page keys from the shared Subscription model", async () => {
+    const db = client([
+      sub,
+      { ...sub, businessId: "front-desk", planId: "front-desk-plan", plan: { key: "AI_BUSINESS_FRONT_DESK" } },
+      { ...sub, businessId: "website-studio", planId: "website-plan", plan: { key: "INTERACTIVE_BUSINESS" } },
+      { ...sub, businessId: "unknown-plan", planId: "unknown-plan", plan: null },
+    ]);
+    const result = await readEvidenceGatedMrr(db, asOf);
+    expect(result.eligibleSubscriptions).toBe(1);
+    expect(result.mrrMinor).toBe(14900);
+    expect(result.exclusions.filter((row) => row.reason === "PRODUCT_NOT_INCLUDED")).toHaveLength(3);
   });
 
   it("does not query payments or infer links for legacy subscriptions", async () => {
