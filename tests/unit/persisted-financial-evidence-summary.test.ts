@@ -7,10 +7,10 @@ const base = {
   providerSettlementId: "1001",
   status: "success",
   currency: "KES",
-  grossProcessedMinor: 10000n,
-  providerFeeMinor: 250n,
-  effectiveNetMinor: 9750n,
-  deductionsMinor: 0n,
+  grossProcessedMinor: BigInt(10000),
+  providerFeeMinor: BigInt(250),
+  effectiveNetMinor: BigInt(9750),
+  deductionsMinor: BigInt(0),
   sourceSnapshotHash: "hash-1",
 };
 
@@ -40,7 +40,7 @@ describe("summarizePersistedFinancialEvidence", () => {
     const report = summarizePersistedFinancialEvidence(
       [base, duplicate, incomplete],
       [{ snapshotId: base.id, paymentReference: null, status: "success" }],
-      [{ reference: "R1", currency: "KES", creditMinor: 100n }, { reference: "R1", currency: "KES", creditMinor: 100n }, { reference: "", currency: "KES", creditMinor: 20n }],
+      [{ reference: "R1", currency: "KES", creditMinor: 10BigInt(0) }, { reference: "R1", currency: "KES", creditMinor: 10BigInt(0) }, { reference: "", currency: "KES", creditMinor: 2BigInt(0) }],
     );
     expect(report.exceptions.DUPLICATE_SETTLEMENT_IDENTITY).toBe(1);
     expect(report.exceptions.DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS).toBe(1);
