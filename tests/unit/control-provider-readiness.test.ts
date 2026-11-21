@@ -56,4 +56,27 @@ describe("platform provider configuration inventory", () => {
     });
     expect(result.providers.voice.missingConfiguration).toContain("OPENAI_API_KEY");
   });
+  
+  it("exposes voice feature gates without treating them as provider acceptance", () => {
+    const result = getPlatformProviderInventory({
+      ...configured,
+      VOICE_CALLS_ENABLED: "true",
+      VOICE_CUSTOMER_BILLING_ENABLED: "true",
+      TELNYX_VOICE_LIVE_VERIFIED: "false",
+    });
+    expect(result.evidenceLevel).toBe("CONFIGURATION_PRESENCE_ONLY");
+    expect(result.providers.voice.callGateEnabled).toBe(true);
+    expect(result.providers.voice.customerBillingGateEnabled).toBe(true);
+    expect(result.providers.voice.canReceiveCalls).toBe(false);
+    expect(result.providers.voice.canSell).toBe(false);
+    expect(result.providers.voice.state).toBe("CONFIGURED_NOT_VERIFIED");
+  });
+
+  it("does not infer enabled voice gates from absent flags", () => {
+    const result = getPlatformProviderInventory(configured);
+    expect(result.providers.voice.callGateEnabled).toBe(false);
+    expect(result.providers.voice.customerBillingGateEnabled).toBe(false);
+    expect(result.providers.voice.canReceiveCalls).toBe(false);
+    expect(result.providers.voice.canSell).toBe(false);
+  });
 });
