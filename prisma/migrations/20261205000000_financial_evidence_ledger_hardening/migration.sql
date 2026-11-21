@@ -25,16 +25,11 @@ BEGIN
 END;
 $$;
 
+-- Retain the original endpoint check and add a stricter summary-source check.
+-- A second CHECK avoids dropping/replacing an existing database constraint.
 ALTER TABLE "ProviderSettlementSnapshot"
-  DROP CONSTRAINT "ProviderSettlementSnapshot_source_check";
-
-ALTER TABLE "ProviderSettlementSnapshot"
-  ADD CONSTRAINT "ProviderSettlementSnapshot_source_check"
-    CHECK (
-      "sourceEndpoint" = '/settlement' AND
-      "sourcePage" BETWEEN 1 AND 10000 AND
-      "sourcePerPage" BETWEEN 1 AND 100
-    );
+  ADD CONSTRAINT "ProviderSettlementSnapshot_source_summary_check"
+    CHECK ("sourceEndpoint" = '/settlement');
 
 ALTER TABLE "ProviderSettlementTransactionEvidence"
   ADD COLUMN "sourcePage" INTEGER,
