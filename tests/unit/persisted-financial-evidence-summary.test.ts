@@ -25,7 +25,7 @@ describe("summarizePersistedFinancialEvidence", () => {
         INCOMPLETE_SETTLEMENT_FIELDS: 0,
         UNSUPPORTED_SETTLEMENT_STATUS: 0,
         DUPLICATE_SETTLEMENT_IDENTITY: 0,
-        DUPLICATE_SETTLEMENT_REFERENCE: 0,
+        DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS: 0,
         TRANSACTION_EVIDENCE_MISSING: 0,
         BANK_REFERENCE_DUPLICATE: 0,
         BANK_CREDIT_WITHOUT_REFERENCE: 0,
@@ -43,7 +43,7 @@ describe("summarizePersistedFinancialEvidence", () => {
       [{ reference: "R1", currency: "KES", creditMinor: 100n }, { reference: "R1", currency: "KES", creditMinor: 100n }, { reference: "", currency: "KES", creditMinor: 20n }],
     );
     expect(report.exceptions.DUPLICATE_SETTLEMENT_IDENTITY).toBe(1);
-    expect(report.exceptions.DUPLICATE_SETTLEMENT_REFERENCE).toBe(1);
+    expect(report.exceptions.DUPLICATE_SETTLEMENT_ID_ACROSS_PROVIDERS).toBe(1);
     expect(report.exceptions.INCOMPLETE_SETTLEMENT_FIELDS).toBe(1);
     expect(report.exceptions.UNSUPPORTED_SETTLEMENT_STATUS).toBe(1);
     expect(report.exceptions.TRANSACTION_EVIDENCE_MISSING).toBe(2);
