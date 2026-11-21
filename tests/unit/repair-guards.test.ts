@@ -204,6 +204,13 @@ describe("runtime and schema guards", () => {
       // append-only TRUNCATE guards. Nullable attribution fields and fail-closed checks preserve
       // existing rows; no production financial records are rewritten.
       "20261205000000_financial_evidence_ledger_hardening",
+      // Exact payment-to-subscription linkage: two nullable columns on Subscription, a unique
+      // paymentId index, a lookup index and a restrictive FK. Existing subscriptions stay NULL;
+      // no payment is inferred and no entitlement is granted by this migration.
+      "20261206000000_subscription_payment_linkage",
+      // Durable recovery work queue: one new table with bounded state/attempt constraints and
+      // indexes only. No payment, subscription or entitlement rows are touched.
+      "20261207000000_payment_recovery_queue",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
@@ -284,6 +291,8 @@ describe("runtime and schema guards", () => {
       "20261128000000_business_hub_conversion",
       "20261129000000_loyalty_points_rewards",
       "20261202000000_mjengo_isolated_entitlements",
+      "20261206000000_subscription_payment_linkage",
+      "20261207000000_payment_recovery_queue",
     ]) {
       let sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");
       if (migration === "20260930000000_commerce_baseline") {

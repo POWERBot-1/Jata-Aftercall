@@ -5039,3 +5039,25 @@ model BankStatementCreditEvidence {
   @@index([reference, currency, creditMinor])
   @@index([bookingDate])
 }
+
+/// Durable operator-review work queue. Tasks never authorize payment or entitlement mutations.
+model PaymentRecoveryTask {
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  exception      String
+  priority       String
+  status         String   @default("READY")
+  payload        Json
+  attempts       Int      @default(0)
+  maxAttempts    Int      @default(8)
+  availableAt    DateTime @default(now())
+  leaseToken     String?
+  leaseUntil     DateTime?
+  lastErrorCode  String?
+  completedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, availableAt, priority])
+  @@index([status, leaseUntil])
+}
