@@ -124,3 +124,14 @@ All monetary values are nullable where the provider may omit evidence and use Po
 `lib/payments/financial-evidence-store.ts` provides transactional persistence primitives for already-fetched normalized Paystack pages and already-supplied canonical CSV text. It does not call Paystack, expose an upload route, persist raw provider payloads or bank files, update Payment rows, create accounting journals, perform automatic bank matching, or authorize payouts. Bank statement imports require an explicit actor ID. The offline Prisma fallback includes fail-closed stubs for the new models.
 
 Important evidence boundary: Paystack settlement IDs are not treated as bank statement references. Persisting both evidence sets does not constitute a match. Exact payout-to-bank reconciliation still requires an independently evidenced bank reference and separately reviewed decision. No production migration has been applied and no live financial data has been read or written.
+
+
+## Evidence-gated recurring revenue calculation — candidate implementation
+
+`lib/payments/recurring-revenue.ts` adds a pure calculation boundary for subscription snapshots supplied with their exact Payment evidence. It admits a row only when the subscription is ACTIVE and within its effective period, the recurring snapshot is complete, the term is exactly 30 or 365 days, and the linked payment matches business, plan, payment ID, JATA reference, purpose, amount and currency. The payment must be PAID, explicitly LIVE, provider-settled by a valid provider timestamp, and marked MATCHED.
+
+The first calculation output is KES-only. Non-KES rows are excluded rather than converted. 30-day value is monthly; 365-day value is divided by twelve without whole-kobo rounding. Missing links, TEST/UNKNOWN payments, unresolved reconciliation, mismatches, unsupported terms and incomplete snapshots produce explicit exclusions.
+
+`tests/unit/recurring-revenue.test.ts` adds focused unit cases for eligibility, annual normalization, legacy missing links, test/unknown/unreconciled payments, identity/amount/currency mismatches, expired periods, unsupported terms, incomplete snapshots and ambiguous payment identities.
+
+**Acceptance limitation:** this is a pure calculation layer, not yet wired into admin reporting or independently executed on this exact commit. The shared base `Subscription` model does not yet carry a payment ID/reference pair and must remain excluded until authoritative linkage is implemented. AI Front Desk and Website Studio entitlements are not recurring subscriptions in this calculation. No MRR/ARR dashboard claim is authorized by this helper alone.
