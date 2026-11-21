@@ -8,6 +8,17 @@
  */
 import { isProviderTransactionId } from "@/lib/paymentVerification";
 
+export type CommissionPolicyGovernance = {
+  attribution: { precedence: string; windowDays: number; renewalTreatment: string; correctionTreatment: string; consentRequired: boolean };
+  amountTreatment: { taxTreatment: string; discountTreatment: string; feeTreatment: string };
+  recurrence: { newSale: string; renewal: string; upgrade: string };
+  reversals: { fullRefund: string; partialRefund: string; chargeback: string; disputeResolution: string; maxDays: number };
+  caps: { perPaymentMinor: number | null; perAgentPeriodMinor: number | null; period: string };
+  payout: { schedule: string; method: string; minimumMinor: number; holdDays: number };
+  hierarchy: { enabled: boolean; compensation: string; maxLevels: number };
+  privacy: { retentionDays: number; legalHold: string };
+};
+
 export type CommissionPolicySnapshot = {
   id: string;
   version: string;
@@ -19,6 +30,8 @@ export type CommissionPolicySnapshot = {
   eligibleEvents: readonly ("NEW_SALE" | "RENEWAL" | "UPGRADE")[];
   basis: "GROSS" | "NET";
   rule: { kind: "FIXED"; minorUnits: number } | { kind: "PERCENTAGE"; basisPoints: number; rounding: "HALF_UP" | "DOWN" };
+  /** Every non-calculation term must be explicit before a policy can be evaluated. */
+  governance: CommissionPolicyGovernance;
 };
 
 export type CommissionPaymentSnapshot = {
@@ -27,6 +40,10 @@ export type CommissionPaymentSnapshot = {
   status: string;
   purpose: string;
   paystackId: string | null;
+  /** Must be derived from authenticated provider mode, never browser input. */
+  isTestMode: boolean;
+  /** Must be derived from authoritative subscription/payment history. */
+  isFirstSettledPaymentForSubscription: boolean;
   currency: string;
   amountMinor: number;
   businessId: string | null;
@@ -42,8 +59,11 @@ export type CommissionAttributionSnapshot = {
   agentStatus: string;
   businessId: string;
   customerId: string;
+  /** Timestamp of the first valid recorded referral interaction. */
   validFrom: Date;
-  validUntil: Date | null; // exclusive; renewal retention must be explicitly approved
+  validUntil: Date | null; // exclusive
+  /** Must be derived from the persisted attribution history. */
+  isFirstTouch: boolean;
 };
 
 export type CommissionEvaluation =
@@ -59,11 +79,51 @@ function validMinor(value: unknown): value is number {
 function nonempty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= 255;
 }
+function completeGovernance(value: unknown): value is CommissionPolicyGovernance {
+  if (!value || typeof value !== "object") return false;
+  const governance = value as Partial<CommissionPolicyGovernance>;
+  const strings = [
+    governance.attribution?.precedence,
+    governance.attribution?.renewalTreatment,
+    governance.attribution?.correctionTreatment,
+    governance.amountTreatment?.taxTreatment,
+    governance.amountTreatment?.discountTreatment,
+    governance.amountTreatment?.feeTreatment,
+    governance.recurrence?.newSale,
+    governance.recurrence?.renewal,
+    governance.recurrence?.upgrade,
+    governance.reversals?.fullRefund,
+    governance.reversals?.partialRefund,
+    governance.reversals?.chargeback,
+    governance.reversals?.disputeResolution,
+    governance.caps?.period,
+    governance.payout?.schedule,
+    governance.payout?.method,
+    governance.hierarchy?.compensation,
+    governance.privacy?.legalHold,
+  ];
+  const integers = [
+    governance.attribution?.windowDays,
+    governance.reversals?.maxDays,
+    governance.payout?.minimumMinor,
+    governance.payout?.holdDays,
+    governance.hierarchy?.maxLevels,
+    governance.privacy?.retentionDays,
+  ];
+  const validCap = (amount: number | null | undefined) => amount === null || validMinor(amount);
+  return strings.every(nonempty) &&
+    integers.every(validMinor) &&
+    typeof governance.attribution?.consentRequired === "boolean" &&
+    typeof governance.hierarchy?.enabled === "boolean" &&
+    validCap(governance.caps?.perPaymentMinor) &&
+    validCap(governance.caps?.perAgentPeriodMinor);
+}
 
 /**
- * `eligibleMinor` is the approved gross/net base already derived from verified evidence. NET
- * treatment of taxes, fees, discounts and refunds has not been defined by the owner. Until it is,
- * callers must not invent a value or call this function for production commission creation.
+ * `eligibleMinor` is the owner-defined net base after recurring discounts and excluding separately
+ * itemized tax and provider fees. This pure evaluator cannot prove the provenance of that amount;
+ * callers must derive it from authoritative server-side payment and refund records. No numeric rate
+ * schedule is approved and this evaluator is not a production accrual writer.
  */
 export function evaluateCommission(input: {
   policy: CommissionPolicySnapshot | null;
@@ -73,6 +133,26 @@ export function evaluateCommission(input: {
 }): CommissionEvaluation {
   const { policy, payment, attribution, eligibleMinor } = input;
   if (!policy || policy.approval !== "APPROVED") return { eligible: false, reason: "POLICY_NOT_APPROVED" };
+  if (!completeGovernance(policy.governance)) return { eligible: false, reason: "POLICY_INCOMPLETE" };
+  // Enforce the owner's adopted initial policy boundary even if a future caller supplies a
+  // syntactically complete but broader policy snapshot. This is a calculation guard, not an
+  // accrual writer or approval of any numeric rate.
+  const governance = policy.governance;
+  if (
+    policy.basis !== "NET" ||
+    !Array.isArray(policy.eligibleEvents) ||
+    policy.eligibleEvents.length !== 1 ||
+    policy.eligibleEvents[0] !== "NEW_SALE" ||
+    governance.attribution.precedence !== "FIRST_TOUCH" ||
+    governance.attribution.windowDays !== 30 ||
+    governance.recurrence.newSale !== "FIRST_SETTLED_NON_TEST_PAYMENT" ||
+    governance.recurrence.renewal !== "NOT_COMMISSIONABLE" ||
+    governance.recurrence.upgrade !== "NOT_COMMISSIONABLE" ||
+    governance.amountTreatment.taxTreatment !== "EXCLUDE_SEPARATELY_ITEMIZED_TAX" ||
+    governance.amountTreatment.discountTreatment !== "AFTER_RECURRING_DISCOUNTS" ||
+    governance.amountTreatment.feeTreatment !== "EXCLUDE_PROVIDER_FEES" ||
+    governance.hierarchy.enabled !== false
+  ) return { eligible: false, reason: "POLICY_OUTSIDE_OWNER_BOUNDARY" };
   if (!nonempty(policy.id) || !nonempty(policy.version) || !validDate(policy.effectiveFrom) ||
       (policy.effectiveUntil !== null && (!validDate(policy.effectiveUntil) || policy.effectiveUntil <= policy.effectiveFrom)) ||
       !Array.isArray(policy.eligiblePlanIds) || !Array.isArray(policy.eligibleEvents) || policy.currency !== "KES") {
@@ -80,15 +160,18 @@ export function evaluateCommission(input: {
   }
   if (!nonempty(payment.id) || !nonempty(payment.reference) || !nonempty(payment.customerId) ||
       !nonempty(payment.businessId) || !nonempty(payment.planId) || !validDate(payment.verifiedAt) ||
-      !validMinor(payment.amountMinor) || payment.amountMinor === 0 || !validMinor(eligibleMinor)) {
+      !validMinor(payment.amountMinor) || payment.amountMinor === 0 || !validMinor(eligibleMinor) ||
+      typeof payment.isTestMode !== "boolean" || typeof payment.isFirstSettledPaymentForSubscription !== "boolean") {
     return { eligible: false, reason: "PAYMENT_INVALID" };
   }
-  if (payment.status !== "PAID" || payment.purpose !== "SUBSCRIPTION" || !isProviderTransactionId(payment.paystackId)) {
+  if (payment.status !== "PAID" || payment.purpose !== "SUBSCRIPTION" || payment.isTestMode ||
+      !payment.isFirstSettledPaymentForSubscription || !isProviderTransactionId(payment.paystackId)) {
     return { eligible: false, reason: "PAYMENT_NOT_VERIFIED" };
   }
-  if (payment.currency !== policy.currency || eligibleMinor > payment.amountMinor ||
-      (policy.basis === "GROSS" && eligibleMinor !== payment.amountMinor) ||
-      (policy.basis !== "GROSS" && policy.basis !== "NET")) return { eligible: false, reason: "BASIS_INVALID" };
+  // The owner-boundary guard above narrows the policy basis to NET before this point.
+  if (payment.currency !== policy.currency || eligibleMinor > payment.amountMinor) {
+    return { eligible: false, reason: "BASIS_INVALID" };
+  }
   if (payment.verifiedAt < policy.effectiveFrom || (policy.effectiveUntil && payment.verifiedAt >= policy.effectiveUntil)) {
     return { eligible: false, reason: "POLICY_NOT_EFFECTIVE" };
   }
@@ -96,14 +179,18 @@ export function evaluateCommission(input: {
     return { eligible: false, reason: "PAYMENT_NOT_ELIGIBLE" };
   }
   if (!attribution || !nonempty(attribution.agentId) || !nonempty(attribution.agentUserId) ||
-      !validDate(attribution.validFrom) || (attribution.validUntil !== null &&
+      !validDate(attribution.validFrom) || typeof attribution.isFirstTouch !== "boolean" ||
+      (attribution.validUntil !== null &&
         (!validDate(attribution.validUntil) || attribution.validUntil <= attribution.validFrom))) {
     return { eligible: false, reason: "ATTRIBUTION_INVALID" };
   }
-  if (attribution.agentStatus !== "ACTIVE" || attribution.agentUserId === payment.customerId ||
+  if (!attribution.isFirstTouch || attribution.agentStatus !== "ACTIVE" || attribution.agentUserId === payment.customerId ||
       attribution.businessId !== payment.businessId || attribution.customerId !== payment.customerId ||
       payment.verifiedAt < attribution.validFrom || (attribution.validUntil && payment.verifiedAt >= attribution.validUntil)) {
     return { eligible: false, reason: "ATTRIBUTION_NOT_ELIGIBLE" };
+  }
+  if (payment.verifiedAt.getTime() - attribution.validFrom.getTime() > 30 * 24 * 60 * 60 * 1000) {
+    return { eligible: false, reason: "ATTRIBUTION_OUTSIDE_WINDOW" };
   }
   if (eligibleMinor === 0) return { eligible: false, reason: "ZERO_ELIGIBLE_AMOUNT" };
   const rule = policy.rule;

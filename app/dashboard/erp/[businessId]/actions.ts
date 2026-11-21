@@ -38,6 +38,7 @@ import {
   recordPurchaseBill,
 } from "@/lib/erp/procurement";
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/erp/notifications";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 import {
   createRequisition,
   submitRequisition,
@@ -68,7 +69,7 @@ function back(base: string, path: string, params: Record<string, string>): never
 
 async function access(businessId: string, permission: Parameters<typeof hasErpPermission>[1], options: { entitled?: boolean } = {}) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
   try {
     return await requireErpAccess(businessId, session, { permission, requireEntitled: options.entitled });
   } catch (error) {
@@ -103,7 +104,11 @@ export async function bootstrapWorkspaceAction(form: FormData) {
   const base = erpBasePath(businessId);
   let error: string | null = null;
   try {
-    const context = await access(businessId, "WORKSPACE_READ");
+    // R-TI-04: bootstrapping creates the ERP configuration (industry pack, feature flags) and
+    // re-creates any default tax rules, templates and channels the owner removed. That is a
+    // settings change, so it needs the same permission as saveBusinessProfileAction, not
+    // WORKSPACE_READ (which every member, including VIEWER, holds).
+    const context = await access(businessId, "MANAGE_SETTINGS");
     await bootstrapErpWorkspace(context.business.id, {
       businessId,
       actorId: context.session.userId,
@@ -1061,11 +1066,11 @@ export async function startErpPlanAction(form: FormData) {
     if (Number(plan.priceKES) !== ERP_PLAN_PRICE_KES || Number(plan.durationDays) !== ERP_PLAN_DURATION_DAYS) {
       throw new ActionError("The plan price on the server does not match the published price. Payment is blocked until an administrator corrects it.");
     }
-    const existing = await prisma.erpSubscription.findUnique({ where: { businessId } });
+    const existing = await prisma.erpProSubscription.findUnique({ where: { businessId } });
     if (existing) {
-      await prisma.erpSubscription.update({ where: { businessId }, data: { planId: plan.id, planKey: ERP_PLAN_KEY, status: existing.status === "ACTIVE" ? "ACTIVE" : "PENDING" } });
+      await prisma.erpProSubscription.update({ where: { businessId }, data: { planId: plan.id, planKey: ERP_PLAN_KEY, status: existing.status === "ACTIVE" ? "ACTIVE" : "PENDING" } });
     } else {
-      await prisma.erpSubscription.create({
+      await prisma.erpProSubscription.create({
         data: { businessId, userId: context.session.userId, planId: plan.id, planKey: ERP_PLAN_KEY, status: "PENDING" },
       });
     }

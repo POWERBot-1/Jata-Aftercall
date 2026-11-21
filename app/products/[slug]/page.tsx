@@ -170,8 +170,9 @@ const PRODUCTS: Record<string, ProductPage> = {
       ] },
     ],
     actions: [
-      { href: "/login", label: "Sign in" },
-      { href: "/dashboard/mjengo", label: "Open the MJENGO OS workspace" },
+      // Public entry outside the /dashboard layout so sign-in keeps the MJENGO destination (R-MJ-11).
+      { href: "/login?next=mjengo", label: "Sign in" },
+      { href: "/mjengo", label: "Open the MJENGO OS workspace" },
     ],
   },
   "jata-autopilot": {

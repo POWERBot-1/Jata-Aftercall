@@ -80,8 +80,10 @@ export function assertMjengoPricing(plan: { key?: string; priceKES?: number; dur
 }
 
 export function mjengoFeatureEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.MJENGO_OS_DISABLED === "true") return false;
-  return true;
+  // Preserve the existing production contract: MJENGO is enabled unless an operator
+  // explicitly disables it. Requiring a new opt-in variable here would silently turn
+  // every existing production deployment into a 404 after this PR is released.
+  return env.MJENGO_OS_DISABLED !== "true";
 }
 
 /**
@@ -133,6 +135,19 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
     };
   }
 
+  // Suspension is decided before payment evidence. The webhook suspends MJENGO OS on a full refund,
+  // and that same refund moves the payment PAID → REFUNDED, so a suspended business never has a PAID
+  // payment. Checked after the unpaid branch (as before R-MJ-08), SUSPENDED was unreachable for every
+  // refund: the owner was told to "complete the KES 2,000 payment" and offered a second checkout (402)
+  // instead of the support path (403). See tests/prisma/mjengo-journey-postgres.test.ts.
+  if (String(subscription.status).toUpperCase() === "SUSPENDED" || String(input.entitlement?.status).toUpperCase() === "SUSPENDED") {
+    return {
+      ...base, entitled: false, inGrace: false, status: "SUSPENDED", lifecycle: "SUSPENDED",
+      reason: "MJENGO OS is suspended. Contact JATA support to restore it.",
+      nextAction: "none",
+    };
+  }
+
   const activeStatuses = ["ACTIVE", "EXPIRING", "PAST_DUE"];
   const subscriptionActive = activeStatuses.includes(String(subscription.status ?? "").toUpperCase());
   if (!subscriptionActive && !paid) {
@@ -140,14 +155,6 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
       ...base, entitled: false, inGrace: false, status: "PENDING", lifecycle: "AWAITING_PAYMENT",
       reason: "Complete the KES 2,000 payment to activate MJENGO OS.",
       nextAction: "pay",
-    };
-  }
-
-  if (String(subscription.status).toUpperCase() === "SUSPENDED" || String(input.entitlement?.status).toUpperCase() === "SUSPENDED") {
-    return {
-      ...base, entitled: false, inGrace: false, status: "SUSPENDED", lifecycle: "SUSPENDED",
-      reason: "MJENGO OS is suspended. Contact JATA support to restore it.",
-      nextAction: "none",
     };
   }
 
@@ -184,29 +191,48 @@ export function deriveMjengoEntitlement(input: MjengoEntitlementInput): MjengoEn
   };
 }
 
-// Reuse ERP subscription/entitlement tables with packageKey discriminator for now;
-// dedicated MJENGO tables can be added later without breaking this gate.
-// For now, MJENGO reads same ErpSubscription/ErpEntitlement but filtered by planKey.
+// MJENGO uses dedicated tables so ERP PRO and MJENGO OS can coexist for one business.
+/**
+ * Whether the business has completed setup (an ERP configuration row exists — the workspace's
+ * journal and settings live there). findUnique resolves `null` for a missing row rather than
+ * throwing, so the result must come from the row itself: the previous `.then(() => true)` reported
+ * every business as configured, which skipped the "set up first" step for brand-new businesses.
+ * A lookup failure is treated as not configured (fail-closed for the lifecycle hint only; it never
+ * grants access — entitlement is derived from settled MJENGO subscription/payment evidence).
+ */
+export async function hasMjengoConfiguration(businessId: string): Promise<boolean> {
+  try {
+    const row = await (prisma as any).erpConfiguration?.findUnique?.({ where: { businessId }, select: { id: true } });
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+
 export async function getMjengoEntitlement(businessId: string): Promise<MjengoEntitlementState> {
-  const [subscription, entitlement, paidPayment] = await Promise.all([
-    (prisma as any).erpSubscription?.findFirst?.({
-      where: { businessId, planKey: MJENGO_PLAN_KEY },
+  const [subscription, entitlement, plan] = await Promise.all([
+    (prisma as any).mjengoSubscription?.findUnique?.({
+      where: { businessId },
       select: { status: true, planKey: true, startAt: true, expiresAt: true, graceUntil: true },
-      orderBy: { createdAt: "desc" },
     }).catch(() => null) ?? null,
-    (prisma as any).erpEntitlement?.findFirst?.({
-      where: { businessId, packageKey: MJENGO_PLAN_KEY },
+    (prisma as any).mjengoEntitlement?.findUnique?.({
+      where: { businessId },
       select: { status: true },
     }).catch(() => null) ?? null,
-    (prisma as any).payment?.findFirst?.({
-      where: { businessId, status: "PAID", planKey: MJENGO_PLAN_KEY } as any,
-      select: { status: true, planKey: true },
-      orderBy: { createdAt: "desc" },
-    }).catch(() => null) ?? null,
+    prisma.planConfig.findUnique({ where: { key: MJENGO_PLAN_KEY }, select: { id: true } }).catch(() => null),
   ]);
+  // Payment stores planId (not planKey); resolve the canonical MJENGO plan before looking for
+  // provider-settled payment evidence. Never infer a payment from the amount alone.
+  const payment = plan
+    ? await prisma.payment.findFirst({
+        where: { businessId, status: "PAID", planId: plan.id },
+        select: { status: true },
+        orderBy: { createdAt: "desc" },
+      }).catch(() => null)
+    : null;
+  const paidPayment = payment ? { status: payment.status, planKey: MJENGO_PLAN_KEY } : null;
 
-  // Check if business has any ERP configuration as proxy for "configured"
-  const configured = await (prisma as any).erpConfiguration?.findUnique?.({ where: { businessId } }).then(() => true).catch(() => false) ?? false;
+  const configured = await hasMjengoConfiguration(businessId);
 
   return deriveMjengoEntitlement({
     subscription: subscription as any ?? null,
@@ -219,8 +245,8 @@ export async function getMjengoEntitlement(businessId: string): Promise<MjengoEn
 export async function syncMjengoEntitlement(businessId: string): Promise<MjengoEntitlementState> {
   const state = await getMjengoEntitlement(businessId);
   try {
-    await (prisma as any).erpEntitlement?.upsert?.({
-      where: { businessId_packageKey: { businessId, packageKey: MJENGO_PLAN_KEY } } as any,
+    await (prisma as any).mjengoEntitlement?.upsert?.({
+      where: { businessId },
       update: { status: state.status, expiresAt: state.expiresAt } as never,
       create: { businessId, packageKey: MJENGO_PLAN_KEY, status: state.status, expiresAt: state.expiresAt } as never,
     });

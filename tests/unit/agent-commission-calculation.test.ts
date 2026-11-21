@@ -1,15 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { evaluateCommission, type CommissionPolicySnapshot, type CommissionPaymentSnapshot, type CommissionAttributionSnapshot } from "@/lib/agents/commission-calculation";
+import { evaluateCommission, type CommissionPolicySnapshot, type CommissionPaymentSnapshot, type CommissionAttributionSnapshot, type CommissionPolicyGovernance } from "@/lib/agents/commission-calculation";
 
 // Test-only hypothetical values; these are not a JATA commission policy.
-const policy: CommissionPolicySnapshot = { id: "policy-test", version: "v1", approval: "APPROVED", effectiveFrom: new Date("2026-01-01Z"), effectiveUntil: null, currency: "KES", eligiblePlanIds: ["plan-1"], eligibleEvents: ["NEW_SALE"], basis: "GROSS", rule: { kind: "PERCENTAGE", basisPoints: 1250, rounding: "HALF_UP" } };
-const payment: CommissionPaymentSnapshot = { id: "payment-1", reference: "sandbox-reference", status: "PAID", purpose: "SUBSCRIPTION", paystackId: "sandbox-transaction", currency: "KES", amountMinor: 10000, businessId: "business-1", customerId: "customer-1", planId: "plan-1", verifiedAt: new Date("2026-02-01Z"), event: "NEW_SALE" };
-const attribution: CommissionAttributionSnapshot = { agentId: "agent-1", agentUserId: "agent-user-1", agentStatus: "ACTIVE", businessId: "business-1", customerId: "customer-1", validFrom: new Date("2026-01-01Z"), validUntil: null };
-const evaluate = (overrides: Partial<Parameters<typeof evaluateCommission>[0]> = {}) => evaluateCommission({ policy, payment, attribution, eligibleMinor: 10000, ...overrides });
+const testOnlyGovernance: CommissionPolicyGovernance = {
+  attribution: { precedence: "FIRST_TOUCH", windowDays: 30, renewalTreatment: "FIRST_TOUCH_ONLY", correctionTreatment: "INDEPENDENT_APPROVAL_AND_IMMUTABLE_AUDIT", consentRequired: true },
+  amountTreatment: { taxTreatment: "EXCLUDE_SEPARATELY_ITEMIZED_TAX", discountTreatment: "AFTER_RECURRING_DISCOUNTS", feeTreatment: "EXCLUDE_PROVIDER_FEES" },
+  recurrence: { newSale: "FIRST_SETTLED_NON_TEST_PAYMENT", renewal: "NOT_COMMISSIONABLE", upgrade: "NOT_COMMISSIONABLE" },
+  reversals: { fullRefund: "TEST_ONLY", partialRefund: "TEST_ONLY", chargeback: "TEST_ONLY", disputeResolution: "TEST_ONLY", maxDays: 1 },
+  caps: { perPaymentMinor: null, perAgentPeriodMinor: null, period: "TEST_ONLY" },
+  payout: { schedule: "TEST_ONLY", method: "TEST_ONLY", minimumMinor: 0, holdDays: 0 },
+  hierarchy: { enabled: false, compensation: "TEST_ONLY", maxLevels: 0 },
+  privacy: { retentionDays: 1, legalHold: "TEST_ONLY" },
+};
+// Explicit placeholders only: they are not JATA policy and must never be persisted or used for accrual.
+const policy: CommissionPolicySnapshot = { id: "policy-test", version: "v1", approval: "APPROVED", effectiveFrom: new Date("2026-01-01Z"), effectiveUntil: null, currency: "KES", eligiblePlanIds: ["plan-1"], eligibleEvents: ["NEW_SALE"], basis: "NET", rule: { kind: "PERCENTAGE", basisPoints: 1250, rounding: "HALF_UP" }, governance: testOnlyGovernance };
+const payment: CommissionPaymentSnapshot = { id: "payment-1", reference: "sandbox-reference", status: "PAID", purpose: "SUBSCRIPTION", paystackId: "sandbox-transaction", isTestMode: false, isFirstSettledPaymentForSubscription: true, currency: "KES", amountMinor: 10000, businessId: "business-1", customerId: "customer-1", planId: "plan-1", verifiedAt: new Date("2026-02-01Z"), event: "NEW_SALE" };
+const attribution: CommissionAttributionSnapshot = { agentId: "agent-1", agentUserId: "agent-user-1", agentStatus: "ACTIVE", businessId: "business-1", customerId: "customer-1", validFrom: new Date("2026-01-10Z"), validUntil: null, isFirstTouch: true };
+const evaluate = (overrides: Partial<Parameters<typeof evaluateCommission>[0]> = {}) => evaluateCommission({ policy, payment, attribution, eligibleMinor: 8000, ...overrides });
 
 describe("commission policy evaluation (hypothetical fixtures only)", () => {
   it("calculates direct sales without requiring agent recruitment", () => {
-    expect(evaluate()).toMatchObject({ eligible: true, commissionMinor: 1250, paymentId: "payment-1", policyVersion: "v1", agentId: "agent-1" });
+    expect(evaluate()).toMatchObject({ eligible: true, commissionMinor: 1000, paymentId: "payment-1", policyVersion: "v1", agentId: "agent-1" });
   });
   it("blocks absent, draft, revoked and out-of-period policies", () => {
     expect(evaluate({ policy: null })).toMatchObject({ reason: "POLICY_NOT_APPROVED" });
@@ -17,14 +28,25 @@ describe("commission policy evaluation (hypothetical fixtures only)", () => {
     expect(evaluate({ policy: { ...policy, approval: "REVOKED" } })).toMatchObject({ reason: "POLICY_NOT_APPROVED" });
     expect(evaluate({ policy: { ...policy, effectiveUntil: payment.verifiedAt } })).toMatchObject({ reason: "POLICY_NOT_EFFECTIVE" });
   });
+  it("blocks an approved-looking policy when any governance dimension is missing", () => {
+    const incomplete = { ...policy, governance: undefined } as unknown as CommissionPolicySnapshot;
+    expect(evaluate({ policy: incomplete })).toMatchObject({ eligible: false, reason: "POLICY_INCOMPLETE" });
+    expect(evaluate({ policy: { ...policy, governance: { ...testOnlyGovernance, payout: undefined } as unknown as CommissionPolicyGovernance } })).toMatchObject({ eligible: false, reason: "POLICY_INCOMPLETE" });
+  });
+  it("rejects policy snapshots that broaden the owner's first-sale-only boundary", () => {
+    expect(evaluate({ policy: { ...policy, eligibleEvents: ["NEW_SALE", "RENEWAL"] } })).toMatchObject({ reason: "POLICY_OUTSIDE_OWNER_BOUNDARY" });
+    expect(evaluate({ policy: { ...policy, basis: "GROSS" } })).toMatchObject({ reason: "POLICY_OUTSIDE_OWNER_BOUNDARY" });
+    expect(evaluate({ policy: { ...policy, governance: { ...testOnlyGovernance, attribution: { ...testOnlyGovernance.attribution, windowDays: 31 } } } })).toMatchObject({ reason: "POLICY_OUTSIDE_OWNER_BOUNDARY" });
+    expect(evaluate({ attribution: { ...attribution, validFrom: new Date("2025-12-31Z") } })).toMatchObject({ reason: "ATTRIBUTION_OUTSIDE_WINDOW" });
+  });
   it("does not credit unverified, refunded or non-subscription events", () => {
-    for (const override of [{ status: "PENDING" }, { status: "REFUNDED" }, { paystackId: null }, { purpose: "ORDER" }]) {
+    for (const override of [{ status: "PENDING" }, { status: "REFUNDED" }, { paystackId: null }, { purpose: "ORDER" }, { isTestMode: true }, { isFirstSettledPaymentForSubscription: false }]) {
       expect(evaluate({ payment: { ...payment, ...override } })).toMatchObject({ reason: "PAYMENT_NOT_VERIFIED" });
     }
     expect(evaluate({ payment: { ...payment, event: "RENEWAL" } })).toMatchObject({ reason: "PAYMENT_NOT_ELIGIBLE" });
   });
   it("blocks self-referral, suspended agents, mismatched customers, and expired attribution", () => {
-    for (const override of [{ agentUserId: payment.customerId }, { agentStatus: "SUSPENDED" }, { businessId: "other" }, { customerId: "other" }, { validUntil: payment.verifiedAt }]) {
+    for (const override of [{ agentUserId: payment.customerId }, { agentStatus: "SUSPENDED" }, { businessId: "other" }, { customerId: "other" }, { validUntil: payment.verifiedAt }, { isFirstTouch: false }]) {
       expect(evaluate({ attribution: { ...attribution, ...override } })).toMatchObject({ reason: "ATTRIBUTION_NOT_ELIGIBLE" });
     }
   });
@@ -37,7 +59,7 @@ describe("commission policy evaluation (hypothetical fixtures only)", () => {
   });
   it("rejects incorrect bases, non-integer values and unsafe overflow", () => {
     expect(evaluate({ eligibleMinor: 10001 })).toMatchObject({ reason: "BASIS_INVALID" });
-    expect(evaluate({ eligibleMinor: 9999 })).toMatchObject({ reason: "BASIS_INVALID" });
+    expect(evaluate({ eligibleMinor: 0 })).toMatchObject({ reason: "ZERO_ELIGIBLE_AMOUNT" });
     expect(evaluate({ eligibleMinor: 1.1 })).toMatchObject({ reason: "PAYMENT_INVALID" });
     expect(evaluate({ policy: { ...policy, rule: { kind: "PERCENTAGE", basisPoints: Number.MAX_SAFE_INTEGER, rounding: "DOWN" } }, payment: { ...payment, amountMinor: 10001 }, eligibleMinor: 10001 })).toMatchObject({ reason: "AMOUNT_OVERFLOW" });
   });

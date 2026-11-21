@@ -21,6 +21,7 @@ import { BusinessCatalogue } from "./BusinessCatalogue";
 import { ItemCard, ItemPrice } from "./ItemCard";
 import { AddToCartButton } from "./CartProvider";
 import { ContactTracker } from "./Track";
+import { primaryCtaLabel } from "@/lib/experience/cta";
 
 function SectionShell({
   id,
@@ -270,7 +271,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
               <p className="eb-lede">{section.subtitle || offer?.subtitle}</p>
               <div style={{ marginTop: "1.5rem" }}>
                 <Link href={`/b/${data.business.slug}/shop`} className="eb-btn">
-                  {offer?.ctaLabel || profile.cta.primary}
+                  {primaryCtaLabel(offer?.ctaLabel, profile.cta.primary, "shop")}
                 </Link>
               </div>
             </div>
@@ -498,7 +499,7 @@ export function SectionRenderer({ section, data }: { section: ExperienceSection;
               {section.body ? <p className="eb-lede" style={{ marginInline: "auto" }}>{section.body}</p> : null}
               <div style={{ marginTop: "1.5rem", display: "flex", justifyContent: "center", gap: "0.75rem", flexWrap: "wrap" }}>
                 <Link href={section.cta?.href && section.cta.href.startsWith("/") ? section.cta.href : `/b/${data.business.slug}/shop`} className="eb-btn">
-                  {section.cta?.label || profile.cta.primary}
+                  {primaryCtaLabel(section.cta?.label, profile.cta.primary, "shop")}
                 </Link>
               </div>
             </div>

@@ -53,3 +53,6 @@ Thumbs.db
 
 # Local verification logs, browser binaries and bundle reports (not release source)
 .cache/
+
+# Local/CI test evidence files (uploaded as artifacts, never committed)
+test-results/

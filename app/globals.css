@@ -1009,6 +1009,15 @@ button:focus-visible {
   padding: clamp(3rem, 9vw, 6rem) 1.25rem clamp(2.5rem, 6vw, 4rem);
 }
 
+/* Keep hero copy and its primary actions clear of the fixed mobile action bar.
+   This applies to every generated family, not only the cardless-immersive variant. */
+@media (max-width: 899px) {
+  .eb-scope:has(.eb-actionbar) .eb-hero__content,
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 1.5rem);
+  }
+}
+
 @media (min-width: 768px) { .eb-hero__content { padding-inline: 2rem; } }
 
 .eb-hero--overlay .eb-hero__content,
@@ -4811,6 +4820,7 @@ button:focus-visible {
 .ws-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
 @media (min-width: 640px) { .ws-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 1200px) { .ws-stats--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 640px) { .ws-stats--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .ws-stat {
   position: relative;
   display: grid;
@@ -5637,5 +5647,62 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* Reserve the measured mobile contact bar inside the hero itself. The trailing spacer at
+   the end of the document protects the footer; it cannot stop a fixed bar from covering a short
+   first-screen hero. Apply this to every family and hero treatment that renders content directly,
+   including split grids, but only when the shared action bar is actually present. */
+.eb-family-cardless-immersive .eb-hero__content { min-width: 0; }
+.eb-family-cardless-immersive .eb-hero .eb-h1 {
+  max-width: 14ch;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+@media (max-width: 899px) {
+  .eb-scope:has(.eb-actionbar) .eb-hero__content,
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 1.5rem);
+  }
+}
+
+/* Un-tinted family sections are transparent and paint on the theme page background
+   (--eb-bg), which is dark for Graphite/Midnight-style themes and light for others. A fixed
+   ink colour is therefore wrong for half the catalogue (it measured 1.1:1 on Graphite).
+   --eb-heading is contrast-corrected against --eb-bg in themeCss(), so use it explicitly at
+   this specificity to win over any pale display-token override; tinted sections keep theirs. */
+.eb-family-editorial .eb-section:not([style]) .eb-section-head .eb-h2 {
+  color: var(--eb-heading);
+}
+.eb-family-cardless-immersive .eb-section:not([style]) .eb-section-head .eb-h2 {
+  color: var(--eb-heading);
+}
+
+/* A cardless hero keeps its title legible over either a media overlay or a plain surface. */
+.eb-family-cardless-immersive .eb-hero--text .eb-h1,
+.eb-family-cardless-immersive .eb-hero--text .eb-lede,
+.eb-family-cardless-immersive .eb-hero--text .eb-eyebrow {
+  color: var(--eb-text);
+}
+.eb-family-cardless-immersive .eb-hero__content {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+.eb-family-cardless-immersive .eb-hero .eb-h1 {
+  max-width: min(14ch, 100%);
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-wrap: balance;
+}
+@media (max-width: 899px) {
+  .eb-family-cardless-immersive .eb-hero__content {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 1.5rem);
+  }
+  .eb-family-cardless-immersive .eb-hero .eb-h1 {
+    font-size: clamp(2rem, 9vw, 3.4rem);
+    line-height: 1.04;
   }
 }

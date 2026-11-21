@@ -8,7 +8,6 @@
 import Link from "next/link";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { getOwnedBusinessIds } from "@/lib/tenant";
 import { posBasePath } from "@/lib/pos/workspace";
 import { formatKES } from "@/lib/format";
@@ -20,6 +19,7 @@ import { WorkspaceEmpty, WorkspaceHero, WorkspacePanel } from "@/components/work
 import { WorkspaceDoor } from "@/components/workspace/WorkspaceDoor";
 import { WORKSPACE_HERO_PHOTO, WORKSPACE_PHOTOS, categoryLabel, photoForCategory } from "@/lib/workspaceImagery";
 import { ArrowRight, BarChart3, Boxes, CreditCard, Receipt, Store, Users } from "lucide-react";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 
 /**
  * Which business is this POS for? (§4)
@@ -35,7 +35,7 @@ export const metadata = { title: "Business POS" };
 
 export default async function PosIndexPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
 
   const ownedIds = await getOwnedBusinessIds(session);
   const businesses = await prisma.business.findMany({

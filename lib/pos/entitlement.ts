@@ -295,12 +295,31 @@ export async function getPosEntitlement(businessId: string): Promise<PosEntitlem
 /** Persist the derived status so admin views and lifecycle jobs can query it directly. */
 export async function syncPosEntitlement(businessId: string): Promise<PosEntitlementState> {
   const state = await getPosEntitlement(businessId);
-  const data = {
-    status: state.status,
-    activatedAt: state.entitled ? new Date() : null,
-    expiresAt: state.expiresAt,
-  };
   try {
+    // R-ADM-03: this runs on every POS request. It used to write `activatedAt: new Date()` each time,
+    // so an entitled business's activation time was always "the last request" — the admin
+    // entitlement view could never show when access began — and every request rewrote the row.
+    // The activation time is now kept while the status is unchanged, and an unchanged row is not
+    // written at all.
+    const existing = await prisma.posEntitlement?.findUnique?.({
+      where: { businessId },
+      select: { status: true, activatedAt: true, expiresAt: true },
+    });
+    const keepActivation = state.entitled && existing?.activatedAt && existing.status === state.status;
+    const data = {
+      status: state.status,
+      activatedAt: state.entitled ? (keepActivation ? existing.activatedAt : new Date()) : null,
+      expiresAt: state.expiresAt,
+    };
+    const time = (value: unknown) => (value ? new Date(value as string | Date).getTime() : null);
+    if (
+      existing &&
+      existing.status === data.status &&
+      time(existing.activatedAt) === time(data.activatedAt) &&
+      time(existing.expiresAt) === time(data.expiresAt)
+    ) {
+      return state;
+    }
     await prisma.posEntitlement?.upsert?.({
       where: { businessId },
       update: data as never,

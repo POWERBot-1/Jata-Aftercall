@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const businessId = searchParams.get("businessId")?.trim() || "";
   if (!businessId) return NextResponse.json({ error: SAFE_ERRORS.chooseBusiness }, { status: 400 });
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardTenantMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   try {
@@ -75,7 +75,8 @@ export async function PATCH(req: Request) {
       select: { id: true, businessId: true, status: true, serviceName: true },
     });
     if (!booking) return NextResponse.json({ error: SAFE_ERRORS.notFound }, { status: 404 });
-    const guard = await guardTenantMutation(session, booking.businessId);
+    // Changing a booking is order handling: STAFF and above (R-TI-03).
+    const guard = await guardTenantMutation(session, booking.businessId, "manage_orders");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     if (!isValidBookingTransition(booking.status, status)) {

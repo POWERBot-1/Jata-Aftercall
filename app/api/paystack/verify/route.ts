@@ -28,10 +28,7 @@ export async function GET(req: Request) {
   const resolvedPlanKey = await planKeyOf(payment.planId);
   const isPosPayment = resolvedPlanKey === POS_PLAN_KEY;
   const isAutopilotPayment = isAutopilotPlanKey(resolvedPlanKey);
-  // MJENGO OS keeps its own subscription row (ErpSubscription with planKey='MJENGO_OS'). Without
-  // this branch the confirmation for a MJENGO payment read the ordinary AFTERCALL Subscription,
-  // which is always empty for that product — so it would report "no subscription" and re-enter the
-  // repair path on every refresh, and the owner would never be sent to the workspace they paid for.
+  // MJENGO OS has a dedicated subscription row, separate from ERP PRO and the ordinary AFTERCALL plan.
   const isMjengoPayment = resolvedPlanKey === MJENGO_PLAN_KEY;
   const posBusinessId = isPosPayment ? payment.businessId ?? null : null;
   const autopilotBusinessId = isAutopilotPayment ? payment.businessId ?? null : null;
@@ -68,9 +65,8 @@ export async function GET(req: Request) {
             // The row is shared 1:1 per business, so the plan key decides whether this payment's
             // product is actually the one that is live. A different key reports no subscription,
             // which is truthful and sends the owner to support instead of showing a false ACTIVE.
-            ? await prisma.erpSubscription
+            ? await (prisma as any).mjengoSubscription
                 .findUnique({ where: { businessId: payment.businessId }, select: { status: true, planKey: true } })
-                .then((row) => (row && row.planKey === MJENGO_PLAN_KEY ? row : null))
             : await prisma.subscription.findUnique({ where: { businessId: payment.businessId }, select: { status: true } })
       : null;
     if (payment.businessId && !subscription) {

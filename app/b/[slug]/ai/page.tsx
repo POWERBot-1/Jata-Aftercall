@@ -12,6 +12,7 @@ import { publicProductPrice } from "@/lib/ai-public-products";
 import { loadStorefront } from "@/lib/experience/storefront";
 import { isRenderPreference } from "@/lib/experience/renderMode";
 import { requestCache } from "@/lib/request-cache";
+import { aiPreviewLoginPath } from "@/lib/post-auth-destination";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +109,8 @@ export default async function PublicAIFrontDeskPage({
     notFound();
   }
   if (data.blocked === "login") {
-    redirect(`/login?callbackUrl=/b/${business.slug}/ai?preview=true`);
+    // Login never read `callbackUrl`, so the owner was dropped on /dashboard (R-RT-02).
+    redirect(aiPreviewLoginPath(business.slug));
   }
   if (data.blocked === "forbidden") {
     // A live AI Front Desk is the KES 499 / 30-day package: an unpublished/unpaid business

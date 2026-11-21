@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import type { PostAuthDestination } from "@/lib/post-auth-destination";
 
-export default function LoginForm({ destination = "/dashboard" }: { destination?: "/dashboard" | "/agents/dashboard" | "/control" }) {
+export default function LoginForm({ destination = "/dashboard" }: { destination?: PostAuthDestination }) {
   const [form, setForm] = useState({ email: "", password: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);

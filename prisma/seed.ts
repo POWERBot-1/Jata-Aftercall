@@ -267,6 +267,70 @@ async function main() {
     console.log("Seeded business:", d.slug);
   }
 
+
+  // PR125's authenticated sandbox acceptance uses a dedicated synthetic owner and two
+  // isolated businesses. Never repurpose the public demo owner: existing demo credentials
+  // are intentionally immutable, and the public demo rows may contain non-demo payments.
+  if (process.env.VERCEL_ENV === "preview" && process.env.JATA_RUN_STAGING_ACCEPTANCE === "true") {
+    const stagingOwnerEmail = "pr125-staging-owner@jata.link";
+    const stagingOwnerHash = await bcrypt.hash(seedEnvironment.demoFixturePassword, 10);
+    const stagingOwner = await prisma.user.upsert({
+      where: { email: stagingOwnerEmail },
+      update: {},
+      create: {
+        email: stagingOwnerEmail,
+        name: "PR125 Staging Owner",
+        phone: "0700000001",
+        passwordHash: stagingOwnerHash,
+        role: "CUSTOMER",
+      },
+    });
+
+    const stagingBusinesses = [
+      {
+        slug: "pr125-staging-checkout",
+        name: "PR125 Staging Checkout",
+        category: "Retail",
+        description: "Synthetic checkout acceptance fixture. Not a real business.",
+      },
+      {
+        slug: "pr125-staging-settlement",
+        name: "PR125 Staging Settlement",
+        category: "Retail",
+        description: "Synthetic payment settlement acceptance fixture. Not a real business.",
+      },
+    ];
+
+    for (const fixture of stagingBusinesses) {
+      const existing = await prisma.business.findUnique({
+        where: { slug: fixture.slug },
+        select: { id: true, ownerId: true },
+      });
+      if (existing && existing.ownerId !== stagingOwner.id) {
+        throw new Error(`Refusing to reuse PR125 staging business owned by another account: ${fixture.slug}`);
+      }
+      const business = existing || await prisma.business.create({
+        data: {
+          ...fixture,
+          ownerId: stagingOwner.id,
+          phone: "0700000001",
+          whatsapp: "0700000001",
+          location: "Synthetic Preview fixture",
+          theme: "clean",
+          isPublished: true,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+      await prisma.businessMember.upsert({
+        where: { userId_businessId: { userId: stagingOwner.id, businessId: business.id } },
+        update: {},
+        create: { userId: stagingOwner.id, businessId: business.id, role: "OWNER" },
+      });
+      console.log("Ensured isolated PR125 staging business:", fixture.slug);
+    }
+  }
+
   console.log("Seed complete.");
 }
 

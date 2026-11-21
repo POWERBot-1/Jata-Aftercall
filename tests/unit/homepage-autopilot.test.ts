@@ -206,7 +206,7 @@ describe("the Autopilot card does not weaken any purchase boundary", () => {
 
   it("is gated by the existing server-side sign-in redirect, like the POS", () => {
     const route = readFileSync(path.join(root, "app/dashboard/autopilot/page.tsx"), "utf8");
-    expect(route).toContain('if (!session) redirect("/login")');
+    expect(route).toContain("if (!session) await redirectToDashboardLogin();");
   });
 
   it("leaves the other five plans, their prices and their destinations untouched", async () => {

@@ -21,7 +21,7 @@ function sanitizeText(value: unknown, max = 300) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-async function authorizeBusiness(businessId: string) {
+async function authorizeBusiness(businessId: string, action: tenantLib.RolePermissionLevel) {
   const session =
     (await authLib.getSession?.().catch(() => null)) ||
     (await authLib.getCurrentUser?.().catch(() => null));
@@ -32,6 +32,7 @@ async function authorizeBusiness(businessId: string) {
     const guarded = await tenantLib.guardTenantMutation(
       { userId, email: session.email || "", role: session.role },
       businessId,
+      action,
     );
     if (!guarded.ok) {
       return { ok: false as const, status: guarded.status, error: guarded.error };
@@ -39,6 +40,8 @@ async function authorizeBusiness(businessId: string) {
     return { ok: true as const, user: { id: userId, email: session.email, role: session.role } };
   }
 
+  // Without the role guard, membership alone can only ever authorize a read (fail closed, R-TI-03).
+  if (action !== "read") return { ok: false as const, status: 403, error: "Forbidden" };
   if (typeof tenantLib.canAccessBusiness === "function") {
     const allowed = await tenantLib.canAccessBusiness(userId, businessId, session.role);
     if (!allowed) return { ok: false as const, status: 403, error: "Forbidden" };
@@ -54,7 +57,7 @@ export async function GET(req: Request) {
     if (!businessId) {
       return NextResponse.json({ error: "businessId is required" }, { status: 400 });
     }
-    const auth = await authorizeBusiness(businessId);
+    const auth = await authorizeBusiness(businessId, "read");
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const orders = await prisma.order.findMany({
@@ -85,7 +88,7 @@ export async function POST(req: Request) {
     if (!businessId) {
       return NextResponse.json({ error: "businessId is required" }, { status: 400 });
     }
-    const auth = await authorizeBusiness(businessId);
+    const auth = await authorizeBusiness(businessId, "manage_orders");
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const customerName = sanitizeText(body.customerName, 80);
@@ -198,7 +201,7 @@ export async function PATCH(req: Request) {
     if (!existing) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
-    const auth = await authorizeBusiness(existing.businessId);
+    const auth = await authorizeBusiness(existing.businessId, "manage_orders");
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     let nextPersisted: { status: OrderState; paymentStatus?: string };
