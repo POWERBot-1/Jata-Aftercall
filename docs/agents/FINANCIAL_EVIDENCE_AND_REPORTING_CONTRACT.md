@@ -143,3 +143,8 @@ The admin overview now presents **Evidence-qualified MRR (KES)** as a distinct p
 Legacy subscriptions without exact payment links remain excluded. The dedicated product models are read independently; null payment links remain excluded. The shared base Subscription model contributes only rows whose related PlanConfig.key is MONTHLY or ANNUAL (Business Page). AI Front Desk, Website Studio and unclassified shared rows remain excluded with an explicit PRODUCT_NOT_INCLUDED reason. No production migration, live DB read, or financial mutation is part of the reporting implementation.
 
 `tests/unit/recurring-revenue-report.test.ts` covers the shared Subscription PlanConfig-key allowlist, explicit exclusion of Front Desk/Website Studio/unknown keys, all five dedicated subscription sources, exact payment-ID lookup, missing legacy links, unreconciled payment exclusion, source failure and empty data. PostgreSQL and full CI acceptance on the exact commit remain pending.
+
+
+### Settlement-to-bank matching collision guard
+
+The deterministic provider settlement ↔ bank-credit matcher now refuses to match when the same settlement reference appears more than once across the supplied provider settlement evidence set, including cross-provider collisions. Such rows return `UNRESOLVED` rather than selecting a provider-specific match. Exact currency and net-credit amount matching remains mandatory. This is still a pure matching function; no automatic financial mutation or ledger posting occurs.
