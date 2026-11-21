@@ -204,12 +204,10 @@ describe("runtime and schema guards", () => {
       // append-only TRUNCATE guards. Nullable attribution fields and fail-closed checks preserve
       // existing rows; no production financial records are rewritten.
       "20261205000000_financial_evidence_ledger_hardening",
-      // Exact payment-to-subscription linkage: two nullable columns on Subscription, a unique
-      // paymentId index, a lookup index and a restrictive FK. Existing subscriptions stay NULL;
-      // no payment is inferred and no entitlement is granted by this migration.
+      // Exact payment-to-subscription linkage: nullable references, unique paymentId and restrictive FK;
+      // historical rows remain NULL and no entitlement is granted by this migration.
       "20261206000000_subscription_payment_linkage",
-      // Durable recovery work queue: one new table with bounded state/attempt constraints and
-      // indexes only. No payment, subscription or entitlement rows are touched.
+      // Durable recovery queue creates one new table and indexes only; no financial row is changed.
       "20261207000000_payment_recovery_queue",
     ]);
     for (const migration of migrations) {
