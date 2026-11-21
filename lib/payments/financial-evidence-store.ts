@@ -24,7 +24,34 @@ function sha256(value: string): string {
 function safeActorId(value: string | undefined): string | null {
   if (typeof value !== "string") return null;
   const actorId = value.trim();
-  return actorId.length >= 1 && actorId.length <= 128 ? actorId : null;
+  return actorId.length >= 1 && actorId.length <= 128 && !/[\\u0000-\\u001f\\u007f]/.test(actorId)
+    ? actorId
+    : null;
+}
+
+function assertPageMeta(page: { page: number; perPage: number }) {
+  if (!Number.isSafeInteger(page.page) || page.page < 1 || page.page > 10_000 ||
+      !Number.isSafeInteger(page.perPage) || page.perPage < 1 || page.perPage > 100) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_PAGE");
+  }
+}
+
+function assertMinor(value: number | null, field: string) {
+  if (value !== null && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_" + field.toUpperCase());
+  }
+}
+
+function assertOptionalCurrency(value: string | null) {
+  if (value !== null && !/^[A-Z]{3}$/.test(value)) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_CURRENCY");
+  }
+}
+
+function assertOptionalDate(value: string | null, field: string) {
+  if (value !== null && (!Number.isFinite(new Date(value).getTime()))) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_" + field.toUpperCase());
+  }
 }
 
 function toBigInt(value: number | null): bigint | null {
@@ -55,8 +82,22 @@ export async function persistPaystackSettlementSummaries(
   fetchedByActorId?: string,
 ): Promise<PersistedPageResult> {
   const actorId = safeActorId(fetchedByActorId);
+  assertPageMeta(page);
+  if (filters.status && !["success", "processing", "pending", "failed"].includes(filters.status)) {
+    throw new Error("FINANCIAL_EVIDENCE_INVALID_STATUS");
+  }
   const sourceFilter = normalizeFilters(filters);
   const data = page.records.map((record) => {
+    if (record.provider !== "PAYSTACK" || !/^[0-9]{1,20}$/.test(record.providerSettlementId) ||
+        !["success", "processing", "pending", "failed", "UNKNOWN"].includes(record.status)) {
+      throw new Error("FINANCIAL_EVIDENCE_INVALID_SETTLEMENT");
+    }
+    assertOptionalCurrency(record.currency);
+    assertMinor(record.grossProcessedMinor, "gross_amount");
+    assertMinor(record.providerFeeMinor, "provider_fee");
+    assertMinor(record.effectiveNetMinor, "net_amount");
+    assertMinor(record.deductionsMinor, "deductions");
+    assertOptionalDate(record.settlementDate, "settlement_date");
     const evidence = {
       provider: record.provider,
       providerSettlementId: record.providerSettlementId,
@@ -101,8 +142,24 @@ export async function persistPaystackSettlementTransactions(
   if (!snapshotId.trim() || !/^[0-9]{1,20}$/.test(settlementId)) {
     throw new Error("FINANCIAL_EVIDENCE_INVALID_SETTLEMENT_IDENTITY");
   }
+  assertPageMeta(page);
 
   const data = page.records.map((record) => {
+    if (record.provider !== "PAYSTACK") throw new Error("FINANCIAL_EVIDENCE_INVALID_PROVIDER");
+    if (record.providerTransactionId !== null && !/^[0-9]{1,20}$/.test(record.providerTransactionId)) {
+      throw new Error("FINANCIAL_EVIDENCE_INVALID_TRANSACTION_ID");
+    }
+    if (record.reference !== null && (record.reference.length < 1 || record.reference.length > 128 ||
+        /[\\u0000-\\u001f\\u007f]/.test(record.reference))) {
+      throw new Error("FINANCIAL_EVIDENCE_INVALID_PAYMENT_REFERENCE");
+    }
+    if (record.status !== null && record.status.length > 40) {
+      throw new Error("FINANCIAL_EVIDENCE_INVALID_TRANSACTION_STATUS");
+    }
+    assertMinor(record.amountMinor, "transaction_amount");
+    assertMinor(record.providerFeeMinor, "transaction_fee");
+    assertOptionalCurrency(record.currency);
+    assertOptionalDate(record.paidAt, "paid_at");
     const evidence = {
       snapshotId,
       settlementId,
