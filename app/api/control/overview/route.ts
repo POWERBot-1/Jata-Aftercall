@@ -2,6 +2,7 @@ import { controlJson } from "@/lib/control/http";
 import prisma from "@/lib/db";
 import { requireAnyControlPermission, controlAccessError, hasControlPermission, scopedBusinessIds } from "@/lib/control/access";
 import type { ControlPermission } from "@/lib/control/permissions";
+import { getPlatformProviderInventory } from "@/lib/control/provider-readiness";
 
 export const dynamic = "force-dynamic";
 const READ_PERMISSIONS: ControlPermission[] = [
@@ -120,7 +121,6 @@ export async function GET() {
     sections.providers = unavailable("Platform provider configuration and health", "Provider status is platform-wide; an explicit platform-wide grant is required.");
   } else if (providerScope.global) {
     try {
-      const { getPlatformProviderInventory } = await import("@/lib/control/provider-readiness");
       const inventory = getPlatformProviderInventory();
       sections.providers = measured(
         "Server-side provider configuration inventory",
