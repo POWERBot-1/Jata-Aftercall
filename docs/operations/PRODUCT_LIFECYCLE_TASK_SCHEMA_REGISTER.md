@@ -73,7 +73,7 @@ The fail-closed TypeScript-compiler-AST inventory ran in POS/ERP verification wo
 | Production references to lifecycle enqueue/run creation adapter | 0 |
 | Test references | 7 |
 | TypeScript parse errors | 0 |
-| Scanner unit tests | 3 passed, 0 failed |
+| Scanner unit tests | 5 passed, 0 failed |
 
 **Assessment:** PASS for the bounded static inventory gate on this exact candidate SHA. The scan did not find a production callsite for `enqueueLifecycleTasks` or `createLifecycleExecutionRun`; the seven references are test references. This is stronger than the earlier PR #137/#138 changed-file review, but it is not a whole-program proof. Reflection, computed module paths, runtime-generated code and arbitrary indirect invocation are outside the scanner's static-analysis model.
 
