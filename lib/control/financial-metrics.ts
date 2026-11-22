@@ -22,6 +22,8 @@ export type RecurringSubscriptionMetricSource = {
     providerSettlementReference: string | null;
     settledRefundMinor: unknown;
     settledChargebackMinor: unknown;
+    reconciliationStatus: string;
+    reconciledAt: Date | string | null;
   } | null;
 };
 
@@ -40,8 +42,8 @@ export type RecurringRevenueMetrics = {
   note?: string;
 };
 
-function isZeroOrAbsent(value: unknown): boolean {
-  return value === null || value === undefined || String(value) === "0";
+function isExplicitZero(value: unknown): boolean {
+  return value !== null && value !== undefined && String(value) === "0";
 }
 
 function hasSettlementAndLinkageEvidence(row: RecurringSubscriptionMetricSource): boolean {
@@ -51,8 +53,11 @@ function hasSettlementAndLinkageEvidence(row: RecurringSubscriptionMetricSource)
   if (!row.paymentReference || payment.reference !== row.paymentReference) return false;
   if (payment.businessId !== row.businessId || payment.planId !== row.planId) return false;
   if (payment.providerSettlementReference !== payment.reference) return false;
+  if (payment.reconciliationStatus !== "RECONCILED") return false;
+  const reconciledAt = payment.reconciledAt instanceof Date ? payment.reconciledAt : new Date(payment.reconciledAt ?? "");
+  if (!Number.isFinite(reconciledAt.getTime())) return false;
   if (typeof payment.paystackId !== "string" || !payment.paystackId.trim()) return false;
-  if (!isZeroOrAbsent(payment.settledRefundMinor) || !isZeroOrAbsent(payment.settledChargebackMinor)) return false;
+  if (!isExplicitZero(payment.settledRefundMinor) || !isExplicitZero(payment.settledChargebackMinor)) return false;
   const settledAt = payment.providerSettledAt instanceof Date ? payment.providerSettledAt : new Date(payment.providerSettledAt ?? "");
   return Number.isFinite(settledAt.getTime());
 }
@@ -128,7 +133,7 @@ export function calculateRecurringRevenueMetrics(
       mrrNumeratorKES: null,
       mrrDenominator: 12,
       arrKES: null,
-      note: "At least one active subscription lacks verified live settlement, matching immutable payment linkage, a complete recurring-price snapshot including its effective timestamp, or zero-refund/chargeback evidence. The aggregate is withheld rather than understated.",
+      note: "At least one active subscription lacks verified live settlement, matching immutable payment linkage, a complete recurring-price snapshot including its effective timestamp, or explicit zero-refund/chargeback values and a completed reconciliation timestamp. The aggregate is withheld rather than understated.",
     };
   }
 
