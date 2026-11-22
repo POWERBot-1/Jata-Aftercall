@@ -58,7 +58,7 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
       businessIds.push(business.id);
 
       let planId: string;
-      if (spec.core) {
+      if ("core" in spec && spec.core) {
         const plan = await client.planConfig.create({
           data: { key: `${spec.planKey}_${stamp}`, name: `Lifecycle ${spec.slug}`, priceKES: 499, durationDays: 30, isActive: true },
         });
