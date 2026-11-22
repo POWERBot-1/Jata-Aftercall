@@ -28,6 +28,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
+      "@openpage": path.resolve(__dirname, "vendor/openpage/src"),
     },
   },
 });

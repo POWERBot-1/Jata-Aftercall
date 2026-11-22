@@ -15,7 +15,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { WorkspaceEmpty, WorkspaceHero, WorkspacePanel } from "@/components/workspace/WorkspaceUI";
 import { WorkspaceDoor } from "@/components/workspace/WorkspaceDoor";
 import { WORKSPACE_HERO_PHOTO, WORKSPACE_PHOTOS, categoryLabel, photoForCategory } from "@/lib/workspaceImagery";
-import { ArrowRight, ExternalLink, Globe, Image as ImageIcon, Palette, ShoppingBag, Wand2 } from "lucide-react";
+import { ArrowRight, ExternalLink, Globe, Image as ImageIcon, ShoppingBag, Wand2 } from "lucide-react";
 
 export const metadata: Metadata = { title: "Website Studio" };
 export const dynamic = "force-dynamic";
@@ -47,7 +47,17 @@ export default async function StudioIndexPage() {
   };
   type EntitlementRow = { businessId: string; status: string };
 
-  const [experiences, entitlements] = await Promise.all([
+  type NativeWebsiteRow = {
+    businessId: string;
+    status: string;
+    openPageDocument: {
+      draftJson: string | null;
+      publishedJson: string | null;
+      draftVersion: number;
+      publishedVersion: number;
+    } | null;
+  };
+  const [experiences, entitlements, nativeWebsites] = await Promise.all([
     prisma.businessExperience
       .findMany({
         where: { businessId: { in: businesses.map((business) => business.id) } },
@@ -57,11 +67,28 @@ export default async function StudioIndexPage() {
     prisma.interactiveBusinessEntitlement
       .findMany({ where: { businessId: { in: businesses.map((business) => business.id) } }, select: { businessId: true, status: true } })
       .catch(() => [] as EntitlementRow[]) as Promise<EntitlementRow[]>,
+    prisma.studioWebsite
+      .findMany({
+        where: { businessId: { in: businesses.map((business) => business.id) }, isDefault: true },
+        select: {
+          businessId: true,
+          status: true,
+          openPageDocument: { select: { draftJson: true, publishedJson: true, draftVersion: true, publishedVersion: true } },
+        },
+      })
+      .catch(() => [] as NativeWebsiteRow[]) as Promise<NativeWebsiteRow[]>,
   ]);
 
   const experienceByBusiness = new Map(experiences.map((row) => [row.businessId, row]));
   const entitlementByBusiness = new Map(entitlements.map((row) => [row.businessId, row.status]));
-  const liveCount = businesses.filter((business) => business.isPublished).length;
+  const nativeByBusiness = new Map(nativeWebsites.map((row) => [row.businessId, row]));
+  const liveCount = businesses.filter((business) => {
+    const native = nativeByBusiness.get(business.id);
+    if (native?.status === "PUBLISHED") return Boolean(native.openPageDocument?.publishedJson);
+    if (native && native.status !== "DRAFT") return false;
+    return business.isPublished;
+  }).length;
+
 
   return (
     <div className="ws-stack">
@@ -73,7 +100,7 @@ export default async function StudioIndexPage() {
             Build the site your <em>customers</em> actually use.
           </>
         }
-        subtitle="Sections, catalogue, theme, photos and preview — all in one editor. Your public page keeps working while you edit; customers only see a change once you publish it."
+        subtitle="Create, refine and publish your website in the OpenPage-powered Website Studio. Your public page stays unchanged until you publish."
         photo={WORKSPACE_HERO_PHOTO}
         actions={
           <>
@@ -93,7 +120,7 @@ export default async function StudioIndexPage() {
       {businesses.length === 0 ? (
         <WorkspaceEmpty
           title="No business yet"
-          text="Create your business first, then build its interactive website: sections, catalogue, theme and preview."
+          text="Create your business first, then build its website in the OpenPage-powered Website Studio."
           photo={WORKSPACE_PHOTOS.professional}
           actions={
             <Link href="/onboarding" className="jata-btn jata-btn-primary">
@@ -106,9 +133,16 @@ export default async function StudioIndexPage() {
           <ul className="ws-stack">
             {businesses.map((business) => {
               const experience = experienceByBusiness.get(business.id) || null;
+              const native = nativeByBusiness.get(business.id) || null;
               const entitlement = entitlementStatusLabel(entitlementByBusiness.get(business.id) || "NONE");
-              const state = experienceStatusLabel(experience?.status || "DRAFT");
-              const hasUnpublishedChanges = Boolean(experience?.draftJson) && experience?.draftJson !== experience?.publishedJson;
+              const state = experienceStatusLabel(native?.status || experience?.status || "DRAFT");
+              const nativePublished = native?.status === "PUBLISHED" && Boolean(native.openPageDocument?.publishedJson);
+              const legacyFallbackLive = (!native || native.status === "DRAFT") && business.isPublished;
+              const siteIsLive = nativePublished || legacyFallbackLive;
+              const hasUnpublishedChanges = native
+                ? Boolean(native.openPageDocument?.draftJson) && native.openPageDocument?.draftJson !== native.openPageDocument?.publishedJson
+                : Boolean(experience?.draftJson) && experience?.draftJson !== experience?.publishedJson;
+              const publishedVersion = native?.openPageDocument?.publishedVersion ?? experience?.publishedVersion ?? 0;
               return (
                 <WorkspaceDoor
                   key={business.id}
@@ -118,25 +152,25 @@ export default async function StudioIndexPage() {
                   meta={`${categoryLabel(business.category)}${business.location ? ` · ${business.location}` : ""} · ${getBusinessUrl(business.slug)}`}
                   pills={
                     <>
-                      <StatusPill tone={business.isPublished ? "success" : "neutral"} icon={<Globe size={11} />}>
-                        {business.isPublished ? "Live" : "Draft"}
+                      <StatusPill tone={siteIsLive ? "success" : "neutral"} icon={<Globe size={11} />}>
+                        {siteIsLive ? "Live" : "Draft"}
                       </StatusPill>
                       {/* The business pill already says Live/Draft. Render the site-state pill only
                           when it adds information — a hidden site, or a site state that disagrees
                           with the business record — never as a second identical "Live". */}
-                      {state.label !== (business.isPublished ? "Live" : "Draft") ? (
+                      {state.label !== (siteIsLive ? "Live" : "Draft") ? (
                         <StatusPill tone={state.tone}>{state.label}</StatusPill>
                       ) : null}
                       <StatusPill tone={entitlement.tone}>Package: {entitlement.label}</StatusPill>
                       {hasUnpublishedChanges ? <StatusPill tone="warning">Unpublished changes</StatusPill> : null}
-                      {experience ? <StatusPill tone="neutral">Version {experience.publishedVersion}</StatusPill> : null}
+                      {publishedVersion > 0 ? <StatusPill tone="neutral">Version {publishedVersion}</StatusPill> : null}
                     </>
                   }
                   note={
                     <p className="ws-muted ws-tiny">
                       {hasUnpublishedChanges
                         ? "You have saved changes customers cannot see yet. Open the preview, check them, then publish."
-                        : business.isPublished
+                        : siteIsLive
                           ? "Your site is live. Editing here never changes what customers see until you publish."
                           : "This site is still a draft. Publish it to give customers the full experience."}
                     </p>
@@ -146,14 +180,8 @@ export default async function StudioIndexPage() {
                       <Link className="jata-btn jata-btn-primary" href={`/dashboard/businesses/${business.id}/studio`}>
                         <Wand2 size={15} aria-hidden="true" /> Open AI Website Studio <ArrowRight size={15} aria-hidden="true" />
                       </Link>
-                      <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}`}>
-                        Business home &amp; classic tools
-                      </Link>
                       <Link className="jata-btn jata-btn-secondary" href={getBusinessUrl(business.slug)} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink size={15} aria-hidden="true" /> {business.isPublished ? "View site" : "Preview"}
-                      </Link>
-                      <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}/theme`}>
-                        <Palette size={15} aria-hidden="true" /> Theme
+                        <ExternalLink size={15} aria-hidden="true" /> {siteIsLive ? "View site" : "Preview"}
                       </Link>
                       <Link className="jata-btn jata-btn-ghost" href={`/dashboard/businesses/${business.id}/photos`}>
                         <ImageIcon size={15} aria-hidden="true" /> Photos
@@ -170,7 +198,7 @@ export default async function StudioIndexPage() {
 
           <WorkspacePanel title="How publishing works" meta="Draft → preview → live">
             <ol className="grid gap-2 sm:grid-cols-3">
-              <Step n={1} title="Edit" text="Change sections, theme, catalogue and photos. Everything is saved to your draft." />
+              <Step n={1} title="Create & refine" text="Describe your business, compare generated layouts and refine the selected design in Website Studio." />
               <Step n={2} title="Preview" text="See the real page at phone or desktop width before anyone else does." />
               <Step n={3} title="Publish" text="Publishing replaces the live version. Until then, customers keep the current site." />
             </ol>

@@ -103,7 +103,7 @@ describe("runtime and schema guards", () => {
     // two enum types, their indexes and guarded foreign keys; it is the customer-conversion
     // half of the EXISTING KES149 / KES999 Business Page subscription, so no pricing, plan,
     // subscription, payment or entitlement table is touched and no existing row is read or
-    // rewritten), and Website Studio 2.0 (workspace/site tenant foundation plus independent per-site content and history; additive tables, indexes, composite foreign keys and a bounded default-site backfill only; no payment, subscription, POS or non-Studio plan rows are changed).
+    // rewritten), and Website Studio 2.0 (workspace/site tenant foundation plus independent per-site content and history; additive tables, indexes, composite foreign keys and a bounded default-site backfill only; no payment, subscription, POS or non-Studio plan rows are changed); and the native OpenPage document store (separate draft and immutable revision tables scoped to StudioWebsite, without converting or rewriting existing Experience documents or published pages).
     // Anything else stays a build failure, and no migration may destroy or rewrite existing
     // data.
     expect(migrations).toEqual([
@@ -191,6 +191,7 @@ describe("runtime and schema guards", () => {
       // only — no existing table (including the four stamp-card tables) is altered, read or
       // rewritten, and no column is added to one.
       "20261129000000_loyalty_points_rewards",
+      "20261130000000_openpage_native_document",
     ]);
     for (const migration of migrations) {
       const sql = readFileSync(path.join(root, "prisma/migrations", migration, "migration.sql"), "utf8");

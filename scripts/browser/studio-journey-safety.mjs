@@ -4,6 +4,8 @@ const METHODS = {
   "/api/business": ["PATCH"], "/api/experience": ["GET", "POST", "PATCH"],
   "/api/experience/publish": ["POST"], "/api/experience/versions": ["GET", "POST"],
   "/api/experience/history": ["GET"], "/api/studio/health": ["GET"],
+  "/api/studio/openpage/document": ["GET", "PUT"],
+  "/api/studio/openpage/publish": ["POST"], "/api/studio/openpage/rollback": ["POST"],
   "/api/products": ["GET", "POST"], "/api/services": ["GET", "POST"],
   "/api/storefront/quote": ["POST"], "/api/storefront/booking": ["GET", "POST"],
   "/api/bookings": ["GET", "PATCH"], "/api/analytics/event": ["POST"],

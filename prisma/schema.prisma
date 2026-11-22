@@ -4744,6 +4744,7 @@ model StudioWebsite {
   content     StudioWebsiteContent?
   versions    StudioWebsiteVersion[]
   draftRevisions StudioWebsiteDraftRevision[]
+  openPageDocument OpenPageSiteDocument?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -4753,6 +4754,41 @@ model StudioWebsite {
   @@index([businessId, status])
 }
 
+
+
+/// Native OpenPage JSON storage. Kept separate from legacy ExperienceDocument content
+/// until the OpenPage public renderer and publication pipeline are fully integrated.
+model OpenPageSiteDocument {
+  id          String   @id @default(cuid())
+  websiteId   String   @unique
+  website     StudioWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  draftJson   String   @db.Text
+  draftVersion Int    @default(1)
+  publishedJson String? @db.Text
+  publishedVersion Int @default(0)
+  publishedAt DateTime?
+  publishedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  revisions   OpenPageSiteRevision[]
+  publications OpenPageSitePublication[]
+
+  @@index([websiteId, updatedAt])
+}
+
+model OpenPageSiteRevision {
+  id          String   @id @default(cuid())
+  websiteId   String
+  document    OpenPageSiteDocument @relation(fields: [websiteId], references: [websiteId], onDelete: Cascade)
+  draftVersion Int
+  snapshotJson String  @db.Text
+  source      String   @default("EDIT")
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@unique([websiteId, draftVersion])
+  @@index([websiteId, createdAt])
+}
 
 /// Independent per-site content state. Draft and published snapshots are never conflated.
 model StudioWebsiteContent {
@@ -4819,4 +4855,20 @@ model StudioWebsiteMember {
   @@unique([websiteId, userId])
   @@index([userId, status])
   @@index([websiteId, status])
+}
+
+ 
+model OpenPageSitePublication {
+  id            String   @id @default(cuid())
+  websiteId     String
+  document      OpenPageSiteDocument @relation(fields: [websiteId], references: [websiteId], onDelete: Cascade)
+  version       Int
+  draftVersion  Int
+  snapshotJson  String   @db.Text
+  note          String?
+  publishedById String
+  publishedAt   DateTime @default(now())
+
+  @@unique([websiteId, version])
+  @@index([websiteId, publishedAt])
 }

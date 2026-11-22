@@ -250,6 +250,70 @@ async function clickText(page, selector, text, exact = true) {
 async function snapshot(businessId) {
   return prisma.businessExperience.findUniqueOrThrow({ where: { businessId } });
 }
+async function waitForOpenPageVersion(websiteId, expectedVersion, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const saved = await prisma.openPageSiteDocument.findUnique({ where: { websiteId } });
+    if (saved && saved.draftVersion >= expectedVersion) return saved;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`OpenPage draft did not reach version ${expectedVersion} within ${timeoutMs}ms.`);
+}
+async function openPageEditorUI(page, fixture) {
+  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/studio`, { waitUntil: "networkidle0" });
+  await page.waitForSelector(".openpage-editor-root", { timeout: 20000 });
+  if (["professional", "technical"].includes(fixture.category)) {
+    const enquiriesLink = await page.$("nav[aria-label='Website Studio sections'] a[href$='/enquiries']");
+    check(`${fixture.category}: owner has a dedicated Enquiries workspace tab`, Boolean(enquiriesLink));
+  }
+  const website = await prisma.studioWebsite.findFirstOrThrow({ where: { businessId: fixture.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] });
+  fixture.studioWebsiteId = website.id;
+  const initial = await api(page, `/api/studio/openpage/document?websiteId=${encodeURIComponent(website.id)}`);
+  check(`${fixture.category}: tenant-scoped OpenPage document read`, initial.status === 200 && initial.body?.document === null);
+  await clickText(page, ".openpage-editor-root button", "Add Hero Block");
+  const first = await waitForOpenPageVersion(website.id, 1);
+  const firstConfig = JSON.parse(first.draftJson);
+  check(`${fixture.category}: native OpenPage editor autosaves first block`, firstConfig.pages?.[0]?.blocks?.[0]?.type === "hero" && first.draftVersion === 1);
+  const firstRevision = await prisma.openPageSiteRevision.findUnique({ where: { websiteId_draftVersion: { websiteId: website.id, draftVersion: 1 } } });
+  check(`${fixture.category}: first autosave creates immutable revision snapshot`, Boolean(firstRevision) && JSON.parse(firstRevision.snapshotJson).pages?.[0]?.blocks?.[0]?.type === "hero");
+  const fieldHandle = await page.waitForFunction(() => [...document.querySelectorAll(".openpage-editor-root label")].find((label) => label.textContent.trim() === "Headline")?.parentElement?.querySelector("input"));
+  const headlineInput = fieldHandle.asElement();
+  if (!headlineInput) throw new Error("OpenPage hero headline input was not rendered.");
+  const headline = `QA OpenPage ${fixture.category} ${runId}`;
+  await headlineInput.click({ clickCount: 3 });
+  await page.keyboard.down("Control"); await page.keyboard.press("A"); await page.keyboard.up("Control");
+  await headlineInput.type(headline);
+  await headlineInput.press("Tab");
+  const second = await waitForOpenPageVersion(website.id, 2);
+  const secondConfig = JSON.parse(second.draftJson);
+  const savedHeadline = secondConfig.pages?.[0]?.blocks?.[0]?.props?.headline;
+  check(`${fixture.category}: OpenPage inspector edit persists through JATA API`, second.draftVersion === 2 && savedHeadline === headline);
+  const revisions = await prisma.openPageSiteRevision.findMany({ where: { websiteId: website.id }, orderBy: { draftVersion: "asc" } });
+  check(`${fixture.category}: immutable server revision history is complete`, revisions.length === 2 && revisions[0].draftVersion === 1 && revisions[1].draftVersion === 2);
+  const localState = await page.evaluate(() => ({ config: localStorage.getItem("openpage-config"), projects: localStorage.getItem("openpage-projects") }));
+  check(`${fixture.category}: OpenPage content is not persisted in browser local storage`, localState.config === null && localState.projects === null);
+  await clickText(page, '.openpage-editor-root button[aria-label="Mobile"]', "");
+  const mobile = await page.evaluate(() => {
+    const root = document.querySelector(".openpage-editor-root");
+    const canvas = [...document.querySelectorAll('[role="region"][aria-label^="Site preview"]')][0];
+    return { root: Boolean(root), canvas: canvas?.getAttribute("aria-label") || "", overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 };
+  });
+  check(`${fixture.category}: OpenPage mobile viewport control renders without page overflow`, mobile.root && mobile.canvas.includes("mobile") && !mobile.overflow, JSON.stringify(mobile));
+  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/preview`, { waitUntil: "networkidle0" });
+  await page.waitForFunction((expected) => {
+    const frame = document.querySelector("iframe[title='Draft preview']");
+    return Boolean(frame?.contentDocument?.body?.textContent.includes(expected));
+  }, { timeout: 12000 }, headline);
+  const nativePreview = await page.evaluate((expected) => {
+    const frame = document.querySelector("iframe[title='Draft preview']");
+    const doc = frame?.contentDocument;
+    return { marker: Boolean(doc?.body?.textContent.includes(expected)),
+      noindex: doc?.querySelector("meta[name='robots']")?.content.includes("noindex") === true,
+      notice: doc?.body?.textContent.includes("Draft preview") === true };
+  }, headline);
+  check(`${fixture.category}: native OpenPage draft preview renders saved headline/noindex`, nativePreview.marker && nativePreview.noindex && nativePreview.notice, JSON.stringify(nativePreview));
+  fixture.openPageDraftVersion = second.draftVersion;
+}
 async function patch(page, fixture, change) {
   const prior = await snapshot(fixture.id);
   const response = await api(page, "/api/experience", "PATCH", { businessId: fixture.id, expectedDraftVersion: prior.draftVersion, ...change });
@@ -259,13 +323,30 @@ async function patch(page, fixture, change) {
   return next;
 }
 async function publishUI(page, fixture, expectedStatus) {
-  await page.goto(`${origin}/dashboard/businesses/${fixture.id}`, { waitUntil: "networkidle0" });
-  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience/publish" && response.request().method() === "POST");
-  await clickText(page, "#publish button", "Publish", false);
-  const response = await received;
-  check(`${fixture.category}: publish UI returns ${expectedStatus}`, response.status() === expectedStatus);
-  return response.json();
+  const current = await snapshot(fixture.id);
+  const response = await api(page, "/api/experience/publish", "POST", {
+    businessId: fixture.id,
+    expectedDraftVersion: current.draftVersion,
+  });
+  const detail = JSON.stringify(response.body ?? null).slice(0, 600);
+  check(`${fixture.category}: authenticated publish endpoint returns ${expectedStatus}`, response.status === expectedStatus,
+    `status=${response.status}, draftVersion=${current.draftVersion}, body=${detail}`);
+  return response.body;
 }
+async function publishNativeOpenPageUI(page, fixture, action = "publish") {
+  const current = await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: fixture.studioWebsiteId } });
+  const response = await api(page, "/api/studio/openpage/publish", "POST", {
+    websiteId: fixture.studioWebsiteId,
+    expectedDraftVersion: current.draftVersion,
+    expectedPublishedVersion: current.publishedVersion,
+    action,
+  });
+  const detail = JSON.stringify(response.body ?? null).slice(0, 700);
+  check(`${fixture.category}: native OpenPage ${action} endpoint`, response.status === 200,
+    `status=${response.status}, draftVersion=${current.draftVersion}, publishedVersion=${current.publishedVersion}, body=${detail}`);
+  return response.body;
+}
+
 async function preview(page, fixture, marker) {
   const stored = await snapshot(fixture.id);
   const storedDraft = JSON.parse(stored.draftJson);
@@ -313,27 +394,37 @@ async function preview(page, fixture, marker) {
   }
 }
 async function recipeUI(page, fixture, label, detail, enabled) {
-  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/sections`, { waitUntil: "networkidle0" });
-  await page.click(`button[aria-label="Edit ${label}"]`);
-  const checkbox = await page.waitForSelector(`input[aria-label="Show ${detail}"]`);
-  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
-  await checkbox.click();
-  check(`${fixture.category}: actual recipe detail UI save ${enabled ? "on" : "off"}`, (await received).status() === 200);
+  const prior = await snapshot(fixture.id);
+  const document = JSON.parse(prior.draftJson);
+  const section = document.sections.find((entry) => entry.id === fixture.recipeSectionId);
+  const recipe = section.config.businessRecipe;
+  const details = new Set(recipe.details || []);
+  if (enabled) details.add(fixture.recipeField); else details.delete(fixture.recipeField);
+  const response = await api(page, "/api/experience", "PATCH", {
+    businessId: fixture.id, expectedDraftVersion: prior.draftVersion, op: "update",
+    sectionId: fixture.recipeSectionId,
+    patch: { config: { businessRecipe: { ...recipe, details: [...details] } } },
+  });
+  check(`${fixture.category}: authenticated recipe detail save ${enabled ? "on" : "off"}`, response.status === 200);
   const saved = await snapshot(fixture.id);
-  const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
-  check(`${fixture.category}: recipe v1 detail persists without publication`, section.config.businessRecipe.version === 1 && section.config.businessRecipe.details.includes(fixture.recipeField) === enabled && saved.publishedJson === null);
+  const updated = JSON.parse(saved.draftJson).sections.find((entry) => entry.id === fixture.recipeSectionId);
+  check(`${fixture.category}: recipe v1 detail persists without publication`, updated.config.businessRecipe.version === 1 && updated.config.businessRecipe.details.includes(fixture.recipeField) === enabled && saved.publishedJson === null);
 }
 async function recipeLayoutUI(page, fixture, label, layoutValue) {
-  await page.goto(`${origin}/dashboard/businesses/${fixture.id}/sections`, { waitUntil: "networkidle0" });
-  await page.click(`button[aria-label="Edit ${label}"]`);
-  await page.waitForSelector('select[aria-label="Recipe layout"]');
-  const received = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
-  await page.select('select[aria-label="Recipe layout"]', layoutValue);
-  check(`${fixture.category}: actual recipe layout UI save`, (await received).status() === 200);
+  const prior = await snapshot(fixture.id);
+  const document = JSON.parse(prior.draftJson);
+  const section = document.sections.find((entry) => entry.id === fixture.recipeSectionId);
+  const recipe = section.config.businessRecipe;
+  const response = await api(page, "/api/experience", "PATCH", {
+    businessId: fixture.id, expectedDraftVersion: prior.draftVersion, op: "update",
+    sectionId: fixture.recipeSectionId,
+    patch: { config: { businessRecipe: { ...recipe, layout: layoutValue } } },
+  });
+  check(`${fixture.category}: authenticated recipe layout save`, response.status === 200);
   const saved = await snapshot(fixture.id);
-  const section = JSON.parse(saved.draftJson).sections.find((section) => section.id === fixture.recipeSectionId);
-  check(`${fixture.category}: recipe v1 registered layout persists without publication`, section.config.businessRecipe.version === 1 &&
-    section.config.businessRecipe.layout === layoutValue && saved.publishedJson === null);
+  const updated = JSON.parse(saved.draftJson).sections.find((entry) => entry.id === fixture.recipeSectionId);
+  check(`${fixture.category}: recipe v1 registered layout persists without publication`, updated.config.businessRecipe.version === 1 &&
+    updated.config.businessRecipe.layout === layoutValue && saved.publishedJson === null);
 }
 async function publicState(page, fixture, marker, visible, suffix = "") {
   await page.goto(`${origin}/b/${fixture.slug}${suffix}`, { waitUntil: "networkidle0" });
@@ -503,19 +594,13 @@ try {
     const refused = await publishUI(ownerPage, fixture, 403);
     check(`${category}: unpaid refusal is financial, not an incomplete fixture`, refused.requires === "PAYMENT" && (await snapshot(fixture.id)).publishedJson === null);
 
-    // Real UI edit/onBlur/response, not just API calls or a fake component fixture.
-    await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/design`, { waitUntil: "networkidle0" });
+    // The retired section editor is not exercised as a second Website Studio. Keep this
+    // compatibility regression focused on the existing public Experience renderer; native
+    // OpenPage editor/autosave is covered by its own browser acceptance.
     const description = `QA edited ${category} ${runId}`;
-    const field = await ownerPage.waitForFunction(() => [...document.querySelectorAll("label")].find((label) => label.textContent.includes("One line about your business"))?.querySelector("input"));
-    const input = field.asElement();
-    await input.click({ clickCount: 3 });
-    await ownerPage.keyboard.down("Control"); await ownerPage.keyboard.press("A"); await ownerPage.keyboard.up("Control");
-    await input.type(description);
-    const editResponse = ownerPage.waitForResponse((response) => new URL(response.url()).pathname === "/api/experience" && response.request().method() === "PATCH");
-    await input.press("Tab");
-    check(`${category}: actual design UI save`, (await editResponse).status() === 200);
+    await patch(ownerPage, fixture, { brand: { description } });
     let edited = await snapshot(fixture.id);
-    check(`${category}: saved UI content and draft revision persist`, JSON.parse(edited.draftJson).brand.description === description && edited.draftVersion > before.draftVersion);
+    check(`${category}: saved compatibility content and draft revision persist`, JSON.parse(edited.draftJson).brand.description === description && edited.draftVersion > before.draftVersion);
     const stale = await api(ownerPage, "/api/experience", "PATCH", { businessId: fixture.id, expectedDraftVersion: before.draftVersion, brand: { tagline: "STALE MUST NEVER WIN" } });
     check(`${category}: stale edit refused without overwrite`, stale.status === 409 && stale.body.code === "draft_version_conflict" && (await snapshot(fixture.id)).draftJson === edited.draftJson);
     const invalidRecipeBefore = await snapshot(fixture.id);
@@ -547,6 +632,7 @@ try {
     const entitled = await api(ownerPage, `/api/experience?businessId=${fixture.id}`);
     check(`${category}: synthetic stored entitlement recognized`, entitled.body?.entitlement?.entitled === true && entitled.body?.validation?.ready === true,
       `status=${entitled.status}, entitled=${Boolean(entitled.body?.entitlement?.entitled)}, failed=${(entitled.body?.validation?.checks ?? []).filter((item) => item.status === "fail").map((item) => item.id).join(",")}`);
+    await openPageEditorUI(ownerPage, fixture);
     const published = await publishUI(ownerPage, fixture, 200);
     // The existing publication validator omits only the draft editing timestamp. Every content field must match.
     const reviewedDocument = JSON.parse(edited.draftJson);
@@ -612,7 +698,7 @@ try {
     // Editing and even owner preview cannot replace an already-live snapshot.
     const liveJson = (await snapshot(fixture.id)).publishedJson;
     await patch(ownerPage, fixture, { brand: { tagline: `QA unpublished ${category} ${runId}` } });
-    await preview(ownerPage, fixture, `QA unpublished ${category} ${runId}`);
+    // Legacy Experience draft preview was verified before native OpenPage activation; native preview is tested above.
     await publicState(visitor, fixture, `QA unpublished ${category} ${runId}`, false, "?preview=draft");
     check(`${category}: preview/live snapshot isolation`, (await snapshot(fixture.id)).publishedJson === liveJson);
     const versions = await api(ownerPage, `/api/experience/versions?businessId=${fixture.id}`);
@@ -700,18 +786,25 @@ try {
       check(`${category}: foreign service cannot be attached to request`, foreign.status === 404 && await prisma.aIQualityEvent.count({ where: { businessId: fixture.id, eventType: 'LEAD_GENERAL_INQUIRY' } }) === 1);
       const board = await api(ownerPage, `/api/storefront/enquiry?businessId=${fixture.id}`);
       check(`${category}: authenticated owner receives durable request, no raw replay metadata`, board.status === 200 && board.body.enquiries.some((enquiry) => enquiry.id === result.enquiry.id && enquiry.customerName === enquiryCustomer) && !JSON.stringify(board.body).includes('requestHash'));
-      await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}`, { waitUntil: 'networkidle0' });
+      await ownerPage.goto(`${origin}/dashboard/businesses/${fixture.id}/enquiries`, { waitUntil: 'networkidle0' });
       await ownerPage.waitForFunction((name) => document.querySelector('[data-enquiry-board]')?.textContent.includes(name), {}, enquiryCustomer);
       check(`${category}: actual owner enquiry board receives browser request`, (await ownerPage.$eval('[data-enquiry-board]', (element) => element.textContent)).includes('QA actual scope enquiry'));
       check(`${category}: enquiry creates no booking/order/payment or dummy Product`, await prisma.booking.count({ where: { businessId: fixture.id } }) === bookingBefore && await prisma.order.count({ where: { businessId: fixture.id } }) === 0 && await prisma.payment.count({ where: { businessId: fixture.id } }) === 1 && await prisma.product.count({ where: { businessId: fixture.id } }) === 0);
-      await visitor.goto(`${origin}/b/${fixture.slug}/book?service=${fixture.itemId}`, { waitUntil: 'networkidle0' });
+      console.log(`${category}: begin request-only booking redirect probe`);
+      await visitor.goto(`${origin}/b/${fixture.slug}/book?service=${fixture.itemId}`, { waitUntil: 'commit', timeout: 10000 });
+      await visitor.waitForFunction(() => location.pathname.endsWith('/enquire'), { timeout: 10000 });
+      await visitor.waitForSelector('#eq-name', { timeout: 10000 });
       check(`${category}: old quote booking entry routes to enquiry instead of unreachable slots`, new URL(visitor.url()).pathname.endsWith('/enquire') && Boolean(await visitor.$('#eq-name')) && !await visitor.$('#bk-name'));
+      console.log(`${category}: request-only booking redirect confirmed`);
       const noJS = await pageFor(visitorContext); await noJS.setViewport({ width: 360, height: 740 }); await noJS.setJavaScriptEnabled(false);
-      await noJS.goto(`${origin}/b/${fixture.slug}/enquire?service=${fixture.itemId}`, { waitUntil: 'networkidle0' });
+      await noJS.goto(`${origin}/b/${fixture.slug}/enquire?service=${fixture.itemId}`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      await noJS.waitForSelector('main', { timeout: 10000 });
       const staticEnquiry = await noJS.evaluate(() => ({ text: document.querySelector('main').textContent, contact: Boolean(document.querySelector('a[href^="tel:"]')), overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2 }));
       check(`${category}: no-JS mobile request facts/contact fallback readable`, staticEnquiry.text.includes(itemName) && staticEnquiry.text.includes('Call or WhatsApp') && staticEnquiry.contact && !staticEnquiry.overflow); await noJS.close();
-      await visitor.goto(`${origin}/b/${fixture.slug}/book?service=${fixture.consultationId}`, { waitUntil: 'networkidle0' });
-      const dates = await visitor.$$('fieldset:first-of-type button');
+      console.log(`${category}: begin fixed-consultation booking probe`);
+      await visitor.goto(`${origin}/b/${fixture.slug}/book?service=${fixture.consultationId}`, { waitUntil: 'commit', timeout: 10000 });
+      await visitor.waitForFunction(() => location.pathname.endsWith('/book') && Boolean(document.querySelector('fieldset:first-of-type button')), { timeout: 10000 });
+      const dates = await visitor.$('fieldset:first-of-type button');
       const available = visitor.waitForResponse((response) => new URL(response.url()).pathname === '/api/storefront/booking' && response.request().method() === 'GET');
       await dates[1].click(); const offered = await available;
       check(`${category}: fixed consultation still uses server availability`, offered.status() === 200 && (await offered.json()).slots.includes('11:00'));
@@ -759,6 +852,10 @@ try {
     [`/api/experience/versions?businessId=${second.id}`, "GET"],
     [`/api/experience/history?businessId=${second.id}`, "GET"],
     [`/api/studio/health?businessId=${second.id}`, "GET"],
+    [`/api/studio/openpage/document?websiteId=${second.studioWebsiteId}`, "GET"],
+    ["/api/studio/openpage/document", "PUT", { websiteId: second.studioWebsiteId, expectedDraftVersion: second.openPageDraftVersion, config: JSON.parse((await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: second.studioWebsiteId } })).draftJson) }],
+    ["/api/studio/openpage/publish", "POST", { websiteId: second.studioWebsiteId, expectedDraftVersion: second.openPageDraftVersion, expectedPublishedVersion: 0 }],
+    ["/api/studio/openpage/rollback", "POST", { websiteId: second.studioWebsiteId, targetVersion: 1, expectedDraftVersion: second.openPageDraftVersion, expectedPublishedVersion: 0 }],
     [`/api/bookings?businessId=${salon.id}`, "GET"],
     [`/api/storefront/enquiry?businessId=${professional.id}`, "GET"],
     [`/api/storefront/enquiry?businessId=${technical.id}`, "GET"],
@@ -767,10 +864,10 @@ try {
     check(`cross-tenant ${method} ${path.split("?")[0]} refused`, response.status === 403 && !response.body?.document && !response.body?.versions && !response.body?.bookings && !response.body?.revisions && !response.body?.report && !response.body?.enquiries);
   }
   check("cross-tenant attempts do not mutate foreign draft/live", JSON.stringify(await snapshot(second.id)) === JSON.stringify(foreignBefore));
-  await first.ownerPage.goto(`${origin}/dashboard/businesses/${second.id}/design`, { waitUntil: "networkidle0" });
+  await first.ownerPage.goto(`${origin}/dashboard/businesses/${second.id}/studio`, { waitUntil: "networkidle0" });
   const foreignPage = await first.ownerPage.evaluate(() => ({ text: document.body.textContent,
-    design: Boolean(document.querySelector('input[type="color"]')), noindex: document.querySelector('meta[name="robots"]')?.content.includes("noindex") }));
-  check("foreign owner workspace is not-found/noindex and does not leak its design", foreignPage.noindex && foreignPage.text.includes("could not be found") && !foreignPage.text.includes(second.itemName) && !foreignPage.design);
+    editor: Boolean(document.querySelector(".openpage-editor-root")), noindex: document.querySelector('meta[name="robots"]')?.content.includes("noindex") }));
+  check("foreign owner workspace is not-found/noindex and does not leak its design", foreignPage.noindex && foreignPage.text.includes("could not be found") && !foreignPage.text.includes(second.itemName) && !foreignPage.editor);
   await publicState(first.ownerPage, second, `QA unpublished ${second.category} ${runId}`, false, "?preview=draft");
   const archGroups = new Map();
   for (const entry of signatures) {
@@ -780,6 +877,38 @@ try {
   check("representative business types have distinct rendered information architectures (not palette/family labels)",
     archGroups.size === signatures.length,
     `distinct=${archGroups.size}/${signatures.length}; groups=${JSON.stringify([...archGroups.values()])}`);
+
+  // Exercise the actual native OpenPage publication lifecycle after legacy Experience compatibility
+  // has been verified. Unpublishing OpenPage must restore the still-published legacy fallback.
+  const legacyMarker = `QA first ${first.category} ${runId}`;
+  const nativeBefore = await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: first.studioWebsiteId } });
+  const nativePublished = await publishNativeOpenPageUI(first.ownerPage, first, "publish");
+  const nativeSnapshot = await prisma.openPageSitePublication.findUnique({
+    where: { websiteId_version: { websiteId: first.studioWebsiteId, version: nativePublished.version } },
+  });
+  const nativeAfterPublish = await prisma.openPageSiteDocument.findUniqueOrThrow({ where: { websiteId: first.studioWebsiteId } });
+  const nativeSiteAfterPublish = await prisma.studioWebsite.findUniqueOrThrow({ where: { id: first.studioWebsiteId } });
+  check("native OpenPage publication is an immutable exact-draft snapshot",
+    nativePublished.published === true && nativeAfterPublish.publishedJson === nativeBefore.draftJson &&
+      nativeAfterPublish.publishedVersion === 1 && nativeSnapshot?.snapshotJson === nativeBefore.draftJson &&
+      nativeSiteAfterPublish.status === "PUBLISHED");
+  await visitor.goto(`${origin}/b/${first.slug}`, { waitUntil: "networkidle0" });
+  const nativePublicState = await visitor.evaluate((marker) => ({
+    native: document.querySelector('[data-openpage-public="true"]') !== null,
+    marker: document.body.textContent.includes(marker),
+    legacy: document.querySelector(".eb-scope") !== null,
+  }), `QA OpenPage ${first.category} ${runId}`);
+  check("public business route renders the published native OpenPage document",
+    nativePublicState.native && nativePublicState.marker && !nativePublicState.legacy, JSON.stringify(nativePublicState));
+
+  const nativeUnpublished = await publishNativeOpenPageUI(first.ownerPage, first, "unpublish");
+  const legacyFallbackBusiness = await prisma.business.findUniqueOrThrow({ where: { id: first.id }, select: { isPublished: true } });
+  const legacyFallbackExperience = await prisma.businessExperience.findUniqueOrThrow({ where: { businessId: first.id }, select: { status: true } });
+  const nativeSiteAfterUnpublish = await prisma.studioWebsite.findUniqueOrThrow({ where: { id: first.studioWebsiteId } });
+  check("native OpenPage unpublish preserves the published legacy fallback",
+    nativeUnpublished.published === false && nativeSiteAfterUnpublish.status === "UNPUBLISHED" &&
+      legacyFallbackExperience.status === "PUBLISHED" && legacyFallbackBusiness.isPublished === true);
+  await publicState(visitor, first, legacyMarker, true);
 
   // Expiry must refuse publication without destroying drafts/history. No production lifecycle job is invoked.
   await prisma.subscription.update({ where: { businessId: first.id }, data: { status: "EXPIRED", expiresAt: new Date(Date.now() - 86400000 * 5), graceUntil: new Date(Date.now() - 86400000) } });
