@@ -5727,3 +5727,24 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
     line-height: 1.04;
   }
 }
+
+/* At the narrowest supported phones, the fixed four-action bar leaves too little
+   vertical room for the default two-line hero title plus vertically stacked CTAs.
+   Keep both hero actions visible above the bar by compacting only this small viewport. */
+@media (max-width: 360px) {
+  .eb-scope:has(.eb-actionbar) .eb-hero__content .eb-h1 {
+    font-size: clamp(1.65rem, 8vw, 2rem);
+    line-height: 1.05;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero__actions {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero__actions > a,
+  .eb-scope:has(.eb-actionbar) .eb-hero__actions > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.4rem;
+    font-size: 0.82rem;
+  }
+}
