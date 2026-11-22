@@ -3,6 +3,7 @@
  * Queries existing product subscription/entitlement tables; never writes or repairs records.
  */
 import prisma from "@/lib/db";
+import { hasTeamFreeAccessForBusiness } from "@/lib/team-access";
 import {
   summarizeProductEntitlementLifecycle,
   type ProductKey,
@@ -122,6 +123,7 @@ export async function loadProductEntitlementLifecycleReport(client: typeof prism
       for (const ent of ents.length ? ents : [null]) {
         const product = (sub?.product ?? ent?.product)!;
         const payment = sub?.paymentId ? paymentById.get(sub.paymentId) : null;
+        const teamFreeAccess = !sub && Boolean(ent) ? await hasTeamFreeAccessForBusiness(ent!.businessId) : false;
         evidence.push({
           product,
           businessId: sub?.businessId ?? ent!.businessId,
@@ -150,6 +152,7 @@ export async function loadProductEntitlementLifecycleReport(client: typeof prism
           entitlementStatus: ent?.status ?? null,
           entitlementExpiresAt: ent?.expiresAt ?? null,
           asOf: new Date(),
+          teamFreeAccess,
         });
       }
     }
