@@ -246,17 +246,26 @@
     "status": "BLOCKED",
     "acceptance": "server-side module/action authorization, confirmation/change-history tests, cross-tenant tests, kill-switch scope, health-source provenance and last-check verification.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §007 (ADMIN-007)",
-    "implementationLocation": "control APIs/views, existing feature-flag infrastructure, Vercel, Neon, Paystack, messaging, AI, POS, Studio, media and audit. No production configuration, DNS, billing or provider changes.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. No configuration module, no feature-flag or AI kill-switch UI, no service-health monitoring. Not implemented. Owner: confirm scope and priority.",
-    "evidence": [],
+    "implementationLocation": "lib/erp/safety-config.ts provides typed fail-closed parsing for existing ERP messaging and automation switches; lib/messaging/pipeline.ts and lib/erp/automation.ts consume it. app/api/control/overview/route.ts and components/control/ControlConsole.tsx expose read-only application/database and persisted queue observations behind system.health.read.",
+    "verificationMethod": "Exact-head CI must validate malformed-config fail-closed tests, messaging/automation non-dispatch tests, route authorization, generated Prisma client, typecheck, unit suite and offline build. Browser review, config change history, scoped operator workflow and external health provenance remain outstanding.",
+    "testResult": "Partial implementation committed on the isolated ADMIN-007 candidate branch: malformed/non-boolean safety configuration now pauses both messaging and automation; read-only health reporting distinguishes responding application, reachable database and persisted queue-state counts from unavailable deployment/provider/AI-cost/media/incident/worker-heartbeat sources. No config writes, provider probes, secret reads or Control grants. Exact-head verification pending; requirement remains BLOCKED.",
+    "evidence": [
+      "lib/erp/safety-config.ts",
+      "lib/messaging/pipeline.ts",
+      "lib/erp/automation.ts",
+      "app/api/control/overview/route.ts",
+      "components/control/ControlConsole.tsx",
+      "tests/unit/erp-safety-config.test.ts",
+      "tests/unit/messaging-dispatch.test.ts",
+      "tests/unit/erp-automation-onboarding.test.ts"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
     ],
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The feature-flag registry, operator kill-switch workflow and health-monitor UI are not implemented. Keep all flags fail-closed and do not enable production behavior; the approved all-DENY Control policy remains in force.",
+    "blocker": "Operator configuration UI and immutable change history, approved scoped kill-switch workflow, AI-specific kill switch enforcement, provider/deployment/media health integrations, durable last-success records and independently inspected browser evidence remain outstanding. Keep the all-DENY policy and production behavior unchanged.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"
