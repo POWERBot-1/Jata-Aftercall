@@ -46,7 +46,7 @@ on:
         required: false
         default: "Explicit candidate"
   pull_request:
-    branches: [main, arena/subscription-payment-reconciliation, arena/product-entitlement-reconciliation-clean-20261122]
+    branches: [main, arena/subscription-payment-reconciliation, arena/product-entitlement-reconciliation-clean-20261122, arena/mobile-hero-clearance-remediation-v2-20261122]
 
 permissions:
   contents: read
