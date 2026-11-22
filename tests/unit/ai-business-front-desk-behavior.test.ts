@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { composePublicPaymentText, extractDeliveryArea, interpretOpeningStatus, isBareDeliveryFollowUp, matchCatalogue, redactSecretsFromPublicText, refersToPreviousPlace } from "@/lib/ai-grounding";
 import { starterForTemplate, AI_BUSINESS_TEMPLATES } from "@/lib/ai-templates";
 
+vi.mock("@/lib/ai-followup", () => ({
+  createAIFrontDeskHandoffTask: vi.fn(async () => ({ task: { id: "test-handoff" }, created: true })),
+}));
+
 const mockState = vi.hoisted(() => ({
   businesses: new Map<string, any>(),
   products: new Map<string, any[]>(),

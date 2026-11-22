@@ -6,7 +6,10 @@
  * discipline, notes and history.
  */
 
+import { createHash } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import prisma from "../db";
+import { enqueueAutomationEvent } from "@/lib/automation/events";
 import {
   ActionResult,
   HUB_SUBJECTS,
@@ -86,6 +89,15 @@ export function validateEnquiryInput(raw: unknown): ValidationResult<ValidatedEn
   };
 }
 
+export function enquiryAutomationEventId(businessId: string, requestKey: string): string {
+  const digest = createHash("sha256").update(`${businessId}:${requestKey}`).digest("hex");
+  return `enquiry_created_${digest}`;
+}
+
+function prismaErrorCode(error: unknown): string | undefined {
+  return error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : undefined;
+}
+
 export async function createEnquiry(params: {
   businessId: string;
   input: ValidatedEnquiry;
@@ -93,40 +105,72 @@ export async function createEnquiry(params: {
   sessionHash?: string | null;
   source?: string;
 }): Promise<{ idempotent: boolean; record: any }> {
-  const existing = await prisma.customerEnquiry
-    .findFirst({ where: { businessId: params.businessId, requestKey: params.input.requestKey } })
-    .catch(() => null);
-  if (existing) return { idempotent: true, record: existing };
+  const where = { businessId: params.businessId, requestKey: params.input.requestKey };
+  let outcome: { idempotent: boolean; record: any };
+  try {
+    outcome = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Reconfirm the tenant inside the write transaction. The public route resolves a published
+      // business from the requested slug; this persisted row is the authoritative tenant identity.
+      const business = await tx.business.findUnique({ where: { id: params.businessId }, select: { id: true } });
+      if (!business) throw new Error("ENQUIRY_BUSINESS_NOT_FOUND");
 
-  const reference = createReference("JATA-ENQ");
-  const record = await prisma.customerEnquiry.create({
-    data: {
-      businessId: params.businessId,
-      reference,
-      requestKey: params.input.requestKey,
-      customerName: params.input.customerName,
-      contactMethod: params.input.contactMethod,
-      contactValue: params.input.contactValue,
-      subject: params.input.subject,
-      message: params.input.message,
-      status: "NEW",
-      source: cleanText(params.source, 40) || "BUSINESS_PAGE",
-      ipHash: params.ipHash ?? null,
-      sessionHash: params.sessionHash ?? null,
-    },
-  });
+      const existing = await tx.customerEnquiry.findFirst({ where });
+      if (existing) return { idempotent: true, record: existing };
 
-  await recordHubActivity(prisma, {
-    businessId: params.businessId,
-    subjectType: HUB_SUBJECTS.CUSTOMER_ENQUIRY,
-    subjectId: record.id,
-    kind: "CREATED",
-    summary: `Enquiry ${reference} from ${params.input.customerName}`,
-    toStatus: "NEW",
-    note: params.input.subject ? `${params.input.subject}: ${params.input.message}` : params.input.message,
-  });
+      const reference = createReference("JATA-ENQ");
+      const record = await tx.customerEnquiry.create({
+        data: {
+          businessId: business.id,
+          reference,
+          requestKey: params.input.requestKey,
+          customerName: params.input.customerName,
+          contactMethod: params.input.contactMethod,
+          contactValue: params.input.contactValue,
+          subject: params.input.subject,
+          message: params.input.message,
+          status: "NEW",
+          source: cleanText(params.source, 40) || "BUSINESS_PAGE",
+          ipHash: params.ipHash ?? null,
+          sessionHash: params.sessionHash ?? null,
+        },
+      });
+      // Never trust a caller-supplied tenant field in the event: derive it from the created row,
+      // whose FK was written against the business fetched within this same transaction.
+      if (record.businessId !== business.id) throw new Error("ENQUIRY_TENANT_MISMATCH");
+      await enqueueAutomationEvent(tx, {
+        id: enquiryAutomationEventId(record.businessId, record.requestKey),
+        type: "enquiry.created",
+        occurredAt: record.createdAt.toISOString(),
+        tenantId: record.businessId,
+        source: "business_page",
+        data: { businessId: record.businessId, enquiryId: record.id, reference: record.reference },
+      });
+      return { idempotent: false, record };
+    });
+  } catch (error) {
+    // Two concurrent submissions with the same business/request key may both observe no row;
+    // the unique key chooses one winner. Return that persisted winner only after its transaction
+    // (including its outbox event) committed. Other unique-key failures still propagate.
+    if (prismaErrorCode(error) === "P2002") {
+      const existing = await prisma.customerEnquiry.findFirst({ where });
+      if (existing) return { idempotent: true, record: existing };
+    }
+    throw error;
+  }
 
-  return { idempotent: false, record };
+  if (!outcome.idempotent) {
+    const record = outcome.record;
+    await recordHubActivity(prisma, {
+      businessId: record.businessId,
+      subjectType: HUB_SUBJECTS.CUSTOMER_ENQUIRY,
+      subjectId: record.id,
+      kind: "CREATED",
+      summary: `Enquiry ${record.reference} from ${params.input.customerName}`,
+      toStatus: "NEW",
+      note: params.input.subject ? `${params.input.subject}: ${params.input.message}` : params.input.message,
+    });
+  }
+  return outcome;
 }
 
 export async function listEnquiries(

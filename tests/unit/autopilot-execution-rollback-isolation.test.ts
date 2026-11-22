@@ -314,9 +314,9 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
     state.subs.set("biz_a", {
       status: "ACTIVE",
       planKey: "JATA_AUTOPILOT",
-      startAt: new Date("2026-10-10T00:00:00Z"),
-      expiresAt: new Date("2026-11-10T00:00:00Z"),
-      graceUntil: new Date("2026-11-13T00:00:00Z"),
+      startAt: new Date(Date.now() - 86_400_000),
+      expiresAt: new Date(Date.now() + 30 * 86_400_000),
+      graceUntil: new Date(Date.now() + 33 * 86_400_000),
     });
 
     state.unanswered.set("uq_1", {

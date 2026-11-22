@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/ai-followup", () => ({
+  createAIFrontDeskHandoffTask: vi.fn(async () => ({ task: { id: "test-handoff" }, created: true })),
+}));
+
 const mockState = vi.hoisted(() => ({
   businesses: new Map<string, any>(),
   products: new Map<string, any[]>(),

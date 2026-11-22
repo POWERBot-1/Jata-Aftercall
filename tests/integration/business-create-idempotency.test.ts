@@ -13,9 +13,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 type Member = { id: string; userId: string; businessId: string; role: string };
 const store = vi.hoisted(() => ({
   businesses: new Map<string, any>(),
+  events: new Map<string, any>(),
   members: [] as Member[],
   creates: 0,
   raceOnce: false,
+  externalRaceCommitted: false,
   failNestedMemberOnce: false,
   failUpsertTimes: 0,
   upsertRaceOnce: false,
@@ -38,10 +40,11 @@ vi.mock("@/lib/db", () => {
         }),
         create: vi.fn(async ({ data }: any) => {
           const { members, ...fields } = data;
-          const id = fields.id ?? `cuid-${store.creates + 1}`;
+          const id = fields.id ?? `cuid-business-${store.creates + 1}`;
           if (store.raceOnce) {
             // A concurrent request for the same draft committed first (business + membership, atomically).
             store.raceOnce = false;
+            store.externalRaceCommitted = true;
             store.businesses.set(id, { ...fields, id });
             store.members.push({ id: `m-${store.members.length + 1}`, userId: fields.ownerId, businessId: id, role: "OWNER" });
             throw uniqueError();
@@ -53,12 +56,38 @@ vi.mock("@/lib/db", () => {
             throw new Error("membership write failed");
           }
           store.creates += 1;
-          const row = { ...fields, id };
+          const row = { ...fields, id, createdAt: new Date() };
           store.businesses.set(id, row);
           if (members?.create) store.members.push({ id: `m-${store.members.length + 1}`, businessId: id, userId: members.create.userId, role: members.create.role });
           return row;
         }),
       },
+      automationEvent: {
+        create: vi.fn(async ({ data }: any) => {
+          if (store.events.has(data.eventId)) throw uniqueError();
+          store.events.set(data.eventId, data);
+          return data;
+        }),
+      },
+      $transaction: vi.fn(async (callback: (tx: any) => Promise<any>) => {
+        const businesses = new Map(store.businesses);
+        const members = [...store.members];
+        const events = new Map(store.events);
+        try {
+          return await callback({
+            business: { create: (args: any) => (prisma as any).business.create(args) },
+            automationEvent: { create: (args: any) => (prisma as any).automationEvent.create(args) },
+          });
+        } catch (error) {
+          if (!store.externalRaceCommitted) {
+            store.businesses = businesses;
+            store.members = members;
+            store.events = events;
+          }
+          store.externalRaceCommitted = false;
+          throw error;
+        }
+      }),
       businessMember: {
         create: vi.fn(async () => {
           throw new Error("unexpected separate (non-atomic) membership create");
@@ -109,9 +138,11 @@ describe("idempotent business creation for onboarding drafts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store.businesses.clear();
+    store.events.clear();
     store.members.length = 0;
     store.creates = 0;
     store.raceOnce = false;
+    store.externalRaceCommitted = false;
     store.failNestedMemberOnce = false;
     store.failUpsertTimes = 0;
     store.upsertRaceOnce = false;
@@ -126,6 +157,8 @@ describe("idempotent business creation for onboarding drafts", () => {
     expect(body.idempotent).toBeUndefined();
     expect(prisma.business.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ members: { create: { userId: "owner-a", role: "OWNER" } } }) }));
     expect(prisma.businessMember.create).not.toHaveBeenCalled();
+    expect(store.events.size).toBe(1);
+    expect([...store.events.values()][0]).toMatchObject({ tenantId: body.business.id, product: "business_page", eventType: "business.created", status: "PENDING" });
     expect(mocks.audit).toHaveBeenCalledTimes(1);
   });
 
