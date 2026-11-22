@@ -15,6 +15,9 @@ export type ProductLifecycleEvidence = {
   businessId: string;
   subscriptionId: string | null;
   subscriptionStatus: string | null;
+  subscriptionExpiresAt: Date | null;
+  subscriptionGraceUntil: Date | null;
+  subscriptionCancelledAt: Date | null;
   paymentId: string | null;
   paymentStatus: string | null;
   paymentPlanId: string | null;
@@ -33,6 +36,8 @@ export type ProductLifecycleEvidence = {
   subscriptionUserId: string | null;
   entitlementId: string | null;
   entitlementStatus: string | null;
+  entitlementExpiresAt: Date | null;
+  asOf: Date;
 };
 
 export type ProductEntitlementException =
@@ -45,6 +50,8 @@ export type ProductEntitlementException =
   | "PAYMENT_TENANT_OR_OWNER_MISMATCH"
   | "PAYMENT_PROVENANCE_MISMATCH"
   | "PAYMENT_SETTLEMENT_UNVERIFIED"
+  | "ACTIVE_SUBSCRIPTION_PAST_VALIDITY"
+  | "ACTIVE_ENTITLEMENT_PAST_EXPIRY"
   | "DUPLICATE_PRODUCT_LIFECYCLE";
 
 export type ProductEntitlementFinding = {
@@ -84,6 +91,8 @@ export function summarizeProductEntitlementLifecycle(
     PAYMENT_TENANT_OR_OWNER_MISMATCH: 0,
     PAYMENT_PROVENANCE_MISMATCH: 0,
     PAYMENT_SETTLEMENT_UNVERIFIED: 0,
+    ACTIVE_SUBSCRIPTION_PAST_VALIDITY: 0,
+    ACTIVE_ENTITLEMENT_PAST_EXPIRY: 0,
     DUPLICATE_PRODUCT_LIFECYCLE: 0,
   };
   const findings: ProductEntitlementFinding[] = [];
@@ -106,8 +115,39 @@ export function summarizeProductEntitlementLifecycle(
       continue;
     }
 
-    const subscriptionIsActive = activeSubscription(row.subscriptionStatus);
-    const entitlementIsActive = activeEntitlement(row.entitlementStatus);
+    const asOf = row.asOf instanceof Date && !Number.isNaN(row.asOf.getTime()) ? row.asOf : new Date();
+    const subscriptionValidUntil = row.subscriptionGraceUntil ?? row.subscriptionExpiresAt;
+    const subscriptionCancelled =
+      row.subscriptionStatus === "CANCELLED" ||
+      row.subscriptionStatus === "SUSPENDED" ||
+      row.subscriptionCancelledAt !== null;
+    const subscriptionPastValidity = Boolean(
+      subscriptionValidUntil && asOf.getTime() > subscriptionValidUntil.getTime()
+    );
+    const entitlementPastExpiry = Boolean(
+      row.entitlementExpiresAt && asOf.getTime() > row.entitlementExpiresAt.getTime()
+    );
+    const subscriptionIsActive =
+      !subscriptionCancelled && !subscriptionPastValidity && activeSubscription(row.subscriptionStatus);
+    const entitlementIsActive = !entitlementPastExpiry && activeEntitlement(row.entitlementStatus);
+
+    if (activeSubscription(row.subscriptionStatus) && subscriptionPastValidity) {
+      push({
+        exception: "ACTIVE_SUBSCRIPTION_PAST_VALIDITY",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+      });
+    }
+    if (activeEntitlement(row.entitlementStatus) && entitlementPastExpiry) {
+      push({
+        exception: "ACTIVE_ENTITLEMENT_PAST_EXPIRY",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        entitlementId: row.entitlementId ?? undefined,
+      });
+    }
 
     if (subscriptionIsActive && !row.entitlementId) {
       push({
