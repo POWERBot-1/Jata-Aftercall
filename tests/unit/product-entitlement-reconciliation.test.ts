@@ -32,6 +32,7 @@ const row = (overrides: Partial<ProductLifecycleEvidence> = {}): ProductLifecycl
   entitlementStatus: "ACTIVE",
   entitlementExpiresAt: null,
   asOf: new Date("2026-11-22T00:00:00.000Z"),
+  teamFreeAccess: false,
   ...overrides,
 });
 
@@ -117,6 +118,17 @@ describe("product entitlement reconciliation", () => {
   it("detects active subscription without entitlement", () => {
     const report = summarizeProductEntitlementLifecycle([row({ entitlementId: null, entitlementStatus: null })]);
     expect(report.counts.ACTIVE_SUBSCRIPTION_WITHOUT_ENTITLEMENT).toBe(1);
+  });
+
+  it("does not misclassify verified team-free access as an orphaned subscription", () => {
+    const teamFree = row({
+      subscriptionId: null,
+      subscriptionStatus: null,
+      paymentId: null,
+      entitlementStatus: "ACTIVE",
+      teamFreeAccess: true,
+    });
+    expect(summarizeProductEntitlementLifecycle([teamFree]).findings).toEqual([]);
   });
 
   it("detects active entitlement without a subscription", () => {
