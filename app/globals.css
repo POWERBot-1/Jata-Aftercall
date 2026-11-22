@@ -5799,3 +5799,19 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
     padding-bottom: 1.25rem !important;
   }
 }
+
+
+/* Revalidation trigger: PR base now includes the stacked-branch workflow filters.
+   This comment-only follow-up forces a fresh exact-head workflow selection.
+   320px viewport correction, based on exact-head geometry (480 generated-family captures).
+   The previous compact rule reduced hero bottom clearance to 1.25rem, placing the hero CTA
+   row inside the fixed two-row contact bar. Restore measured clearance only on narrow phones;
+   retain compact typography and one-row hero CTA sizing. */
+@media (max-width: 360px) {
+  .eb-scope:has(.eb-actionbar) .eb-hero__content {
+    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 2rem) !important;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 2rem) !important;
+  }
+}
