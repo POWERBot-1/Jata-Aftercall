@@ -214,7 +214,7 @@ export function summarizeProductEntitlementLifecycle(
         businessId: row.businessId,
         entitlementId: row.entitlementId ?? undefined,
       });
-    } else if (entitlementIsActive && !subscriptionIsActive) {
+    } else if (entitlementIsActive && row.subscriptionId && !subscriptionIsActive) {
       push({
         exception: "ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION",
         product: row.product,
