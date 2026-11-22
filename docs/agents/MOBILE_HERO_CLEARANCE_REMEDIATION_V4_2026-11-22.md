@@ -11,15 +11,19 @@ Motion isolated browser run `45035333185`, candidate SHA `e661df2255c4e61678e855
 - Hero heading geometry did not intersect the action bar; horizontal overflow was zero.
 - Independent screenshot inspection confirmed the fixed action bar visibly covers the hero CTA row.
 
-## Correction
+## First correction attempt and diagnostic
 
-For storefronts with a fixed action bar at widths up to 360px, increase bottom clearance on both standard hero content and split-hero grid from the prior action-bar height + safe-area + 2rem to +4rem. This gives an additional 32px of reserved clearance and is expected to move the centered hero content up enough to clear the 6px measured overlap. No desktop or wider-phone rule is changed.
+The first v4 attempt increased bottom clearance from +2rem to +4rem. Its exact-head browser capture still failed, proving that bottom padding alone did not move the CTA. The existing narrow-screen compaction rule retained 1rem of top padding, placing the content too low.
 
-A focused CSS contract test asserts both selectors and the new spacing declaration. The full real-Chrome generated-family matrix remains the acceptance test.
+## Current correction
+
+For storefronts with a fixed action bar at widths up to 360px, remove top padding from both standard hero content and split-hero grid, while retaining the action-bar height + safe-area + 4rem bottom reserve. Removing the 1rem top inset is expected to move the CTA row up by 16px, clearing the previously measured 6px intersection with approximately 10px of clearance. No desktop or wider-phone rule is changed.
+
+A focused CSS contract test asserts both selectors, zero top padding and the bottom reserve. The full real-Chrome generated-family matrix remains the acceptance test.
 
 ## Verification
 
-- Exact-head CI pending.
+- Latest exact-head attempt confirmed that bottom padding alone did not resolve the collision. The top-padding correction is now committed; exact-head CI pending.
 - No visual acceptance claimed until the 480-observation rerun reports zero intersections and no horizontal overflow, and screenshots are independently inspected.
 - No Studio family was published to a customer business; browser fixtures use the disposable database.
 - No production deployment, merge or database mutation was performed.
