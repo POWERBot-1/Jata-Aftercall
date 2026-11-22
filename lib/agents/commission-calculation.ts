@@ -8,6 +8,17 @@
  */
 import { isProviderTransactionId } from "@/lib/paymentVerification";
 
+export type CommissionPolicyGovernance = {
+  attribution: { precedence: string; windowDays: number; renewalTreatment: string; correctionTreatment: string; consentRequired: boolean };
+  amountTreatment: { taxTreatment: string; discountTreatment: string; feeTreatment: string };
+  recurrence: { newSale: string; renewal: string; upgrade: string };
+  reversals: { fullRefund: string; partialRefund: string; chargeback: string; disputeResolution: string; maxDays: number };
+  caps: { perPaymentMinor: number | null; perAgentPeriodMinor: number | null; period: string };
+  payout: { schedule: string; method: string; minimumMinor: number; holdDays: number };
+  hierarchy: { enabled: boolean; compensation: string; maxLevels: number };
+  privacy: { retentionDays: number; legalHold: string };
+};
+
 export type CommissionPolicySnapshot = {
   id: string;
   version: string;
@@ -19,6 +30,8 @@ export type CommissionPolicySnapshot = {
   eligibleEvents: readonly ("NEW_SALE" | "RENEWAL" | "UPGRADE")[];
   basis: "GROSS" | "NET";
   rule: { kind: "FIXED"; minorUnits: number } | { kind: "PERCENTAGE"; basisPoints: number; rounding: "HALF_UP" | "DOWN" };
+  /** Every non-calculation term must be explicit before a policy can be evaluated. */
+  governance: CommissionPolicyGovernance;
 };
 
 export type CommissionPaymentSnapshot = {
@@ -59,6 +72,45 @@ function validMinor(value: unknown): value is number {
 function nonempty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= 255;
 }
+function completeGovernance(value: unknown): value is CommissionPolicyGovernance {
+  if (!value || typeof value !== "object") return false;
+  const governance = value as Partial<CommissionPolicyGovernance>;
+  const strings = [
+    governance.attribution?.precedence,
+    governance.attribution?.renewalTreatment,
+    governance.attribution?.correctionTreatment,
+    governance.amountTreatment?.taxTreatment,
+    governance.amountTreatment?.discountTreatment,
+    governance.amountTreatment?.feeTreatment,
+    governance.recurrence?.newSale,
+    governance.recurrence?.renewal,
+    governance.recurrence?.upgrade,
+    governance.reversals?.fullRefund,
+    governance.reversals?.partialRefund,
+    governance.reversals?.chargeback,
+    governance.reversals?.disputeResolution,
+    governance.caps?.period,
+    governance.payout?.schedule,
+    governance.payout?.method,
+    governance.hierarchy?.compensation,
+    governance.privacy?.legalHold,
+  ];
+  const integers = [
+    governance.attribution?.windowDays,
+    governance.reversals?.maxDays,
+    governance.payout?.minimumMinor,
+    governance.payout?.holdDays,
+    governance.hierarchy?.maxLevels,
+    governance.privacy?.retentionDays,
+  ];
+  const validCap = (amount: number | null | undefined) => amount === null || validMinor(amount);
+  return strings.every(nonempty) &&
+    integers.every(validMinor) &&
+    typeof governance.attribution?.consentRequired === "boolean" &&
+    typeof governance.hierarchy?.enabled === "boolean" &&
+    validCap(governance.caps?.perPaymentMinor) &&
+    validCap(governance.caps?.perAgentPeriodMinor);
+}
 
 /**
  * `eligibleMinor` is the approved gross/net base already derived from verified evidence. NET
@@ -73,6 +125,7 @@ export function evaluateCommission(input: {
 }): CommissionEvaluation {
   const { policy, payment, attribution, eligibleMinor } = input;
   if (!policy || policy.approval !== "APPROVED") return { eligible: false, reason: "POLICY_NOT_APPROVED" };
+  if (!completeGovernance(policy.governance)) return { eligible: false, reason: "POLICY_INCOMPLETE" };
   if (!nonempty(policy.id) || !nonempty(policy.version) || !validDate(policy.effectiveFrom) ||
       (policy.effectiveUntil !== null && (!validDate(policy.effectiveUntil) || policy.effectiveUntil <= policy.effectiveFrom)) ||
       !Array.isArray(policy.eligiblePlanIds) || !Array.isArray(policy.eligibleEvents) || policy.currency !== "KES") {
