@@ -17,7 +17,7 @@ The first v4 attempt increased bottom clearance from +2rem to +4rem. Its exact-h
 
 ## Current correction
 
-For storefronts with a fixed action bar at widths up to 360px, remove top padding from both standard hero content and split-hero grid, while retaining the action-bar height + safe-area + 4rem bottom reserve. Removing the 1rem top inset is expected to move the CTA row up by 16px, clearing the previously measured 6px intersection with approximately 10px of clearance. No desktop or wider-phone rule is changed.
+For storefronts with a fixed action bar at widths up to 360px, remove top padding from both standard hero content and split-hero grid, while retaining the action-bar height + safe-area + 4rem bottom reserve. Removing the 1rem top inset is expected to move the CTA row up by 16px, clearing the previously measured 6px intersection with approximately 10px of clearance. No desktop or wider-phone rule is changed. v5 changes the reserve to +6rem.
 
 A focused CSS contract test asserts both selectors, zero top padding and the bottom reserve. The full real-Chrome generated-family matrix remains the acceptance test.
 
