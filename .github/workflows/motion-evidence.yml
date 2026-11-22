@@ -2,7 +2,7 @@ name: Motion isolated browser evidence
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, arena/subscription-payment-reconciliation, arena/product-entitlement-reconciliation-clean-20261122]
 permissions:
   contents: read
 jobs:
@@ -24,6 +24,7 @@ jobs:
       AUTH_SECRET: interactive-business-e2e-test-secret
       NEXT_TELEMETRY_DISABLED: '1'
       MOTION_ISOLATED: '1'
+      CI: 'true'
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
