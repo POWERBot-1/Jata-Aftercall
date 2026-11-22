@@ -196,7 +196,7 @@ export async function runAutomation(client: any, input: RunAutomationInput) {
   const rule = await client.erpAutomationRule.findUnique({ where: { id: input.ruleId } });
   if (!rule || rule.businessId !== input.businessId) throw Object.assign(new Error("That automation rule was not found."), { status: 404 });
 
-  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } }).catch(() => null);
+  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } });
   if (automationKillSwitch(configuration)) {
     return { status: "SKIPPED", reason: "Automation is paused by the platform safety switch.", actions: [] as string[] };
   }
