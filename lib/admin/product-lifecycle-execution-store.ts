@@ -14,6 +14,7 @@ import {
   type LifecycleTask,
 } from "@/lib/admin/product-lifecycle-execution-ledger";
 import type { LifecycleProduct } from "@/lib/admin/product-expiry-grace-observation";
+import { assertSafeLifecyclePayload } from "@/lib/admin/product-lifecycle-payload-guard";
 
 type Tx = any;
 type TaskInput = {
@@ -118,6 +119,7 @@ export async function enqueueLifecycleTasks(runId: string, inputs: TaskInput[]) 
       throw new Error("LIFECYCLE_INVALID_MAX_ATTEMPTS");
     }
     if (!input.product || typeof input.product !== "string") throw new Error("LIFECYCLE_INVALID_PRODUCT");
+    assertSafeLifecyclePayload(input.payload);
     const payload = JSON.parse(safeJson(input.payload));
     const idempotencyKey = lifecycleIdempotencyKey({
       product: input.product, businessId, subscriptionId, transitionKey,
