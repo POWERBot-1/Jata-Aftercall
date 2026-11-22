@@ -5732,6 +5732,12 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
    vertical room for the default two-line hero title plus vertically stacked CTAs.
    Keep both hero actions visible above the bar by compacting only this small viewport. */
 @media (max-width: 360px) {
+  /* The first 320px family capture still found CTA/action-bar intersections.
+     Add 2rem of measured clearance at this viewport; keep the rule family-agnostic. */
+  .eb-scope:has(.eb-actionbar) .eb-hero__content,
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    padding-bottom: calc(max(var(--eb-actionbar-h, 9.5rem), 10.5rem) + env(safe-area-inset-bottom) + 7.5rem);
+  }
   .eb-scope:has(.eb-actionbar) .eb-hero__content .eb-h1 {
     font-size: clamp(1.65rem, 8vw, 2rem);
     line-height: 1.05;
