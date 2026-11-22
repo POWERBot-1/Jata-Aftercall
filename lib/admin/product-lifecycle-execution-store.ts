@@ -68,7 +68,7 @@ function eventData(input: {
     reasonCode: input.reasonCode,
     actorType: "SYSTEM",
     actorId: input.actorId ?? null,
-    metadata: input.metadata === undefined ? undefined : JSON.parse(safeJson(input.metadata)),
+    metadata: input.metadata === undefined ? undefined : (assertSafeLifecyclePayload(input.metadata), JSON.parse(safeJson(input.metadata))),
   };
 }
 
@@ -89,7 +89,7 @@ export async function createLifecycleExecutionRun(input: {
   const runKey = boundedText(input.runKey, "RUN_KEY", 200);
   const mode = input.mode ?? "OBSERVE";
   if (mode !== "OBSERVE" && mode !== "PLAN") throw new Error("LIFECYCLE_INVALID_MODE");
-  if (input.cursor !== undefined) safeJson(input.cursor);
+  if (input.cursor !== undefined) { assertSafeLifecyclePayload(input.cursor); safeJson(input.cursor); }
   try {
     return await prisma.productLifecycleExecutionRun.create({
       data: { runKey, mode, status: "RUNNING", cursor: input.cursor as any },
