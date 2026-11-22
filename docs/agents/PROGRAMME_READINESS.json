@@ -164,10 +164,15 @@
     "status": "BLOCKED",
     "acceptance": "Verify authoritative sources, role and tenant isolation, audited actions and independent screenshots at all six owner-specified viewport sizes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §005 (ADMIN-005)",
-    "implementationLocation": "`app/api/control/overview/route.ts`, `app/api/control/businesses/route.ts`, `app/api/control/audit/route.ts`, `components/control/ControlConsole.tsx`, database `Business`, `Subscription`, `Payment`, agent evidence, outbox, and `ControlAuditEvent` models.",
+    "implementationLocation": "app/api/control/overview/route.ts and components/control/ControlConsole.tsx; lib/control/financial-metrics.ts; tests/unit/control-financial-metrics.test.ts; existing six subscription models and Payment source.",
     "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run’s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
-    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Console modules exist for businesses, agents, exceptions and audit, but MRR/ARR, payment, subscription, AI usage, job and incident panels are not implemented and the console withholds PII and financial figures pending owner policy. Owner: approve the PII/financial display policy and confirm the metric set.",
-    "evidence": [],
+    "testResult": "Partial read-only MRR/ARR implementation is now present in lib/control/financial-metrics.ts and app/api/control/overview/route.ts across the six persisted product subscription models. It requires immutable price snapshots, live provider settlement, exact payment/business/plan/reference linkage, explicit RECONCILED status/timestamp, and explicit zero refund/chargeback values; unknown evidence withholds the aggregate. Product lifecycle counts and trial UNAVAILABLE state are surfaced separately. Exact-head CI is pending for the latest strict-evidence revision; no production data was queried and no aggregate has been reconciled against the production ledger. Full ADMIN-005 remains BLOCKED: AI provider-metered cost, canonical incidents, historical MRR time series, PII/hierarchy and independently inspected six-viewport functional journeys are incomplete; the all-DENY policy still forbids Control exposure.",
+    "evidence": [
+      "lib/control/financial-metrics.ts",
+      "tests/unit/control-financial-metrics.test.ts",
+      "app/api/control/overview/route.ts",
+      "components/control/ControlConsole.tsx"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
@@ -197,7 +202,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner-approved financial metric definitions and aggregate-first/masked-PII display policy are recorded in docs/agents/OWNER_AUTHORIZED_PROGRAMME_DECISIONS_2026-11-16.md. The metrics implementation and reconciled read-only data source are still missing. The approved all-DENY Control policy means no financial or PII data may be exposed through Control until access is separately authorized.",
+    "blocker": "The metrics read model is implemented as a candidate, but authoritative settlement/reversal source semantics and a real reconciled read-only data source have not been independently verified. No historical backfill is allowed. AI provider-metered usage/cost, incidents, historical MRR, full hierarchy/PII controls and six-viewport independent acceptance remain outstanding. All 90 Control cells remain DENY; do not expose these metrics in production or grant access.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
@@ -215,7 +220,9 @@
       "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
       "scripts/browser/control-deny.check.mjs",
       "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md",
-      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md"
+      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+      "lib/control/financial-metrics.ts",
+      "tests/unit/control-financial-metrics.test.ts"
     ],
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED",
