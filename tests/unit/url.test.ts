@@ -15,7 +15,7 @@ function setEnv(values: Partial<Record<EnvKey, string>>) {
 
 // Real values observed in production for this project: VERCEL_URL is the ephemeral, Deployment-Protected
 // host; VERCEL_PROJECT_PRODUCTION_URL is the stable production domain. Neither carries a scheme.
-const STABLE_HOST = "jata-aftercall.vercel.app";
+const STABLE_HOST = "jataaftercall.co.ke";
 const EPHEMERAL_HOST = "jata-aftercall-e2p2idokw-powerbot-1.vercel.app";
 const STABLE_URL = `https://${STABLE_HOST}`;
 
@@ -80,6 +80,15 @@ describe("getBaseUrl — stable production URL on Vercel (Fix 1)", () => {
     expect(getBaseUrl()).toBe(STABLE_URL);
   });
 
+  it("does not emit a Vercel production alias as the customer-facing origin", () => {
+    setEnv({
+      VERCEL_ENV: "production",
+      VERCEL_URL: EPHEMERAL_HOST,
+      VERCEL_PROJECT_PRODUCTION_URL: "jata-aftercall.vercel.app",
+    });
+    expect(getBaseUrl()).toBe("https://jataaftercall.co.ke");
+  });
+
   it("non-local PUBLIC_BASE_URL takes precedence over both Vercel URLs", () => {
     setEnv({
       PUBLIC_BASE_URL: "https://jata-aftercall.pages.dev",
@@ -116,16 +125,16 @@ describe("getBaseUrl — stable production URL on Vercel (Fix 1)", () => {
     expect(getBaseUrl()).toBe(STABLE_URL);
   });
 
-  it("legacy fallback: only ephemeral VERCEL_URL exposed still yields an https deployment URL (never localhost)", () => {
+  it("only an ephemeral VERCEL_URL exposed still falls back to the official apex (never a protected preview host)", () => {
     setEnv({ PUBLIC_BASE_URL: "http://localhost:3000", VERCEL_URL: EPHEMERAL_HOST });
-    expect(getBaseUrl()).toBe(`https://${EPHEMERAL_HOST}`);
+    expect(getBaseUrl()).toBe(STABLE_URL);
   });
 
   it("tolerates a scheme and trailing slash on Vercel-provided hosts", () => {
     setEnv({ VERCEL_PROJECT_PRODUCTION_URL: `https://${STABLE_HOST}/` });
     expect(getBaseUrl()).toBe(STABLE_URL);
     setEnv({ VERCEL_URL: `https://${EPHEMERAL_HOST}/` });
-    expect(getBaseUrl()).toBe(`https://${EPHEMERAL_HOST}`);
+    expect(getBaseUrl()).toBe(STABLE_URL);
   });
 
   it("preview deployments also point customer-facing URLs at the stable production domain", () => {
