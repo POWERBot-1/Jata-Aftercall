@@ -38,6 +38,7 @@ export type ProductLifecycleEvidence = {
   entitlementStatus: string | null;
   entitlementExpiresAt: Date | null;
   asOf: Date;
+  teamFreeAccess: boolean;
 };
 
 export type ProductEntitlementException =
@@ -206,7 +207,7 @@ export function summarizeProductEntitlementLifecycle(
       });
     }
 
-    if (entitlementIsActive && !row.subscriptionId) {
+    if (entitlementIsActive && !row.subscriptionId && !row.teamFreeAccess) {
       push({
         exception: "ACTIVE_ENTITLEMENT_WITHOUT_SUBSCRIPTION",
         product: row.product,
