@@ -45,15 +45,15 @@ export async function loadProductEntitlementLifecycleReport() {
         select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, paymentId: true, paymentReference: true, plan: { select: { key: true } } },
       }),
       prisma.posSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      prisma.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
-      prisma.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
-      prisma.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, paymentId: true, paymentReference: true } }),
+      prisma.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      prisma.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      prisma.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
       prisma.interactiveBusinessEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      prisma.aIPackageEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
-      prisma.posEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
-      prisma.autopilotEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
-      prisma.mjengoEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
-      prisma.erpProEntitlement.findMany({ select: { id: true, businessId: true, status: true } }),
+      prisma.aIPackageEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      prisma.posEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      prisma.autopilotEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      prisma.mjengoEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      prisma.erpProEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
     ]);
 
   const subscriptions: SubscriptionRow[] = [
@@ -62,14 +62,14 @@ export async function loadProductEntitlementLifecycleReport() {
       return product ? [{ product, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: null, paymentId: row.paymentId, paymentReference: row.paymentReference }] : [];
     }),
     ...posSubs.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: row.cancelledAt, paymentId: row.paymentId, paymentReference: row.paymentReference })),
-    ...autopilotSubs.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
+    ...autopilotSubs.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: row.cancelledAt, paymentId: row.paymentId, paymentReference: row.paymentReference })),
     ...mjengoSubs.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
     ...erpProSubs.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
   ];
 
   const entitlements: EntitlementRow[] = [
     ...interactive.map((row) => ({ product: "WEBSITE_STUDIO" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
-    ...ai.map((row) => ({ product: "AI_FRONT_DESK" as const, businessId: row.businessId, id: row.id, status: row.status })),
+    ...ai.map((row) => ({ product: "AI_FRONT_DESK" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
     ...posEnts.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, status: row.status })),
     ...autopilotEnts.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, status: row.status })),
     ...mjengoEnts.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, status: row.status })),
