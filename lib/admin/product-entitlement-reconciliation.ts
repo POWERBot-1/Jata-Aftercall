@@ -161,8 +161,14 @@ export function summarizeProductEntitlementLifecycle(
         ? subscriptionValidUntil
         : row.entitlementExpiresAt;
     const entitlementPastExpiry = isPastValidity(row.product, asOf, entitlementValidity);
+    const autopilotPaidThroughCancellation =
+      row.product === "AUTOPILOT" &&
+      row.subscriptionStatus === "CANCELLED" &&
+      Boolean(row.subscriptionExpiresAt && asOf.getTime() < row.subscriptionExpiresAt.getTime());
     const subscriptionIsActive =
-      !subscriptionCancelled && !subscriptionPastValidity && activeSubscription(row.subscriptionStatus);
+      !subscriptionCancelled &&
+      !subscriptionPastValidity &&
+      (activeSubscription(row.subscriptionStatus) || autopilotPaidThroughCancellation);
     const entitlementIsActive = !entitlementPastExpiry && activeEntitlement(row.entitlementStatus);
 
     if (activeSubscription(row.subscriptionStatus) && subscriptionPastValidity) {
