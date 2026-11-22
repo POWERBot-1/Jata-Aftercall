@@ -161,6 +161,15 @@ export function automationKillSwitch(configuration: { featureFlagsJson?: string 
   return parseErpSafetyFlags(configuration?.featureFlagsJson).automationKillSwitch;
 }
 
+function parseJson<T>(value: string | null | undefined, fallback: T): T {
+  try {
+    const parsed = JSON.parse(value ?? "");
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export type RunAutomationInput = {
   businessId: string;
   ruleId: string;
