@@ -42,3 +42,18 @@ The inventory must include all products supported by `LifecycleProduct`, not jus
 ## Next gate
 
 Locate and review every actual enqueue caller on the lifecycle integration branch. Build synthetic fixtures from those callsites, then introduce strict, versioned schemas one task type at a time. Keep the PR draft and do not activate a worker or scheduler while any producer remains unclassified.
+
+## Source-level producer inventory — 2026-11-22
+
+The lifecycle integration branch was inspected at PR #137/#138:
+
+| Source | Finding | Consequence |
+|---|---|---|
+| `app/api/cron/product-lifecycle-observer/route.ts` | Authenticated GET returns aggregate counts and an opaque cursor; it does not enqueue tasks. | No task payload contract originates here. |
+| `lib/admin/product-lifecycle-execution-ledger.ts` | `planLifecycleObservation` is a pure decision function; it returns a small action enum and does not persist or enqueue. | Planner output is not a persisted payload. |
+| `lib/admin/product-lifecycle-execution-store.ts` | Exports the generic enqueue adapter; the inspected PR #137/#138 changed-file scope contains no call to it. | The adapter has no demonstrated production producer contract yet. |
+| `lib/admin/product-expiry-grace-observation-store.ts` | Loads five subscription inventories and returns detailed observations internally; the HTTP route strips rows and returns aggregates. | Do not persist the full observation object or treat the read-only route as a producer. |
+
+**Inventory result: no concrete enqueue callsite was found in the inspected lifecycle PR source scope.** This is narrower than a repository-wide proof: a complete search of every source file on the candidate head is still required before declaring the producer inventory globally complete.
+
+The next safe implementation step is therefore not to invent a per-transition schema or connect the planner to enqueue. First obtain a complete candidate-head callsite inventory. If no producer exists, define and review the first producer contract as a separate change before adding any enqueue wiring. Until then, the generic denylist remains defense-in-depth only and worker/scheduler activation stays blocked.
