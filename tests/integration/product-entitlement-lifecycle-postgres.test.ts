@@ -108,6 +108,14 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
       payments: await client.payment.count({ where: { id: { in: paymentIds } } }),
       coreSubscriptions: await client.subscription.count({ where: { id: { in: coreSubscriptionIds } } }),
       businesses: await client.business.count({ where: { id: { in: businessIds } } }),
+      productRows: await Promise.all(
+        [...new Set(productRows.map((row) => row.model))].map(async (model) => ({
+          model,
+          count: await (client as any)[model].count({
+            where: { id: { in: productRows.filter((row) => row.model === model).map((row) => row.id) } },
+          }),
+        })),
+      ),
     };
 
     const report = await loadProductEntitlementLifecycleReport(client);
@@ -116,6 +124,14 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
       payments: await client.payment.count({ where: { id: { in: paymentIds } } }),
       coreSubscriptions: await client.subscription.count({ where: { id: { in: coreSubscriptionIds } } }),
       businesses: await client.business.count({ where: { id: { in: businessIds } } }),
+      productRows: await Promise.all(
+        [...new Set(productRows.map((row) => row.model))].map(async (model) => ({
+          model,
+          count: await (client as any)[model].count({
+            where: { id: { in: productRows.filter((row) => row.model === model).map((row) => row.id) } },
+          }),
+        })),
+      ),
     };
 
     expect(report.scope).toBe("READ_ONLY_PRODUCT_ENTITLEMENT_INVENTORY");
