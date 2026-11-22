@@ -42,10 +42,6 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
   }, 60_000);
 
   it("reads all six product families without changing subscription, entitlement, or payment rows", async () => {
-    // The candidate rehearsal runs the repository seed before integration tests.
-    // Compare against the pre-fixture inventory so unrelated seeded product pairs
-    // do not make this six-fixture assertion brittle.
-    const baselineReport = await loadProductEntitlementLifecycleReport(client);
     const specs = [
       { product: "WEBSITE_STUDIO", slug: "website", planKey: "INTERACTIVE_BUSINESS", subscriptionModel: "subscription", entitlementModel: "interactiveBusinessEntitlement", entitlementData: { packageKey: "INTERACTIVE_BUSINESS" }, core: true },
       { product: "AI_FRONT_DESK", slug: "ai", planKey: "AI_FRONT_DESK_STANDARD", subscriptionModel: "subscription", entitlementModel: "aIPackageEntitlement", entitlementData: { packageKey: "AI_FRONT_DESK_STANDARD" }, core: true },
@@ -125,7 +121,9 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
       ),
     };
 
-    const report = await loadProductEntitlementLifecycleReport(client);
+    // Scope the read to these six fixture tenants. Other PostgreSQL integration
+    // suites may write their own synthetic business/product pairs concurrently.
+    const report = await loadProductEntitlementLifecycleReport(client, businessIds);
 
     const after = {
       payments: await client.payment.count({ where: { id: { in: paymentIds } } }),
@@ -143,7 +141,7 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
 
     expect(report.scope).toBe("READ_ONLY_PRODUCT_ENTITLEMENT_INVENTORY");
     expect(report.productsReviewed).toBe(6);
-    expect(report.businessProductPairsReviewed - baselineReport.businessProductPairsReviewed).toBe(6);
+    expect(report.businessProductPairsReviewed).toBe(6);
     expect(report.findings.filter((finding) => businessIds.includes(finding.businessId))).toEqual([]);
     expect(after).toEqual(before);
   }, 60_000);
