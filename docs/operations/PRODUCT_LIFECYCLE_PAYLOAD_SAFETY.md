@@ -7,7 +7,8 @@ This guard is an additional denylist-based minimisation layer for lifecycle task
 - Rejects common credential, authentication, contact, address, transcript, message and raw-provider-response field names.
 - Rejects email-shaped values, phone-like values and common payment/API credential prefixes.
 - Limits nesting depth, visited node count, object fields, array length and string length.
-- Rejects unsupported values and circular structures.
+- Rejects unsupported values, non-finite numbers, non-plain objects, prototype-sensitive keys and circular structures.
+- Applies the same guard to task payloads, event metadata, run cursors and run summaries before persistence.
 
 The guard is applied to task payloads before persistence. Event metadata, run cursors and summaries remain subject to the existing JSON serialization/size bound and require separate allowlisting before any worker activation.
 
