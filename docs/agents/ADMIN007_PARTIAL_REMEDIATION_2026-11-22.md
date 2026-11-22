@@ -14,6 +14,7 @@ The owner-approved `CONTROL_ROLE_ACCESS_ENABLED=false` and all 90 DENY cells rem
 - Missing configuration preserves the existing documented defaults (both kill switches off); an explicit boolean kill switch is honored.
 - Malformed JSON, non-object JSON, or a non-boolean value for a recognized safety flag sets both messaging and automation kill switches to ON in the returned in-memory decision.
 - Messaging dispatch and ERP automation now consume this common parser.
+- A failed configuration-store read now aborts dispatch/automation before any side effect; it is no longer caught and treated as an empty configuration.
 - Invalid configuration therefore stops dispatch/automation rather than silently parsing as an empty object and proceeding.
 - No database write, schema migration, config mutation, or provider call was added.
 
@@ -30,8 +31,8 @@ The owner-approved `CONTROL_ROLE_ACCESS_ENABLED=false` and all 90 DENY cells rem
 
 - Valid/defaulted configuration parsing.
 - Malformed JSON, arrays, null, scalar JSON and non-boolean safety flags fail closed.
-- Messaging dispatch does not send when configuration is malformed.
-- ERP automation does not run when configuration is malformed.
+- Messaging dispatch does not send when configuration is malformed or its configuration read fails.
+- ERP automation does not run when configuration is malformed or its configuration read fails.
 - Existing positive kill-switch behavior remains covered.
 
 ## Still BLOCKED
