@@ -164,10 +164,15 @@
     "status": "BLOCKED",
     "acceptance": "Verify authoritative sources, role and tenant isolation, audited actions and independent screenshots at all six owner-specified viewport sizes.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §005 (ADMIN-005)",
-    "implementationLocation": "`app/api/control/overview/route.ts`, `app/api/control/businesses/route.ts`, `app/api/control/audit/route.ts`, `components/control/ControlConsole.tsx`, database `Business`, `Subscription`, `Payment`, agent evidence, outbox, and `ControlAuditEvent` models.",
+    "implementationLocation": "app/api/control/overview/route.ts and components/control/ControlConsole.tsx; lib/control/financial-metrics.ts; tests/unit/control-financial-metrics.test.ts; existing six subscription models and Payment source.",
     "verificationMethod": "At implementation commit `0b665e5719935966de76c0e3f42b23c2dcad4872` (PR merge ref `4f88e7aeda8d62f5b427ff14b8e652e30e07939f`), Interactive Business E2E run 41321876592 passed, including anonymous denial, authenticated protected reads and same-origin mutation returning POLICY_PENDING, unchanged disposable business state, no Control grant, and denial screenshot upload. The explicitly authorized synthetic ordinary test User existed only in that run’s isolated disposable PostgreSQL database; no Control role/grant/permission or production identity/data/configuration was used. Full no-database suite 41321876655, Release Validation 41321876594, exact candidate PostgreSQL 18 migration rehearsal 41321876623, and POS/ERP verification 41321876611 passed. Instruction-integrity passed in run 41321876626; programme-completeness failed with 34 BLOCKED/NOT_TESTED requirements. The denial screenshots have not been independently visually inspected. This verifies denial behavior only, not positive authorization or production acceptance.",
-    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. Console modules exist for businesses, agents, exceptions and audit, but MRR/ARR, payment, subscription, AI usage, job and incident panels are not implemented and the console withholds PII and financial figures pending owner policy. Owner: approve the PII/financial display policy and confirm the metric set.",
-    "evidence": [],
+    "testResult": "Partial read-only MRR/ARR implementation is now present in lib/control/financial-metrics.ts and app/api/control/overview/route.ts across the six persisted product subscription models. It requires immutable price snapshots, live provider settlement, exact payment/business/plan/reference linkage, explicit RECONCILED status/timestamp, and explicit zero refund/chargeback values; unknown evidence withholds the aggregate. Product lifecycle counts and trial UNAVAILABLE state are surfaced separately. Exact-head CI is pending for the latest strict-evidence revision; no production data was queried and no aggregate has been reconciled against the production ledger. Full ADMIN-005 remains BLOCKED: AI provider-metered cost, canonical incidents, historical MRR time series, PII/hierarchy and independently inspected six-viewport functional journeys are incomplete; the all-DENY policy still forbids Control exposure.",
+    "evidence": [
+      "lib/control/financial-metrics.ts",
+      "tests/unit/control-financial-metrics.test.ts",
+      "app/api/control/overview/route.ts",
+      "components/control/ControlConsole.tsx"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516480",
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41294516504",
@@ -197,7 +202,7 @@
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The owner-approved financial metric definitions and aggregate-first/masked-PII display policy are recorded in docs/agents/OWNER_AUTHORIZED_PROGRAMME_DECISIONS_2026-11-16.md. The metrics implementation and reconciled read-only data source are still missing. The approved all-DENY Control policy means no financial or PII data may be exposed through Control until access is separately authorized.",
+    "blocker": "The metrics read model is implemented as a candidate, but authoritative settlement/reversal source semantics and a real reconciled read-only data source have not been independently verified. No historical backfill is allowed. AI provider-metered usage/cost, incidents, historical MRR, full hierarchy/PII controls and six-viewport independent acceptance remain outstanding. All 90 Control cells remain DENY; do not expose these metrics in production or grant access.",
     "sourceCommit": "0b665e5719935966de76c0e3f42b23c2dcad4872",
     "implementationEvidence": [
       "app/api/control/overview/route.ts",
@@ -215,7 +220,9 @@
       "docs/agents/CONTROL_ROLE_ACTION_TEST_MATRIX.md",
       "scripts/browser/control-deny.check.mjs",
       "docs/agents/CONTROL_OWNER_DECISION_PACKAGE.md",
-      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md"
+      "docs/agents/CONTROL_ROLE_ACTION_MATRIX.md",
+      "lib/control/financial-metrics.ts",
+      "tests/unit/control-financial-metrics.test.ts"
     ],
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED",
@@ -246,17 +253,26 @@
     "status": "BLOCKED",
     "acceptance": "server-side module/action authorization, confirmation/change-history tests, cross-tenant tests, kill-switch scope, health-source provenance and last-check verification.",
     "acceptanceSource": "docs/ADMIN_BUILDING_INSTRUCTIONS.md §007 (ADMIN-007)",
-    "implementationLocation": "control APIs/views, existing feature-flag infrastructure, Vercel, Neon, Paystack, messaging, AI, POS, Studio, media and audit. No production configuration, DNS, billing or provider changes.",
-    "verificationMethod": "Compared the canonical criterion with its related audit, source paths and exact-head safe CI evidence; stopped before any production/provider/payment/message/DNS action. Missing dependency and required evidence are stated in the result.",
-    "testResult": "Reconciled on 2026-11-07 against candidate head d5c3f56da052a51836cf387d2cd0d31da401af04 and kept BLOCKED. No configuration module, no feature-flag or AI kill-switch UI, no service-health monitoring. Not implemented. Owner: confirm scope and priority.",
-    "evidence": [],
+    "implementationLocation": "lib/erp/safety-config.ts provides typed fail-closed parsing for existing ERP messaging and automation switches; lib/messaging/pipeline.ts and lib/erp/automation.ts consume it. app/api/control/overview/route.ts and components/control/ControlConsole.tsx expose read-only application/database and persisted queue observations behind system.health.read.",
+    "verificationMethod": "Exact-head CI must validate malformed-config fail-closed tests, messaging/automation non-dispatch tests, route authorization, generated Prisma client, typecheck, unit suite and offline build. Browser review, config change history, scoped operator workflow and external health provenance remain outstanding.",
+    "testResult": "Partial implementation committed on the isolated ADMIN-007 candidate branch: malformed/non-boolean safety configuration now pauses both messaging and automation; read-only health reporting distinguishes responding application, reachable database and persisted queue-state counts from unavailable deployment/provider/AI-cost/media/incident/worker-heartbeat sources. No config writes, provider probes, secret reads or Control grants. Exact-head verification pending; requirement remains BLOCKED.",
+    "evidence": [
+      "lib/erp/safety-config.ts",
+      "lib/messaging/pipeline.ts",
+      "lib/erp/automation.ts",
+      "app/api/control/overview/route.ts",
+      "components/control/ControlConsole.tsx",
+      "tests/unit/erp-safety-config.test.ts",
+      "tests/unit/messaging-dispatch.test.ts",
+      "tests/unit/erp-automation-onboarding.test.ts"
+    ],
     "evidenceLinks": [
       "https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/41288418420"
     ],
     "assessmentReference": "docs/audits/PROGRAMME_RECONCILIATION_2026-11-07.md",
     "verificationCommit": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "scopeNote": "This record classifies the complete canonical requirement, not the narrower test alone.",
-    "blocker": "The feature-flag registry, operator kill-switch workflow and health-monitor UI are not implemented. Keep all flags fail-closed and do not enable production behavior; the approved all-DENY Control policy remains in force.",
+    "blocker": "Operator configuration UI and immutable change history, approved scoped kill-switch workflow, AI-specific kill switch enforcement, provider/deployment/media health integrations, durable last-success records and independently inspected browser evidence remain outstanding. Keep the all-DENY policy and production behavior unchanged.",
     "sourceCommit": "9ab2fdcb380f16450b52bcdb470434a18169c0a6",
     "currentAssessmentSourceSha": "d5c3f56da052a51836cf387d2cd0d31da401af04",
     "currentAssessmentStatus": "BLOCKED"

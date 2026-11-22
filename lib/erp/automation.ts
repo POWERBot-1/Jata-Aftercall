@@ -9,6 +9,7 @@
 
 import { logErpAudit } from "./audit";
 import { createTask } from "./tasks";
+import { parseErpSafetyFlags } from "./safety-config";
 
 export type AutomationTrigger =
   | "LOW_STOCK"
@@ -156,6 +157,10 @@ export function evaluateConditions(conditions: AutomationCondition[], event: Rec
   return { matched: details.every((detail) => detail.matched), details };
 }
 
+export function automationKillSwitch(configuration: { featureFlagsJson?: string | null } | null | undefined): boolean {
+  return parseErpSafetyFlags(configuration?.featureFlagsJson).automationKillSwitch;
+}
+
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   try {
     const parsed = JSON.parse(value ?? "");
@@ -163,10 +168,6 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-export function automationKillSwitch(configuration: { featureFlagsJson?: string | null } | null | undefined): boolean {
-  return Boolean(parseJson<Record<string, boolean>>(configuration?.featureFlagsJson, {}).automationKillSwitch);
 }
 
 export type RunAutomationInput = {
@@ -195,7 +196,7 @@ export async function runAutomation(client: any, input: RunAutomationInput) {
   const rule = await client.erpAutomationRule.findUnique({ where: { id: input.ruleId } });
   if (!rule || rule.businessId !== input.businessId) throw Object.assign(new Error("That automation rule was not found."), { status: 404 });
 
-  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } }).catch(() => null);
+  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } });
   if (automationKillSwitch(configuration)) {
     return { status: "SKIPPED", reason: "Automation is paused by the platform safety switch.", actions: [] as string[] };
   }

@@ -139,6 +139,24 @@ describe("running a rule", () => {
     expect(result.reason).toMatch(/safety switch/i);
   });
 
+  it("skips automation when the persisted safety configuration is malformed", async () => {
+    const fake = createFakeDb(erpSeed());
+    const created = await createRule(fake.db, { activate: true });
+    fake.rows("erpConfiguration").find((row) => row.businessId === "bizA")!.featureFlagsJson = "{";
+    const result = await runAutomation(fake.db, { businessId: "bizA", ruleId: created.id, eventId: "evt-invalid-config", event: { balanceCents: 900 } });
+    expect(result.status).toBe("SKIPPED");
+    expect(result.reason).toMatch(/safety switch/i);
+    expect(fake.rows("erpAutomationRun")).toHaveLength(0);
+  });
+
+  it("refuses automation when the safety configuration cannot be read", async () => {
+    const fake = createFakeDb(erpSeed());
+    const created = await createRule(fake.db, { activate: true });
+    (fake.db as any).erpConfiguration.findUnique = async () => { throw new Error("configuration store unavailable"); };
+    await expect(runAutomation(fake.db, { businessId: "bizA", ruleId: created.id, eventId: "evt-config-read-failure", event: { balanceCents: 900 } })).rejects.toThrow(/configuration store unavailable/i);
+    expect(fake.rows("erpAutomationRun")).toHaveLength(0);
+  });
+
   it("will not run another tenant's rule", async () => {
     const fake = createFakeDb(erpSeed());
     const created = await createRule(fake.db, { activate: true });

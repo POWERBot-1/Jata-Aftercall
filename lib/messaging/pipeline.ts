@@ -13,6 +13,7 @@ import { consumeReserved, releaseReserved } from "./billing";
 import { evaluateEligibility } from "./consent";
 import { getMessagingProvider, type MessagingProviderAdapter } from "./providers";
 import { senderIdCanSend } from "./senderId";
+import { parseErpSafetyFlags } from "../erp/safety-config";
 
 export type DispatchSummary = {
   claimed: number;
@@ -38,13 +39,8 @@ export function backoffMs(attempt: number, key: string, baseMs = 60_000, maxMs =
   return Math.min(maxMs, exponential + deterministicJitter(key));
 }
 
-function parseFlags(json: string | null | undefined): Record<string, boolean> {
-  try {
-    const parsed = JSON.parse(json || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
+function parseFlags(json: string | null | undefined) {
+  return parseErpSafetyFlags(json);
 }
 
 async function channelReady(client: any, businessId: string, channel: string) {
@@ -145,7 +141,7 @@ export async function dispatchBatch(
     return summary;
   }
 
-  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } }).catch(() => null);
+  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } });
   const flags = parseFlags(configuration?.featureFlagsJson);
   if (flags.messagingKillSwitch) {
     await client.msgCampaign.update({ where: { id: campaign.id }, data: { status: "PAUSED", pausedAt: now, failureReason: "Messaging is paused by the platform safety switch. Nothing was sent." } });

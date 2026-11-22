@@ -120,6 +120,8 @@ export async function GET() {
               providerSettlementReference: true,
               settledRefundMinor: true,
               settledChargebackMinor: true,
+              reconciliationStatus: true,
+              reconciledAt: true,
             },
           })
         : [];
@@ -196,14 +198,46 @@ export async function GET() {
   if (providerScope.allowed) sections.providers = unavailable("Vercel / Neon / Paystack / messaging / storage provider probes", providerScope.global ? "No authenticated provider health probe with a verified source and last-success timestamp is configured. No credentials or simulated status are shown." : "Provider status is platform-wide; an explicit platform-wide grant is required. No provider probe or simulated status is shown.");
 
   const systemScope = scopedBusinessIds(grants, "system.health.read");
-  if (systemScope.allowed && !systemScope.global) sections.system = unavailable("Application runtime and database connection", "Platform health is not tenant-keyed; an explicit platform-wide grant is required.");
+  if (systemScope.allowed && !systemScope.global) sections.system = unavailable("Platform service and queue observations", "Platform health is not tenant-keyed; an explicit platform-wide grant is required.");
   if (systemScope.global) {
+    const observedAt = asOf();
+    const readStatusCounts = async (query: () => Promise<any[]>) => {
+      try {
+        const rows = await query();
+        return { state: "OBSERVED" as const, counts: rows.map((row: any) => ({ status: String(row.status), count: row._count._all })) };
+      } catch {
+        return { state: "UNAVAILABLE" as const, counts: [] as Array<{ status: string; count: number }> };
+      }
+    };
+    let database: "REACHABLE" | "UNAVAILABLE" = "UNAVAILABLE";
     try {
       await prisma.$queryRaw`SELECT 1`;
-      sections.system = measured("Application runtime and database connection", { application: "RESPONDING", database: "REACHABLE", observedAt: asOf() });
+      database = "REACHABLE";
     } catch {
-      sections.system = unavailable("Application runtime and database connection", "The database health query failed.");
+      database = "UNAVAILABLE";
     }
+    const [erpTasks, paymentRecovery, messagingOutbox] = await Promise.all([
+      readStatusCounts(() => prisma.erpTask.groupBy({ by: ["status"], _count: { _all: true } })),
+      readStatusCounts(() => prisma.paymentRecoveryTask.groupBy({ by: ["status"], _count: { _all: true } })),
+      readStatusCounts(() => prisma.msgCampaignRecipient.groupBy({ by: ["status"], _count: { _all: true } })),
+    ]);
+    sections.system = measured(
+      "Application runtime, database and persisted queue observations",
+      {
+        application: "RESPONDING",
+        database,
+        observedAt,
+        queues: { erpTasks, paymentRecovery, messagingOutbox },
+        deployment: { state: "UNAVAILABLE", note: "No authenticated deployment-health source is connected to this read model." },
+        providers: { state: "UNAVAILABLE", note: "No live provider health probe was executed; configured credentials are not treated as provider health." },
+        aiUsageAndCost: { state: "UNAVAILABLE", note: "No authoritative provider-metered usage and cost source was verified." },
+        mediaStorage: { state: "UNAVAILABLE", note: "No storage-provider health probe was executed." },
+        incidents: { state: "UNAVAILABLE", note: "No canonical incident model with severity and opened/resolved timestamps exists." },
+        workerHeartbeat: { state: "UNAVAILABLE", note: "Persisted queue counts do not prove a worker is running or healthy." },
+      },
+      database === "REACHABLE" && erpTasks.state === "OBSERVED" && paymentRecovery.state === "OBSERVED" && messagingOutbox.state === "OBSERVED" ? "PENDING" : "UNAVAILABLE",
+      "Partial operational observations only. No durable last-success ledger exists; observedAt is this request's timestamp. Queue counts do not prove worker health, and unavailable external sources remain explicitly unavailable.",
+    );
   }
 
   if (can("exceptions.read")) {

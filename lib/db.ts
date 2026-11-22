@@ -637,6 +637,7 @@ function createFallbackPrisma(): any {
     agentWhatsAppWebhookEvent: emptyModel(),
     // POS / ERP - PRO and messaging models. Same contract as the rest of the stub.
     erpTask: emptyModel(),
+    paymentRecoveryTask: emptyModel(),
     erpPurchaseOrder: emptyModel(),
     erpPurchaseOrderLine: emptyModel(),
     erpGoodsReceipt: emptyModel(),
