@@ -171,8 +171,8 @@ export function summarizeProductEntitlementLifecycle(
       !Number.isNaN(row.providerSettledAt.getTime()) &&
       Boolean(row.paymentReference) &&
       row.providerSettlementReference === row.paymentReference &&
-      (row.settledRefundMinor === null || row.settledRefundMinor <= 0n) &&
-      (row.settledChargebackMinor === null || row.settledChargebackMinor <= 0n)
+      (row.settledRefundMinor === null || row.settledRefundMinor <= BigInt(0)) &&
+      (row.settledChargebackMinor === null || row.settledChargebackMinor <= BigInt(0))
     );
 
     if (row.paymentId && row.paymentStatus !== null && !hasVerifiedSettlement) {
