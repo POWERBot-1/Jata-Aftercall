@@ -46,7 +46,7 @@ on:
         required: false
         default: "Explicit candidate"
   pull_request:
-    branches: [main]
+    branches: [main, arena/subscription-payment-reconciliation]
 
 permissions:
   contents: read
@@ -93,7 +93,7 @@ jobs:
       - name: Checkout the reviewing branch (rehearsal script + baseline history)
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
           path: gate
           fetch-depth: 1
 
