@@ -5810,10 +5810,10 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
 @media (max-width: 360px) {
   .eb-scope:has(.eb-actionbar) .eb-hero__content {
     padding-top: 0 !important;
-    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 4rem) !important;
+    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 6rem) !important;
   }
   .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
     padding-top: 0 !important;
-    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 4rem) !important;
+    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 6rem) !important;
   }
 }
