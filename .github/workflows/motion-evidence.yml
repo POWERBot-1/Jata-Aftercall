@@ -24,6 +24,7 @@ jobs:
       AUTH_SECRET: interactive-business-e2e-test-secret
       NEXT_TELEMETRY_DISABLED: '1'
       MOTION_ISOLATED: '1'
+      CI: 'true'
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
