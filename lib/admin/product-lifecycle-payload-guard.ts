@@ -1,16 +1,14 @@
 /**
  * Conservative guard for lifecycle ledger JSON evidence.
- *
- * Lifecycle payloads are operational metadata, never a customer-data store.
  * This denylist reduces accidental disclosure; it is not a task-specific schema
  * allowlist or a complete PII/secret detector.
  */
 const FORBIDDEN_KEY = /(?:password|secret|token|authorization|cookie|api[_-]?key|credential|email|phone|mobile|address|name|message|transcript|provider[_-]?response|raw[_-]?body)/i;
 const FORBIDDEN_EXACT_KEY = new Set(["__proto__", "prototype", "constructor"]);
 const SUSPICIOUS_VALUE = [
-  /\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/i,
-  /\\b(?:\\+?\\d[\\d ()-]{7,}\\d)\\b/,
-  /\\b(?:sk_live_|sk_test_|pk_live_|pk_test_|Bearer\\s+)/i,
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
+  /\b(?:\+?\d[\d ()-]{7,}\d)\b/,
+  /\b(?:sk_live_|sk_test_|pk_live_|pk_test_|Bearer\s+)/i,
 ];
 
 export function assertSafeLifecyclePayload(value: unknown): void {
