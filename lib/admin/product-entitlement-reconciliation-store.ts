@@ -38,22 +38,22 @@ function corePlanProduct(key: string): ProductKey | null {
   return null;
 }
 
-export async function loadProductEntitlementLifecycleReport() {
+export async function loadProductEntitlementLifecycleReport(client: typeof prisma = prisma) {
   const [core, posSubs, autopilotSubs, mjengoSubs, erpProSubs, interactive, ai, posEnts, autopilotEnts, mjengoEnts, erpProEnts] =
     await Promise.all([
-      prisma.subscription.findMany({
+      client.subscription.findMany({
         select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, paymentId: true, paymentReference: true, plan: { select: { key: true } } },
       }),
-      prisma.posSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      prisma.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      prisma.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      prisma.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      prisma.interactiveBusinessEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      prisma.aIPackageEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      prisma.posEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      prisma.autopilotEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      prisma.mjengoEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      prisma.erpProEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.posSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.interactiveBusinessEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.aIPackageEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.posEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.autopilotEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.mjengoEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.erpProEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
     ]);
 
   const subscriptions: SubscriptionRow[] = [
@@ -78,7 +78,7 @@ export async function loadProductEntitlementLifecycleReport() {
 
   const paymentIds = [...new Set(subscriptions.flatMap((row) => row.paymentId ? [row.paymentId] : []))];
   const payments = paymentIds.length
-    ? await prisma.payment.findMany({
+    ? await client.payment.findMany({
         where: { id: { in: paymentIds } },
         select: {
           id: true, status: true, businessId: true, userId: true, planId: true, reference: true, purpose: true,
