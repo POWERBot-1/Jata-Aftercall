@@ -258,11 +258,13 @@ function SectionContent({ sectionKey, section, permissions, businesses, query, s
     {hasMore ? <button type="button" className="ws-btn-outline ws-btn-outline--ink mt-3" onClick={onLoadMore}>Load next page</button> : null}
   </>;
   if (sectionKey === "subscriptions.read") return <>
-    <p className="mt-3 text-3xl font-semibold">{data.total}</p><p className="ws-tiny">Authoritative subscription record count</p>
+    <p className="mt-3 text-3xl font-semibold">{data.total}</p><p className="ws-tiny">Core subscription record count</p>
     <div className="mt-3 flex flex-wrap gap-2">{data.byStatus.map((row: any) => <span key={row.status} className="ws-pill" data-tone={row.status === "FAILED" ? "draft" : "live"}>{row.status}: {row.count}</span>)}</div>
+    <p className="ws-tiny mt-3">Product subscription status counts across all six persisted product models</p>
+    <div className="mt-2 flex flex-wrap gap-2">{(data.productStatusCounts || []).map((row: any) => <span key={`${row.product}:${row.status}`} className="ws-pill">{row.product} · {row.status}: {row.count}</span>)}</div>
     {data.recurringRevenue?.state === "VERIFIED" ? <div className="ws-stats mt-4">
-      <Metric label="MRR · exact KES fraction" value={`KES ${data.recurringRevenue.mrrNumeratorKES} ÷ ${data.recurringRevenue.mrrDenominator}`} />
-      <Metric label="ARR · annualized run-rate" value={`KES ${data.recurringRevenue.arrKES}`} />
+      <Metric label="Platform MRR · exact KES fraction" value={`KES ${data.recurringRevenue.mrrNumeratorKES} ÷ ${data.recurringRevenue.mrrDenominator}`} />
+      <Metric label="Platform ARR · annualized run-rate" value={`KES ${data.recurringRevenue.arrKES}`} />
       <Metric label="Included active subscriptions" value={data.recurringRevenue.includedSubscriptionCount} />
       <Metric label="Excluded test subscriptions" value={data.recurringRevenue.excludedTestSubscriptionCount} />
     </div> : <p className="ws-muted mt-3">MRR / ARR: UNAVAILABLE — {data.recurringRevenue?.note || "The recurring revenue source did not return a verified result."}</p>}
