@@ -76,10 +76,20 @@ export async function loadProductEntitlementLifecycleReport() {
   const payments = paymentIds.length
     ? await prisma.payment.findMany({
         where: { id: { in: paymentIds } },
-        select: { id: true, status: true, businessId: true, userId: true, planId: true, reference: true, purpose: true },
+        select: {
+          id: true, status: true, businessId: true, userId: true, planId: true, reference: true, purpose: true,
+          environment: true, reconciliationStatus: true, providerSettledAt: true,
+          providerSettlementReference: true, settledRefundMinor: true, settledChargebackMinor: true,
+        },
       })
     : [];
-  type PaymentEvidenceRow = { id: string; status: string; businessId: string | null; userId: string | null; planId: string | null; reference: string; purpose: string };
+  type PaymentEvidenceRow = {
+    id: string; status: string; businessId: string | null; userId: string | null;
+    planId: string | null; reference: string; purpose: string; environment: string;
+    reconciliationStatus: string; providerSettledAt: Date | null;
+    providerSettlementReference: string | null; settledRefundMinor: bigint | null;
+    settledChargebackMinor: bigint | null;
+  };
   const paymentById = new Map<string, PaymentEvidenceRow>(
     payments.map((payment) => {
       const row = payment as PaymentEvidenceRow;
@@ -119,6 +129,12 @@ export async function loadProductEntitlementLifecycleReport() {
           paymentReference: payment?.reference ?? null,
           subscriptionPaymentReference: sub?.paymentReference ?? null,
           paymentPurpose: payment?.purpose ?? null,
+          paymentEnvironment: payment?.environment ?? null,
+          paymentReconciliationStatus: payment?.reconciliationStatus ?? null,
+          providerSettledAt: payment?.providerSettledAt ?? null,
+          providerSettlementReference: payment?.providerSettlementReference ?? null,
+          settledRefundMinor: payment?.settledRefundMinor ?? null,
+          settledChargebackMinor: payment?.settledChargebackMinor ?? null,
           subscriptionPlanId: sub?.planId ?? null,
           paymentBusinessId: payment?.businessId ?? null,
           paymentUserId: payment?.userId ?? null,
