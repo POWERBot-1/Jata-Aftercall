@@ -2,7 +2,7 @@ name: Motion isolated browser evidence
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main, arena/subscription-payment-reconciliation, arena/product-entitlement-reconciliation-clean-20261122]
+    branches: [main, arena/subscription-payment-reconciliation, arena/product-entitlement-reconciliation-clean-20261122, arena/admin005-readonly-recurring-metrics-20261122]
 permissions:
   contents: read
 jobs:
