@@ -233,8 +233,8 @@ export async function GET() {
         incidents: { state: "UNAVAILABLE", note: "No canonical incident model with severity and opened/resolved timestamps exists." },
         workerHeartbeat: { state: "UNAVAILABLE", note: "Persisted queue counts do not prove a worker is running or healthy." },
       },
-      database === "REACHABLE" && erpTasks.state === "OBSERVED" && paymentRecovery.state === "OBSERVED" && messagingOutbox.state === "OBSERVED" ? "VERIFIED" : "UNAVAILABLE",
-      "Observed timestamps describe this read only. Queue counts are not worker-health claims; unavailable sources remain explicitly unavailable.",
+      database === "REACHABLE" && erpTasks.state === "OBSERVED" && paymentRecovery.state === "OBSERVED" && messagingOutbox.state === "OBSERVED" ? "PENDING" : "UNAVAILABLE",
+      "Partial operational observations only. No durable last-success ledger exists; observedAt is this request's timestamp. Queue counts do not prove worker health, and unavailable external sources remain explicitly unavailable.",
     );
   }
 
