@@ -9,6 +9,9 @@ const row = (overrides: Partial<ProductLifecycleEvidence> = {}): ProductLifecycl
   businessId: "biz-1",
   subscriptionId: "sub-1",
   subscriptionStatus: "ACTIVE",
+  subscriptionExpiresAt: null,
+  subscriptionGraceUntil: null,
+  subscriptionCancelledAt: null,
   paymentId: "pay-1",
   paymentStatus: "PAID",
   paymentPlanId: "plan-1",
@@ -27,12 +30,45 @@ const row = (overrides: Partial<ProductLifecycleEvidence> = {}): ProductLifecycl
   subscriptionUserId: "user-1",
   entitlementId: "ent-1",
   entitlementStatus: "ACTIVE",
+  entitlementExpiresAt: null,
+  asOf: new Date("2026-11-22T00:00:00.000Z"),
   ...overrides,
 });
 
 describe("product entitlement reconciliation", () => {
   it("accepts a consistent paid active lifecycle", () => {
     expect(summarizeProductEntitlementLifecycle([row()]).findings).toEqual([]);
+  });
+
+  it("honours the exact subscription expiry boundary and explicit grace end", () => {
+    const expiresAt = new Date("2026-11-20T00:00:00.000Z");
+    const graceUntil = new Date("2026-11-23T00:00:00.000Z");
+    const withinGrace = row({
+      subscriptionStatus: "PAST_DUE",
+      subscriptionExpiresAt: expiresAt,
+      subscriptionGraceUntil: graceUntil,
+      asOf: graceUntil,
+    });
+    expect(summarizeProductEntitlementLifecycle([withinGrace]).counts.ACTIVE_SUBSCRIPTION_PAST_VALIDITY).toBe(0);
+
+    const afterGrace = row({
+      subscriptionStatus: "PAST_DUE",
+      subscriptionExpiresAt: expiresAt,
+      subscriptionGraceUntil: graceUntil,
+      asOf: new Date("2026-11-23T00:00:00.001Z"),
+    });
+    expect(summarizeProductEntitlementLifecycle([afterGrace]).counts.ACTIVE_SUBSCRIPTION_PAST_VALIDITY).toBe(1);
+  });
+
+  it("detects expired active entitlement and cancelled subscription state", () => {
+    const expiredEntitlement = row({
+      entitlementExpiresAt: new Date("2026-11-21T23:59:59.000Z"),
+      asOf: new Date("2026-11-22T00:00:00.000Z"),
+    });
+    expect(summarizeProductEntitlementLifecycle([expiredEntitlement]).counts.ACTIVE_ENTITLEMENT_PAST_EXPIRY).toBe(1);
+
+    const cancelled = row({ subscriptionCancelledAt: new Date("2026-11-21T00:00:00.000Z") });
+    expect(summarizeProductEntitlementLifecycle([cancelled]).counts.ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION).toBe(1);
   });
 
   it("detects active subscription without entitlement", () => {
