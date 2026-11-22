@@ -39,22 +39,39 @@ function corePlanProduct(key: string): ProductKey | null {
   return null;
 }
 
-export async function loadProductEntitlementLifecycleReport(client: typeof prisma = prisma) {
+export async function loadProductEntitlementLifecycleReport(
+  client: typeof prisma = prisma,
+  businessIds?: string[],
+) {
+  // Optional tenant scope supports isolated acceptance checks without counting
+  // unrelated fixtures created concurrently by other integration suites.
+  const businessScope = businessIds ? { businessId: { in: businessIds } } : undefined;
   const [core, posSubs, autopilotSubs, mjengoSubs, erpProSubs, interactive, ai, posEnts, autopilotEnts, mjengoEnts, erpProEnts] =
     await Promise.all([
       client.subscription.findMany({
+        ...(businessScope ? { where: businessScope } : {}),
         select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, paymentId: true, paymentReference: true, plan: { select: { key: true } } },
       }),
-      client.posSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      client.autopilotSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      client.mjengoSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      client.erpProSubscription.findMany({ select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
-      client.interactiveBusinessEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      client.aIPackageEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      client.posEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      client.autopilotEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      client.mjengoEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
-      client.erpProEntitlement.findMany({ select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.posSubscription.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.autopilotSubscription.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.mjengoSubscription.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.erpProSubscription.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, userId: true, planId: true, status: true, expiresAt: true, graceUntil: true, cancelledAt: true, paymentId: true, paymentReference: true } }),
+      client.interactiveBusinessEntitlement.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.aIPackageEntitlement.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.posEntitlement.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.autopilotEntitlement.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.mjengoEntitlement.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, status: true, expiresAt: true } }),
+      client.erpProEntitlement.findMany({
+        ...(businessScope ? { where: businessScope } : {}), select: { id: true, businessId: true, status: true, expiresAt: true } }),
     ]);
 
   const subscriptions: SubscriptionRow[] = [
