@@ -21,6 +21,12 @@ export type ProductLifecycleEvidence = {
   paymentReference: string | null;
   subscriptionPaymentReference: string | null;
   paymentPurpose: string | null;
+  paymentEnvironment: string | null;
+  paymentReconciliationStatus: string | null;
+  providerSettledAt: Date | null;
+  providerSettlementReference: string | null;
+  settledRefundMinor: bigint | null;
+  settledChargebackMinor: bigint | null;
   subscriptionPlanId: string | null;
   paymentBusinessId: string | null;
   paymentUserId: string | null;
@@ -38,6 +44,7 @@ export type ProductEntitlementException =
   | "LINKED_PAYMENT_RECORD_NOT_FOUND"
   | "PAYMENT_TENANT_OR_OWNER_MISMATCH"
   | "PAYMENT_PROVENANCE_MISMATCH"
+  | "PAYMENT_SETTLEMENT_UNVERIFIED"
   | "DUPLICATE_PRODUCT_LIFECYCLE";
 
 export type ProductEntitlementFinding = {
@@ -76,6 +83,7 @@ export function summarizeProductEntitlementLifecycle(
     LINKED_PAYMENT_RECORD_NOT_FOUND: 0,
     PAYMENT_TENANT_OR_OWNER_MISMATCH: 0,
     PAYMENT_PROVENANCE_MISMATCH: 0,
+    PAYMENT_SETTLEMENT_UNVERIFIED: 0,
     DUPLICATE_PRODUCT_LIFECYCLE: 0,
   };
   const findings: ProductEntitlementFinding[] = [];
@@ -152,6 +160,28 @@ export function summarizeProductEntitlementLifecycle(
         businessId: row.businessId,
         subscriptionId: row.subscriptionId ?? undefined,
         paymentId: row.paymentId ?? undefined,
+      });
+    }
+
+    const hasVerifiedSettlement = Boolean(
+      row.paymentStatus === "PAID" &&
+      row.paymentEnvironment === "LIVE" &&
+      row.paymentReconciliationStatus === "MATCHED" &&
+      row.providerSettledAt instanceof Date &&
+      !Number.isNaN(row.providerSettledAt.getTime()) &&
+      Boolean(row.paymentReference) &&
+      row.providerSettlementReference === row.paymentReference &&
+      (row.settledRefundMinor === null || row.settledRefundMinor <= 0n) &&
+      (row.settledChargebackMinor === null || row.settledChargebackMinor <= 0n)
+    );
+
+    if (row.paymentId && row.paymentStatus !== null && !hasVerifiedSettlement) {
+      push({
+        exception: "PAYMENT_SETTLEMENT_UNVERIFIED",
+        product: row.product,
+        businessId: row.businessId,
+        subscriptionId: row.subscriptionId ?? undefined,
+        paymentId: row.paymentId,
       });
     }
 
