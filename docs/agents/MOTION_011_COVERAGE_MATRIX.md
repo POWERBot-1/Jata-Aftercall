@@ -60,3 +60,21 @@ The list includes feature-gated routes: a 404 can be correct for an unsupported 
 ## Completeness gate investigation
 
 The `programme-completeness` job runs `scripts/admin/check-programme-readiness.mjs`; it correctly fails because every listed requirement in `docs/agents/PROGRAMME_READINESS.json` is NOT_TESTED and lacks recorded acceptance/evidence. The checker and its negative tests pass. The job cannot truthfully pass until the broader programme's requirements have actual evidence and independent acceptance. No status was promoted, no history modified, and no gate was bypassed. This is an unmet acceptance condition, not a checker malfunction.
+
+
+## Exact-head evidence update — 2026-11-22
+
+The earlier local-environment note above is historical and is superseded for the candidate listed here. Disposable CI now supplies exact-head Chrome/PostgreSQL evidence; it does not change the remaining independent-review requirements.
+
+- Candidate: `b5706a1dbc3c3daa721d4c083b3818b875d06c2f`
+- Motion isolated browser workflow: run `45042578553`
+- Route artifact: `14762253885`; generated-family artifact: `14762941539`; historical baseline artifact: `14762048786`.
+- A synthetic, disposable, published-and-entitled AI Front Desk route was exercised on six viewports in normal and OS reduced-motion modes: 12/12 HTTP 200; one motion probe per capture; normal mode `motion/eligible`, reduced mode `lite/reduced-motion`.
+- The unentitled customer-facing AI route's HTTP 404 is intentional: `app/b/[slug]/ai/page.tsx` calls `notFound()` when the server-derived publication is not publicly operational. The earlier artifact's 12/12 404 observations are therefore expected fail-closed fallback behavior, not a missing-route defect. Authorized preview is separately observed at 12/12 HTTP 200 in that earlier run.
+- The exact-head family artifact contains 480 observations across 20 families, six viewports, draft/published and normal/reduced states. All returned HTTP 200; measured horizontal overflow, hero-text/action-bar intersection and hero-CTA/action-bar intersection were each zero. The harness labels these rows `OBSERVED`; they are not a substitute for independent visual PASS.
+- Route lifecycle evidence: reduced-motion cancellation, six preference transitions, eight-slot queue saturation/recovery, visibility exit/re-entry and route observer cleanup all report PASS. Queue stress used 17 targets, 8 initial active slots, 9 queued, maximum 8 active and all 17 completed.
+- Historical baseline job completed and produced 12 legacy storefront captures; it is not a matched baseline for all 20 families, commerce routes or AI renderer states.
+
+Full details and limitations: `docs/evidence/MOTION_011_EXACT_HEAD_EVIDENCE_2026-11-22.md`.
+
+**Canonical MOTION-011 remains BLOCKED.** Independent review of the complete images/videos, matched historical/current comparisons, complete route/state coverage and broader owner-specification acceptance remain outstanding. No readiness status is promoted by this evidence update.
