@@ -83,7 +83,7 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
         businessId: business.id, userId: ownerId, planId, status: "ACTIVE",
         startAt: new Date(), expiresAt, graceUntil, paymentId: payment.id, paymentReference: reference,
       };
-      if (spec.core) {
+      if ("core" in spec && spec.core) {
         const subscription = await client.subscription.create({ data: common });
         coreSubscriptionIds.push(subscription.id);
       } else {
