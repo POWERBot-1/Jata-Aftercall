@@ -5,16 +5,16 @@
  *
  * Resolution order (see getBaseUrl):
  *   1. Explicit, non-localhost PUBLIC_BASE_URL (then NEXTAUTH_URL) — operator configuration always wins.
- *   2. On Vercel: VERCEL_PROJECT_PRODUCTION_URL — the stable production domain. Vercel sets it at build
- *      and runtime (also on preview deployments) precisely for links that must point to production.
- *   3. On Vercel: VERCEL_URL — the ephemeral per-deployment host (e.g. jata-aftercall-<hash>-<team>.vercel.app).
- *      It changes every deploy and sits behind Deployment Protection, so it is only a last resort.
- *   4. Local/development: PUBLIC_BASE_URL -> NEXTAUTH_URL -> http://localhost:3000 (localhost allowed here).
+ *   2. On Vercel production: the official apex domain is the final fallback when explicit URLs are unset.
+ *   3. On Vercel preview: VERCEL_PROJECT_PRODUCTION_URL — the stable production domain.
+ *   4. VERCEL_URL — the ephemeral per-deployment host, only as a last resort for previews.
+ *   5. Local/development: PUBLIC_BASE_URL -> NEXTAUTH_URL -> http://localhost:3000.
  *
  * Localhost values must never override a production URL when running on Vercel.
  */
 
 const LOCAL_FALLBACK_URL = "http://localhost:3000";
+const CANONICAL_PRODUCTION_URL = "https://jataaftercall.co.ke";
 
 function isLocalhostUrl(url: string): boolean {
   if (!url) return false;
@@ -51,9 +51,13 @@ export function getBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
     // 1. Explicit non-localhost configuration wins; localhost values are ignored on Vercel.
     if (publicBase && !isLocalhostUrl(publicBase)) return sanitizeBase(publicBase);
     if (nextAuth && !isLocalhostUrl(nextAuth)) return sanitizeBase(nextAuth);
-    // 2. Stable production domain — never the ephemeral, Deployment-Protected deployment host.
+    // Production-generated metadata, share links and callbacks must resolve to the owner-approved
+    // public apex if neither explicit URL variable is configured. Never fall back to a Vercel alias
+    // for production customer-facing URLs.
+    if (vercelEnv === "production") return CANONICAL_PRODUCTION_URL;
+    // Preview deployments still target the stable production domain, not their protected host.
     if (vercelProduction) return vercelProduction;
-    // 3. Legacy last resort when the production URL variable is not exposed.
+    // Legacy last resort only for preview-like Vercel environments.
     return vercelDeployment;
   }
 
