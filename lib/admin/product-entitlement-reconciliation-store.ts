@@ -64,16 +64,16 @@ export async function loadProductEntitlementLifecycleReport() {
     ...posSubs.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: row.cancelledAt, paymentId: row.paymentId, paymentReference: row.paymentReference })),
     ...autopilotSubs.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: row.cancelledAt, paymentId: row.paymentId, paymentReference: row.paymentReference })),
     ...mjengoSubs.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: row.cancelledAt, paymentId: row.paymentId, paymentReference: row.paymentReference })),
-    ...erpProSubs.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, paymentId: row.paymentId, paymentReference: row.paymentReference })),
+    ...erpProSubs.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, userId: row.userId, planId: row.planId, status: row.status, expiresAt: row.expiresAt, graceUntil: row.graceUntil, cancelledAt: row.cancelledAt, paymentId: row.paymentId, paymentReference: row.paymentReference })),
   ];
 
   const entitlements: EntitlementRow[] = [
     ...interactive.map((row) => ({ product: "WEBSITE_STUDIO" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
     ...ai.map((row) => ({ product: "AI_FRONT_DESK" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
     ...posEnts.map((row) => ({ product: "BUSINESS_POS" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
-    ...autopilotEnts.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, status: row.status })),
-    ...mjengoEnts.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, status: row.status })),
-    ...erpProEnts.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, status: row.status })),
+    ...autopilotEnts.map((row) => ({ product: "AUTOPILOT" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
+    ...mjengoEnts.map((row) => ({ product: "MJENGO_OS" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
+    ...erpProEnts.map((row) => ({ product: "ERP_PRO" as const, businessId: row.businessId, id: row.id, status: row.status, expiresAt: row.expiresAt })),
   ];
 
   const paymentIds = [...new Set(subscriptions.flatMap((row) => row.paymentId ? [row.paymentId] : []))];
