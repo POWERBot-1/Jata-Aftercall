@@ -77,6 +77,25 @@ describe("calculateRecurringRevenueMetrics", () => {
     });
   });
 
+  it("withholds platform MRR when one payment is linked to multiple active product rows", () => {
+    const first = subscription();
+    const duplicate = subscription({
+      businessId: "business-b",
+      planId: "plan-b",
+      paymentReference: "JATA-REF-B",
+      payment: payment({
+        businessId: "business-b",
+        planId: "plan-b",
+        reference: "JATA-REF-B",
+        providerSettlementReference: "JATA-REF-B",
+      }),
+    });
+    const result = calculateRecurringRevenueMetrics([first, duplicate]);
+    expect(result.state).toBe("UNAVAILABLE");
+    expect(result.mrrNumeratorKES).toBeNull();
+    expect(result.incompleteSubscriptionCount).toBe(1);
+  });
+
   it("returns exact zero when there are no active subscriptions", () => {
     expect(calculateRecurringRevenueMetrics([subscription({ status: "CANCELLED" })])).toMatchObject({
       state: "VERIFIED",
