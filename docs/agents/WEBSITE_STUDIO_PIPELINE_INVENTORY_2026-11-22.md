@@ -85,3 +85,18 @@ Required viewports remain 320×568, 360×800, 390×844, 430×932, 768×1024 and 
 - No production existing-site inheritance, provider, payment, or publication behavior was tested.
 
 **Disposition:** this inventory advances the source-level portion of MOTION-003 only. MOTION-002 universal inheritance and MOTION-004 runtime/transaction behavior remain IN PROGRESS / NOT TESTED. Do not mark programme completeness PASS, merge, or deploy from this document.
+
+
+## 8. Existing executable coverage and exact browser-workflow reachability
+
+A follow-up review found existing unit coverage that should be distinguished from the browser acceptance still outstanding:
+
+- `tests/unit/experience-art-direction.test.ts` iterates all 20 `TEMPLATE_FAMILY_KEYS`, builds each explicit family, validates and serializes the document, and server-renders `ExperienceSite`. It asserts the selected family marker, owner facts, KES price, shop/contact links and absence of blank/hidden SSR content. This is meaningful all-family deterministic/SSR coverage; it is not browser interaction, screenshot, viewport, or published-route evidence.
+- `tests/unit/storefront-motion.test.ts` exercises the finite recipe registry, SSR readability, lazy import, scope ownership, reduced-motion changes, Save-Data/network/visibility changes, cancellation, fallback behavior, focus handling and bounded reveal concurrency. Its own test description explicitly identifies the runtime doubles as unit doubles, not browser evidence.
+- `package.json` exposes browser commands including `test:browser:motion`, `test:browser:families`, `test:browser:layout`, `test:browser:studio-authenticated` and `test:smoke:studio`. The presence of scripts is not evidence that they ran successfully on this commit.
+
+The repository's `.github/workflows/motion-evidence.yml` contains a disposable PostgreSQL 16 + synthetic-fixture + production-build + Chrome capture path, with generated-family and route-behaviour artifacts. Its pull-request trigger is restricted to PRs targeting `main`; PR #139 targets `arena/subscription-payment-reconciliation`. Its other trigger is `workflow_dispatch`. The available GitHub connection in this session exposes workflow inspection and reruns, but no workflow-dispatch operation. Consequently this exact candidate has no motion-evidence workflow run. Do not infer a pass from the workflow's existence or from the unit suite.
+
+The existing `candidate-rehearsal.yml` separately uses disposable PostgreSQL 18, but likewise triggers pull requests only when the target is `main`, or manual dispatch with an explicit full SHA. It has not run for this PR. PostgreSQL 16 migration/integration evidence remains distinct from PostgreSQL 18 acceptance.
+
+**Reconciled status:** all-20-family deterministic generation/SSR and the motion controller's unit-double suite have source-level test coverage. Authenticated real-browser Studio flow, screenshots/recordings, six-viewport acceptance, and PostgreSQL 18 remain NOT TESTED for this candidate.
