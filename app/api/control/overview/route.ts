@@ -2,6 +2,7 @@ import { controlJson } from "@/lib/control/http";
 import prisma from "@/lib/db";
 import { requireAnyControlPermission, controlAccessError, hasControlPermission, scopedBusinessIds } from "@/lib/control/access";
 import type { ControlPermission } from "@/lib/control/permissions";
+import { calculateRecurringRevenueMetrics } from "@/lib/control/financial-metrics";
 
 export const dynamic = "force-dynamic";
 const READ_PERMISSIONS: ControlPermission[] = [
@@ -64,7 +65,38 @@ export async function GET() {
         client.count({ where }),
         client.groupBy({ by: [statusField], where, _count: { _all: true } }),
       ]);
-      return { total, byStatus: byStatus.map((row: any) => ({ status: row.status, count: row._count._all })) };
+      const result = { total, byStatus: byStatus.map((row: any) => ({ status: row.status, count: row._count._all })) };
+      if (model !== "subscription") return result;
+
+      // Aggregate only. Never select tenant, owner, payer, provider-secret or raw payload fields.
+      const activeSubscriptions = await prisma.subscription.findMany({
+        where: { ...where, status: "ACTIVE" },
+        select: {
+          status: true,
+          recurringAmountKES: true,
+          recurringDiscountKES: true,
+          recurringCurrency: true,
+          recurringIntervalDays: true,
+          payment: {
+            select: {
+              status: true,
+              environment: true,
+              reconciliationStatus: true,
+              providerSettledAt: true,
+              providerSettlementReference: true,
+            },
+          },
+        },
+      });
+      return {
+        ...result,
+        recurringRevenue: calculateRecurringRevenueMetrics(activeSubscriptions),
+        trialAvailability: {
+          state: "UNAVAILABLE",
+          source: "Subscription lifecycle schema",
+          note: "No persisted TRIAL status or trial-end timestamp exists. No trial count is inferred.",
+        },
+      };
     }, (data) => data.byStatus.some((row: any) => row.status === "FAILED") ? "FAILED" : data.byStatus.some((row: any) => row.status === "PENDING" || row.status === "EXPIRING") ? "PENDING" : "VERIFIED");
   }
 
