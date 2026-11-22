@@ -54,9 +54,9 @@ The lifecycle integration branch was inspected at PR #137/#138:
 | `lib/admin/product-lifecycle-execution-store.ts` | Exports the generic enqueue adapter; the inspected PR #137/#138 changed-file scope contains no call to it. | The adapter has no demonstrated production producer contract yet. |
 | `lib/admin/product-expiry-grace-observation-store.ts` | Loads five subscription inventories and returns detailed observations internally; the HTTP route strips rows and returns aggregates. | Do not persist the full observation object or treat the read-only route as a producer. |
 
-**Inventory result: no concrete enqueue callsite was found in the inspected lifecycle PR source scope.** This is narrower than a repository-wide proof: a complete search of every source file on the candidate head is still required before declaring the producer inventory globally complete.
+**Inventory result:** the bounded AST inventory scanned all 1,533 tracked TS/TSX/JS source files on SHA `66e050f1cbff1c05e90fe6e5ef4612273d9cc44f` and found zero production references to the enqueue/run-creation adapter. This supports a repository-wide static inventory conclusion for that exact SHA, subject to the scanner's documented limitations (reflection, computed module paths, runtime-generated code and arbitrary indirect invocation). Re-run the inventory on every candidate head that changes relevant source.
 
-The next safe implementation step is therefore not to invent a per-transition schema or connect the planner to enqueue. First obtain a complete candidate-head callsite inventory. If no producer exists, define and review the first producer contract as a separate change before adding any enqueue wiring. Until then, the generic denylist remains defense-in-depth only and worker/scheduler activation stays blocked.
+No concrete production producer exists in the scanned candidate. Therefore, the per-task producer contract and strict payload allowlists remain BLOCKED; this is not a basis to wire the planner into enqueue. Define and review the first producer contract as a separate change before adding enqueue wiring. Until then, the generic denylist remains defense-in-depth only and worker/scheduler activation stays blocked.
 
 
 ## Payload root-shape hardening — 2026-11-22
@@ -80,3 +80,10 @@ The fail-closed TypeScript-compiler-AST inventory ran in POS/ERP verification wo
 **Do not over-interpret this result:** the per-task producer inventory remains BLOCKED because no real production producer contract exists to enumerate. Task-specific strict allowlists and fixtures derived from real producer contracts remain BLOCKED / NOT TESTED. The next implementation must not invent a payload schema or wire the pure planner into enqueue merely to create a caller. A separately reviewed first producer contract is required before production enqueue wiring.
 
 The same workflow completed successfully: migration-chain scenarios reported `RESULT: PASS (all migration scenarios)`; the PostgreSQL suite reported 12 test files and 115 tests passed. The candidate remains a draft PR, and no worker or scheduler was activated.
+
+
+## Runtime product discriminator validation — 2026-11-22
+
+Commit `069b0bcf1fcc260518a98ae4233214b159b4dd21` adds a runtime predicate for the seven declared `LifecycleProduct` values and enforces it at the enqueue boundary. Invalid, unknown, wrong-case and non-string values are rejected with `LIFECYCLE_INVALID_PRODUCT`. Unit coverage includes all accepted values and invalid inputs.
+
+This validates the product discriminator only. It does not define transition-specific payload schemas or change the blocked producer/allowlist decision. Exact-head CI is required before recording the new change as verified.
