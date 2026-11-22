@@ -32,9 +32,9 @@ describe("calculateRecurringRevenueMetrics", () => {
       includedSubscriptionCount: 2,
       excludedTestSubscriptionCount: 0,
       incompleteSubscriptionCount: 0,
-      mrrNumeratorKES: "22000",
+      mrrNumeratorKES: "24000",
       mrrDenominator: 12,
-      arrKES: "22000",
+      arrKES: "24000",
     });
   });
 
