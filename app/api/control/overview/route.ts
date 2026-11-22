@@ -120,6 +120,8 @@ export async function GET() {
               providerSettlementReference: true,
               settledRefundMinor: true,
               settledChargebackMinor: true,
+              reconciliationStatus: true,
+              reconciledAt: true,
             },
           })
         : [];
