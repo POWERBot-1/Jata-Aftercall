@@ -32,6 +32,13 @@ describe("lifecycle payload safety guard", () => {
     expect(() => assertSafeLifecyclePayload(nested)).toThrow("LIFECYCLE_PAYLOAD_COMPLEXITY_LIMIT");
   });
 
+  it("rejects non-finite numbers, class instances and prototype-sensitive keys", () => {
+    expect(() => assertSafeLifecyclePayload({ value: Number.NaN })).toThrow("LIFECYCLE_PAYLOAD_INVALID_NUMBER");
+    expect(() => assertSafeLifecyclePayload({ value: Number.POSITIVE_INFINITY })).toThrow("LIFECYCLE_PAYLOAD_INVALID_NUMBER");
+    expect(() => assertSafeLifecyclePayload({ value: new Date() })).toThrow("LIFECYCLE_PAYLOAD_INVALID_OBJECT");
+    expect(() => assertSafeLifecyclePayload(JSON.parse('{"constructor":{"polluted":true}}'))).toThrow("LIFECYCLE_PAYLOAD_FORBIDDEN_FIELD");
+  });
+
   it("rejects unsupported values and circular objects", () => {
     expect(() => assertSafeLifecyclePayload({ value: undefined })).toThrow("LIFECYCLE_PAYLOAD_INVALID_TYPE");
     const circular: Record<string, unknown> = {};
