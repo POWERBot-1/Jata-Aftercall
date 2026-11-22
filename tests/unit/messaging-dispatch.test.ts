@@ -186,6 +186,18 @@ describe("dispatch", () => {
     expect(recipientOf(campaign.id).status).toBe("QUEUED");
   });
 
+  it("fails closed and sends nothing when the persisted safety configuration is malformed", async () => {
+    const campaign = await approvedCampaign();
+    fake.rows("erpConfiguration").find((row) => row.businessId === "bizA")!.featureFlagsJson = "{";
+    const provider = new MockMessagingProvider();
+    const summary = await dispatchBatch(fake.db, { businessId: "bizA", campaignId: campaign.id, provider, now: OPEN });
+
+    expect(summary.paused).toBe(true);
+    expect(summary.campaignStatus).toBe("PAUSED");
+    expect(provider.sent).toHaveLength(0);
+    expect(recipientOf(campaign.id).status).toBe("QUEUED");
+  });
+
   it("re-checks consent at send time and releases the reservation for a blocked contact", async () => {
     const campaign = await approvedCampaign();
     // The customer opts out after the campaign was approved.
