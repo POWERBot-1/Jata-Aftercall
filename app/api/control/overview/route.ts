@@ -81,6 +81,7 @@ export async function GET() {
           recurringDiscountKES: true,
           recurringCurrency: true,
           recurringIntervalDays: true,
+          recurringPriceEffectiveAt: true,
           payment: {
             select: {
               id: true,
