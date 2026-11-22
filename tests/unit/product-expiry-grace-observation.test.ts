@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isLifecycleProduct,
   observeSubscriptionExpiry,
   summarizeSubscriptionExpiry,
   type LifecycleExpiryEvidence,
@@ -17,6 +18,15 @@ const row = (overrides: Partial<LifecycleExpiryEvidence> = {}): LifecycleExpiryE
 });
 
 describe("read-only product expiry and grace observation", () => {
+  it("validates lifecycle product values at runtime", () => {
+    for (const product of ["BUSINESS_PAGE", "WEBSITE_STUDIO", "AI_FRONT_DESK", "BUSINESS_POS", "AUTOPILOT", "MJENGO_OS", "ERP_PRO"]) {
+      expect(isLifecycleProduct(product)).toBe(true);
+    }
+    for (const product of ["", "business_pos", "UNKNOWN", null, 42, {}]) {
+      expect(isLifecycleProduct(product)).toBe(false);
+    }
+  });
+
   it("identifies current subscriptions before their expiry", () => {
     expect(observeSubscriptionExpiry(row({ expiresAt: new Date("2026-11-24T12:00:00Z") }), now).state).toBe("CURRENT");
     expect(observeSubscriptionExpiry(row({ expiresAt: new Date("2026-11-24T12:00:00Z"), graceUntil: "not-a-date" as unknown as Date }), now).state).toBe("CURRENT");

@@ -13,7 +13,7 @@ import {
   moveLifecycleTaskToReview,
   type LifecycleTask,
 } from "@/lib/admin/product-lifecycle-execution-ledger";
-import type { LifecycleProduct } from "@/lib/admin/product-expiry-grace-observation";
+import { isLifecycleProduct, type LifecycleProduct } from "@/lib/admin/product-expiry-grace-observation";
 import { assertSafeLifecyclePayload } from "@/lib/admin/product-lifecycle-payload-guard";
 
 type Tx = any;
@@ -118,7 +118,7 @@ export async function enqueueLifecycleTasks(runId: string, inputs: TaskInput[]) 
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20) {
       throw new Error("LIFECYCLE_INVALID_MAX_ATTEMPTS");
     }
-    if (!input.product || typeof input.product !== "string") throw new Error("LIFECYCLE_INVALID_PRODUCT");
+    if (!isLifecycleProduct(input.product)) throw new Error("LIFECYCLE_INVALID_PRODUCT");
     assertSafeLifecyclePayload(input.payload);
     const payload = JSON.parse(safeJson(input.payload));
     const idempotencyKey = lifecycleIdempotencyKey({
