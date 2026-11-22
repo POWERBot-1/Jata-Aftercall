@@ -117,6 +117,19 @@ describe("muted text is darkened on the surface it actually paints on", () => {
   });
 });
 
+describe("family section headings meet WCAG AA on white surfaces", () => {
+  const white: Rgb = { r: 255, g: 255, b: 255 };
+  it.each([
+    ".eb-family-editorial .eb-section:not([style]) .eb-section-head .eb-h2",
+    ".eb-family-cardless-immersive .eb-section:not([style]) .eb-section-head .eb-h2",
+  ])("%s has a dark foreground rather than the theme's pale display token", (selector) => {
+    const body = ruleBody(selector);
+    const colour = parseRgb(body);
+    expect(colour, "section heading must declare an explicit ink colour").not.toBeNull();
+    expect(contrastRatio(colour!, white)).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+});
+
 describe("the action bar's primary CTA clears AA", () => {
   it("darkens the brand fill enough for its cream label", () => {
     // The shipped brand #C24A27 with cream text measured 4.40:1 — just under AA on the

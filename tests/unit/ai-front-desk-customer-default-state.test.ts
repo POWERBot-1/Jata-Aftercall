@@ -81,6 +81,16 @@ describe("motion inheritance SSR contract", () => {
   });
 });
 
+describe("customer conversation header responsive layout", () => {
+  it("stacks the grounding label below the heading on narrow screens", () => {
+    const source = readFileSync(path.join(root, "components/AIFrontDeskCustomerClient.tsx"), "utf8");
+    expect(source).toContain("flex min-w-0 flex-col gap-1 border-b");
+    expect(source).toContain("sm:flex-row sm:items-center sm:justify-between");
+    expect(source).toContain("min-w-0 break-words");
+    expect(render("PREVIEW")).toContain("Answers from saved business data");
+  });
+});
+
 describe("publication state defaults", () => {
   it("renders the desk as a draft when no publication state is supplied", () => {
     const html = render();

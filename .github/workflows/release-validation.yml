@@ -203,7 +203,10 @@ jobs:
         if: always()
         with:
           name: static-logs
-          path: /tmp/step-*.log
+          path: |
+            /tmp/step-*.log
+            /tmp/audit-production.json
+            /tmp/audit-full.json
           if-no-files-found: warn
           retention-days: 14
 
