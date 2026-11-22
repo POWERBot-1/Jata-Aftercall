@@ -67,8 +67,51 @@ describe("product entitlement reconciliation", () => {
     });
     expect(summarizeProductEntitlementLifecycle([expiredEntitlement]).counts.ACTIVE_ENTITLEMENT_PAST_EXPIRY).toBe(1);
 
-    const cancelled = row({ subscriptionCancelledAt: new Date("2026-11-21T00:00:00.000Z") });
+    const cancelled = row({ subscriptionStatus: "CANCELLED" });
     expect(summarizeProductEntitlementLifecycle([cancelled]).counts.ACTIVE_ENTITLEMENT_WITH_INACTIVE_SUBSCRIPTION).toBe(1);
+  });
+
+  it("applies Autopilot's documented fallback grace and paid-through cancellation", () => {
+    const expiry = new Date("2026-11-20T00:00:00.000Z");
+    const inFallbackGrace = row({
+      product: "AUTOPILOT",
+      subscriptionExpiresAt: expiry,
+      subscriptionGraceUntil: null,
+      asOf: new Date("2026-11-22T00:00:00.000Z"),
+    });
+    expect(summarizeProductEntitlementLifecycle([inFallbackGrace]).counts.ACTIVE_SUBSCRIPTION_PAST_VALIDITY).toBe(0);
+    expect(summarizeProductEntitlementLifecycle([inFallbackGrace]).counts.ACTIVE_ENTITLEMENT_PAST_EXPIRY).toBe(0);
+
+    const cancelledButPaidThrough = row({
+      product: "AUTOPILOT",
+      subscriptionStatus: "CANCELLED",
+      subscriptionExpiresAt: new Date("2026-11-24T00:00:00.000Z"),
+      asOf: new Date("2026-11-22T00:00:00.000Z"),
+    });
+    expect(summarizeProductEntitlementLifecycle([cancelledButPaidThrough]).findings).toEqual([]);
+  });
+
+  it("treats ERP PRO's exact grace-until instant as expired", () => {
+    const graceUntil = new Date("2026-11-23T00:00:00.000Z");
+    const atBoundary = row({
+      product: "ERP_PRO",
+      subscriptionExpiresAt: new Date("2026-11-20T00:00:00.000Z"),
+      subscriptionGraceUntil: graceUntil,
+      entitlementExpiresAt: new Date("2026-11-20T00:00:00.000Z"),
+      asOf: graceUntil,
+    });
+    const report = summarizeProductEntitlementLifecycle([atBoundary]);
+    expect(report.counts.ACTIVE_SUBSCRIPTION_PAST_VALIDITY).toBe(1);
+    expect(report.counts.ACTIVE_ENTITLEMENT_PAST_EXPIRY).toBe(1);
+  });
+
+  it("does not treat a persisted cancellation timestamp alone as access revocation", () => {
+    const paidThrough = row({
+      subscriptionCancelledAt: new Date("2026-11-21T00:00:00.000Z"),
+      subscriptionExpiresAt: new Date("2026-11-24T00:00:00.000Z"),
+      asOf: new Date("2026-11-22T00:00:00.000Z"),
+    });
+    expect(summarizeProductEntitlementLifecycle([paidThrough]).findings).toEqual([]);
   });
 
   it("detects active subscription without entitlement", () => {
