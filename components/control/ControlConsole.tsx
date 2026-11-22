@@ -257,11 +257,24 @@ function SectionContent({ sectionKey, section, permissions, businesses, query, s
     </article>) : <p className="ws-muted">No matching business records in this permission scope.</p>}</div>
     {hasMore ? <button type="button" className="ws-btn-outline ws-btn-outline--ink mt-3" onClick={onLoadMore}>Load next page</button> : null}
   </>;
-  if (sectionKey === "subscriptions.read" || sectionKey === "payments.read") return <>
+  if (sectionKey === "subscriptions.read") return <>
+    <p className="mt-3 text-3xl font-semibold">{data.total}</p><p className="ws-tiny">Authoritative subscription record count</p>
+    <div className="mt-3 flex flex-wrap gap-2">{data.byStatus.map((row: any) => <span key={row.status} className="ws-pill" data-tone={row.status === "FAILED" ? "draft" : "live"}>{row.status}: {row.count}</span>)}</div>
+    {data.recurringRevenue?.state === "VERIFIED" ? <div className="ws-stats mt-4">
+      <Metric label="MRR · exact KES fraction" value={`KES ${data.recurringRevenue.mrrNumeratorKES} ÷ ${data.recurringRevenue.mrrDenominator}`} />
+      <Metric label="ARR · annualized run-rate" value={`KES ${data.recurringRevenue.arrKES}`} />
+      <Metric label="Included active subscriptions" value={data.recurringRevenue.includedSubscriptionCount} />
+      <Metric label="Excluded test subscriptions" value={data.recurringRevenue.excludedTestSubscriptionCount} />
+    </div> : <p className="ws-muted mt-3">MRR / ARR: UNAVAILABLE — {data.recurringRevenue?.note || "The recurring revenue source did not return a verified result."}</p>}
+    {data.recurringRevenue?.state === "VERIFIED" && data.recurringRevenue.note ? <p className="ws-tiny mt-2">{data.recurringRevenue.note}</p> : null}
+    <p className="ws-tiny mt-3">Trials: {data.trialAvailability?.state || "UNAVAILABLE"} — {data.trialAvailability?.note || "No authoritative trial source."}</p>
+    <ControlRecordList kind="subscriptions" list={recordLists.subscriptions} onLoadMore={onLoadMoreRecords} />
+  </>;
+  if (sectionKey === "payments.read") return <>
     <p className="mt-3 text-3xl font-semibold">{data.total}</p><p className="ws-tiny">Authoritative record count</p>
     <div className="mt-3 flex flex-wrap gap-2">{data.byStatus.map((row: any) => <span key={row.status} className="ws-pill" data-tone={row.status === "FAILED" ? "draft" : "live"}>{row.status}: {row.count}</span>)}</div>
-    {sectionKey === "payments.read" ? <p className="ws-tiny mt-3">Amounts, payment references and provider identifiers are withheld pending owner-approved financial and privacy policy. Status rows do not establish reconciliation or commission eligibility.</p> : null}
-    <ControlRecordList kind={sectionKey === "subscriptions.read" ? "subscriptions" : "payments"} list={recordLists[sectionKey === "subscriptions.read" ? "subscriptions" : "payments"]} onLoadMore={onLoadMoreRecords} />
+    <p className="ws-tiny mt-3">Amounts, payment references and provider identifiers remain withheld. Status rows alone do not establish settlement, reconciliation or commission eligibility.</p>
+    <ControlRecordList kind="payments" list={recordLists.payments} onLoadMore={onLoadMoreRecords} />
   </>;
   if (sectionKey === "agents.read") return <><div className="ws-stats mt-4"><Metric label="Applications" value={data.total} /><Metric label="Consented registration attributions" value={data.consentedRegistrationAttributions} /><Metric label="Activation" value="Not inferred" /></div><Breakdown label="Application status" rows={data.byStatus} /><Breakdown label="Agent status" rows={data.byAgentStatus} /><p className="ws-tiny mt-3">Names, phone numbers and user identifiers are withheld pending owner-approved identity/PII policy. This read-only view does not change an application or grant agent status.</p><ControlRecordList kind="agents" list={recordLists.agents} onLoadMore={onLoadMoreRecords} /></>;
   if (sectionKey === "commissions.read") return <><p className="mt-3 text-3xl font-semibold">{data.total}</p><Breakdown label="Stored ledger entry types" rows={data.byEntryType.map((row: any) => ({ status: row.entryType, count: row.count }))} /><p className="ws-muted mt-3">Amounts, currency, related payment/agent identities, earning eligibility and payable balance are withheld pending owner policy. No financial authority is inferred from these immutable storage rows.</p><ControlRecordList kind="commissions" list={recordLists.commissions} onLoadMore={onLoadMoreRecords} /></>;
