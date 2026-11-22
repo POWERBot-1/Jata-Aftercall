@@ -10,7 +10,7 @@ This guard is an additional denylist-based minimisation layer for lifecycle task
 - Rejects unsupported values, non-finite numbers, non-plain objects, prototype-sensitive keys and circular structures.
 - Applies the same guard to task payloads, event metadata, run cursors and run summaries before persistence.
 
-The guard is applied to task payloads before persistence. Event metadata, run cursors and summaries remain subject to the existing JSON serialization/size bound and require separate allowlisting before any worker activation.
+The guard is applied to task payloads, event metadata, run cursors and run summaries before persistence. These checks are still denylist-based and do not replace task-specific allowlists before worker activation.
 
 ## Limitations
 Pattern matching cannot prove that arbitrary text contains no personal data or secret. False positives are possible, and sensitive content can be represented in unrecognised formats or under innocuous field names. The current implementation therefore reduces risk but does not establish a complete privacy guarantee.
