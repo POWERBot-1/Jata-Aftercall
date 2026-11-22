@@ -77,6 +77,34 @@ const activeSubscription = (status: string | null) =>
 const activeEntitlement = (status: string | null) =>
   status === "ACTIVE" || status === "LIVE" || status === "GRACE" || status === "PAST_DUE";
 
+/**
+ * Mirrors the product entitlement evaluators' persisted time rules.
+ * Autopilot has a documented three-day fallback grace when graceUntil is absent;
+ * other products only use an explicitly persisted graceUntil.
+ */
+function effectiveSubscriptionValidity(row: ProductLifecycleEvidence): Date | null {
+  const expiresAt = row.subscriptionExpiresAt;
+  if (row.product === "AUTOPILOT" && row.subscriptionStatus === "CANCELLED") {
+    // Autopilot cancellation remains effective through the paid-through date, but
+    // its evaluator does not grant grace after that date for cancelled subscriptions.
+    return expiresAt;
+  }
+  if (row.subscriptionGraceUntil) return row.subscriptionGraceUntil;
+  if (row.product === "AUTOPILOT" && expiresAt) {
+    return new Date(expiresAt.getTime() + 3 * 86_400_000);
+  }
+  return expiresAt;
+}
+
+function isPastValidity(product: ProductKey, asOf: Date, validUntil: Date | null): boolean {
+  if (!validUntil) return false;
+  const comparison = asOf.getTime() - validUntil.getTime();
+  // ERP PRO and Autopilot treat the exact grace boundary as expired.
+  if (product === "ERP_PRO" || product === "AUTOPILOT") return comparison >= 0;
+  // POS, MJENGO and AI evaluators expire only after the persisted boundary.
+  return comparison > 0;
+}
+
 export function summarizeProductEntitlementLifecycle(
   evidence: ProductLifecycleEvidence[],
   excludedProducts: string[] = ["BUSINESS_PAGE", "LEGACY_ERP"],
@@ -116,17 +144,23 @@ export function summarizeProductEntitlementLifecycle(
     }
 
     const asOf = row.asOf instanceof Date && !Number.isNaN(row.asOf.getTime()) ? row.asOf : new Date();
-    const subscriptionValidUntil = row.subscriptionGraceUntil ?? row.subscriptionExpiresAt;
+    const subscriptionValidUntil = effectiveSubscriptionValidity(row);
     const subscriptionCancelled =
-      row.subscriptionStatus === "CANCELLED" ||
       row.subscriptionStatus === "SUSPENDED" ||
-      row.subscriptionCancelledAt !== null;
-    const subscriptionPastValidity = Boolean(
-      subscriptionValidUntil && asOf.getTime() > subscriptionValidUntil.getTime()
-    );
-    const entitlementPastExpiry = Boolean(
-      row.entitlementExpiresAt && asOf.getTime() > row.entitlementExpiresAt.getTime()
-    );
+      (row.product !== "AUTOPILOT" && row.subscriptionStatus === "CANCELLED") ||
+      (row.product === "AUTOPILOT" && row.subscriptionStatus === "CANCELLED" &&
+        Boolean(row.subscriptionExpiresAt && asOf.getTime() >= row.subscriptionExpiresAt.getTime()));
+    const subscriptionPastValidity = isPastValidity(row.product, asOf, subscriptionValidUntil);
+    // Product entitlement mirrors commonly retain the paid-through expiresAt while
+    // subscription grace remains authoritative. Do not falsely expire the mirror
+    // during that same approved grace interval.
+    const entitlementValidity =
+      row.entitlementExpiresAt &&
+      row.subscriptionExpiresAt &&
+      row.entitlementExpiresAt.getTime() === row.subscriptionExpiresAt.getTime()
+        ? subscriptionValidUntil
+        : row.entitlementExpiresAt;
+    const entitlementPastExpiry = isPastValidity(row.product, asOf, entitlementValidity);
     const subscriptionIsActive =
       !subscriptionCancelled && !subscriptionPastValidity && activeSubscription(row.subscriptionStatus);
     const entitlementIsActive = !entitlementPastExpiry && activeEntitlement(row.entitlementStatus);
