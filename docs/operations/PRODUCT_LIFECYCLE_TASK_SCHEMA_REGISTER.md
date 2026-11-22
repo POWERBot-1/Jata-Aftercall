@@ -32,7 +32,7 @@ The inventory must include all products supported by `LifecycleProduct`, not jus
 
 | Requirement | Status | Evidence |
 |---|---|---|
-| Generic payload denylist and complexity bounds | PASS (partial control) | `lib/admin/product-lifecycle-payload-guard.ts` |
+| Generic payload denylist, complexity bounds and object-root validation | PASS (partial control) | `lib/admin/product-lifecycle-payload-guard.ts` |
 | Guard applied to task payload, event metadata, run cursor and summary writes | PASS (guard coverage only) | `lib/admin/product-lifecycle-execution-store.ts` |
 | Per-task producer inventory | BLOCKED | Concrete producer callsites and fixtures not established in this review |
 | Product/transition-specific strict allowlists | BLOCKED | Cannot define without producer inventory |
@@ -57,3 +57,8 @@ The lifecycle integration branch was inspected at PR #137/#138:
 **Inventory result: no concrete enqueue callsite was found in the inspected lifecycle PR source scope.** This is narrower than a repository-wide proof: a complete search of every source file on the candidate head is still required before declaring the producer inventory globally complete.
 
 The next safe implementation step is therefore not to invent a per-transition schema or connect the planner to enqueue. First obtain a complete candidate-head callsite inventory. If no producer exists, define and review the first producer contract as a separate change before adding any enqueue wiring. Until then, the generic denylist remains defense-in-depth only and worker/scheduler activation stays blocked.
+
+
+## Payload root-shape hardening — 2026-11-22
+
+The generic JSON guard now rejects null, scalar and array roots. Lifecycle JSON columns are object contracts; accepting a scalar or array at the root would bypass the intended key-based review boundary even if nested values were bounded. A unit test covers null, undefined, string, number, boolean, empty array, non-empty array and a valid empty object. This is defense-in-depth only; it does not replace task-specific strict allowlists or constitute executed test evidence until exact-head CI runs.
