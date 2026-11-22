@@ -2,7 +2,7 @@
   "name": "jata-aftercall",
   "version": "1.0.0",
   "private": true,
-  "description": "JATA AFTERCALL \u2014 lightweight after-interaction business conversion pages for Kenyan SMEs",
+  "description": "JATA AFTERCALL — lightweight after-interaction business conversion pages for Kenyan SMEs",
   "scripts": {
     "dev": "next dev --webpack -H 0.0.0.0",
     "build": "bash scripts/build.sh",
@@ -57,7 +57,8 @@
     "test:mjengo": "vitest run tests/unit/mjengo-*.test.ts",
     "verify:mjengo:nav": "node scripts/verify/mjengo-nav-audit.mjs",
     "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs",
-    "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs"
+    "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs",
+    "audit:product-lifecycle-producers": "node scripts/audit/product-lifecycle-producer-inventory.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
