@@ -65,6 +65,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lifecycle producer inventory tests
+        run: node --test scripts/__tests__/product-lifecycle-producer-inventory.test.cjs
+
+      - name: Lifecycle producer inventory (fail closed on unclassified production references)
+        run: npm run audit:product-lifecycle-producers
+
       - name: Unit suite
         run: npx vitest run tests/unit
 

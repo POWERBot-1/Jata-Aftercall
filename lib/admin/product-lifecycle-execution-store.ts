@@ -13,7 +13,8 @@ import {
   moveLifecycleTaskToReview,
   type LifecycleTask,
 } from "@/lib/admin/product-lifecycle-execution-ledger";
-import type { LifecycleProduct } from "@/lib/admin/product-expiry-grace-observation";
+import { isLifecycleProduct, type LifecycleProduct } from "@/lib/admin/product-expiry-grace-observation";
+import { assertSafeLifecyclePayload } from "@/lib/admin/product-lifecycle-payload-guard";
 
 type Tx = any;
 type TaskInput = {
@@ -67,7 +68,7 @@ function eventData(input: {
     reasonCode: input.reasonCode,
     actorType: "SYSTEM",
     actorId: input.actorId ?? null,
-    metadata: input.metadata === undefined ? undefined : JSON.parse(safeJson(input.metadata)),
+    metadata: input.metadata === undefined ? undefined : (assertSafeLifecyclePayload(input.metadata), JSON.parse(safeJson(input.metadata))),
   };
 }
 
@@ -88,7 +89,7 @@ export async function createLifecycleExecutionRun(input: {
   const runKey = boundedText(input.runKey, "RUN_KEY", 200);
   const mode = input.mode ?? "OBSERVE";
   if (mode !== "OBSERVE" && mode !== "PLAN") throw new Error("LIFECYCLE_INVALID_MODE");
-  if (input.cursor !== undefined) safeJson(input.cursor);
+  if (input.cursor !== undefined) { assertSafeLifecyclePayload(input.cursor); safeJson(input.cursor); }
   try {
     return await prisma.productLifecycleExecutionRun.create({
       data: { runKey, mode, status: "RUNNING", cursor: input.cursor as any },
@@ -117,7 +118,8 @@ export async function enqueueLifecycleTasks(runId: string, inputs: TaskInput[]) 
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20) {
       throw new Error("LIFECYCLE_INVALID_MAX_ATTEMPTS");
     }
-    if (!input.product || typeof input.product !== "string") throw new Error("LIFECYCLE_INVALID_PRODUCT");
+    if (!isLifecycleProduct(input.product)) throw new Error("LIFECYCLE_INVALID_PRODUCT");
+    assertSafeLifecyclePayload(input.payload);
     const payload = JSON.parse(safeJson(input.payload));
     const idempotencyKey = lifecycleIdempotencyKey({
       product: input.product, businessId, subscriptionId, transitionKey,
@@ -309,7 +311,9 @@ export async function finishLifecycleExecutionRun(input: {
   summary: Record<string, unknown>; cursor?: Record<string, unknown>;
 }) {
   boundedText(input.runId, "RUN_ID", 128);
+  assertSafeLifecyclePayload(input.summary);
   const summary = JSON.parse(safeJson(input.summary));
+  if (input.cursor !== undefined) assertSafeLifecyclePayload(input.cursor);
   const cursor = input.cursor === undefined ? undefined : JSON.parse(safeJson(input.cursor));
   const now = new Date();
   return prisma.$transaction(async (tx: Tx) => {

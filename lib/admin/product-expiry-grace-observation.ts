@@ -7,6 +7,21 @@ export type LifecycleProduct =
   | "MJENGO_OS"
   | "ERP_PRO";
 
+const LIFECYCLE_PRODUCTS = [
+  "BUSINESS_PAGE",
+  "WEBSITE_STUDIO",
+  "AI_FRONT_DESK",
+  "BUSINESS_POS",
+  "AUTOPILOT",
+  "MJENGO_OS",
+  "ERP_PRO",
+] as const satisfies readonly LifecycleProduct[];
+
+/** Runtime validation for values crossing persistence/API boundaries. */
+export function isLifecycleProduct(value: unknown): value is LifecycleProduct {
+  return typeof value === "string" && LIFECYCLE_PRODUCTS.includes(value as LifecycleProduct);
+}
+
 export type LifecycleExpiryEvidence = {
   product: LifecycleProduct;
   businessId: string;

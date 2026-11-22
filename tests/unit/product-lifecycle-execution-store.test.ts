@@ -6,6 +6,11 @@ const source = readFileSync(join(process.cwd(), "lib/admin/product-lifecycle-exe
 const dbFallback = readFileSync(join(process.cwd(), "lib/db.ts"), "utf8");
 
 describe("transaction-backed product lifecycle persistence contract", () => {
+  it("validates lifecycle product identifiers at the persistence boundary", () => {
+    expect(source).toContain("isLifecycleProduct(input.product)");
+    expect(source).toContain('throw new Error("LIFECYCLE_INVALID_PRODUCT")');
+  });
+
   it("enqueues within a transaction and relies on the unique idempotency key", () => {
     expect(source).toContain("prisma.$transaction(async (tx");
     expect(source).toContain("createMany({ data: rows, skipDuplicates: true })");
