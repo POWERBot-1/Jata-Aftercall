@@ -198,6 +198,15 @@ describe("dispatch", () => {
     expect(recipientOf(campaign.id).status).toBe("QUEUED");
   });
 
+  it("refuses dispatch when the safety configuration cannot be read", async () => {
+    const campaign = await approvedCampaign();
+    (fake.db as any).erpConfiguration.findUnique = async () => { throw new Error("configuration store unavailable"); };
+    const provider = new MockMessagingProvider();
+    await expect(dispatchBatch(fake.db, { businessId: "bizA", campaignId: campaign.id, provider, now: OPEN })).rejects.toThrow(/configuration store unavailable/i);
+    expect(provider.sent).toHaveLength(0);
+    expect(recipientOf(campaign.id).status).toBe("QUEUED");
+  });
+
   it("re-checks consent at send time and releases the reservation for a blocked contact", async () => {
     const campaign = await approvedCampaign();
     // The customer opts out after the campaign was approved.
