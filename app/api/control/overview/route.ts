@@ -68,21 +68,45 @@ export async function GET() {
       const result = { total, byStatus: byStatus.map((row: any) => ({ status: row.status, count: row._count._all })) };
       if (model !== "subscription") return result;
 
-      // Aggregate only. Never select tenant, owner, payer, provider-secret or raw payload fields.
-      const activeSubscriptions = await prisma.subscription.findMany({
-        where: { ...where, status: "ACTIVE" },
-        select: {
-          status: true,
-          businessId: true,
-          planId: true,
-          paymentId: true,
-          paymentReference: true,
-          recurringAmountKES: true,
-          recurringDiscountKES: true,
-          recurringCurrency: true,
-          recurringIntervalDays: true,
-          recurringPriceEffectiveAt: true,
-          payment: {
+      // Platform MRR spans every persisted product subscription table. Keep the
+      // core Subscription record list above separate; this aggregate joins only IDs and
+      // settlement evidence, never payer or provider payload fields.
+      const readProductSubscriptions = async (product: string, delegate: any) => {
+        const [counts, active] = await Promise.all([
+          delegate.groupBy({ by: ["status"], where, _count: { _all: true } }),
+          delegate.findMany({
+            where: { ...where, status: "ACTIVE" },
+            select: {
+              status: true,
+              businessId: true,
+              planId: true,
+              paymentId: true,
+              paymentReference: true,
+              recurringAmountKES: true,
+              recurringDiscountKES: true,
+              recurringCurrency: true,
+              recurringIntervalDays: true,
+              recurringPriceEffectiveAt: true,
+            },
+          }),
+        ]);
+        return { product, counts, active };
+      };
+      const productSources = await Promise.all([
+        readProductSubscriptions("CORE", prisma.subscription),
+        readProductSubscriptions("BUSINESS_POS", prisma.posSubscription),
+        readProductSubscriptions("AUTOPILOT", prisma.autopilotSubscription),
+        readProductSubscriptions("ERP_LEGACY", prisma.erpSubscription),
+        readProductSubscriptions("ERP_PRO", prisma.erpProSubscription),
+        readProductSubscriptions("MJENGO_OS", prisma.mjengoSubscription),
+      ]);
+      const activeRows = productSources.flatMap((source) =>
+        source.active.map((row: any) => ({ ...row, sourceProduct: source.product })),
+      );
+      const paymentIds = [...new Set(activeRows.map((row: any) => row.paymentId).filter((id: unknown): id is string => typeof id === "string" && id.length > 0))];
+      const paymentRows = paymentIds.length
+        ? await prisma.payment.findMany({
+            where: { id: { in: paymentIds } },
             select: {
               id: true,
               businessId: true,
@@ -97,18 +121,27 @@ export async function GET() {
               settledRefundMinor: true,
               settledChargebackMinor: true,
             },
-          },
-        },
-      });
+          })
+        : [];
+      const paymentById = new Map(paymentRows.map((payment: any) => [payment.id, payment]));
+      const recurringRevenue = calculateRecurringRevenueMetrics(
+        activeRows.map((row: any) => ({
+          ...row,
+          payment: row.paymentId ? paymentById.get(row.paymentId) ?? null : null,
+        })),
+      );
       return {
         ...result,
-        recurringRevenue: calculateRecurringRevenueMetrics(activeSubscriptions),
+        productStatusCounts: productSources.flatMap((source) =>
+          source.counts.map((row: any) => ({ product: source.product, status: row.status, count: row._count._all })),
+        ),
+        recurringRevenue,
         trialAvailability: {
           state: "UNAVAILABLE",
-          source: "Subscription lifecycle schema",
-          note: "No persisted TRIAL status or trial-end timestamp exists. No trial count is inferred.",
+          source: "All product subscription lifecycle schemas",
+          note: "No persisted TRIAL status or trial-end timestamp exists across the six subscription models. No trial count is inferred.",
         },
-      };
+      };;
     }, (data) => data.byStatus.some((row: any) => row.status === "FAILED") ? "FAILED" : data.byStatus.some((row: any) => row.status === "PENDING" || row.status === "EXPIRING") ? "PENDING" : "VERIFIED");
   }
 
