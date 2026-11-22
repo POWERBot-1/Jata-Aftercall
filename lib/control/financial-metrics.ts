@@ -49,7 +49,7 @@ export function calculateRecurringRevenueMetrics(
   let included = 0;
   let excludedTest = 0;
   let incomplete = 0;
-  let numerator = 0n;
+  let numerator = 0;
 
   for (const row of active) {
     const payment = row.payment;
@@ -75,8 +75,14 @@ export function calculateRecurringRevenueMetrics(
       continue;
     }
 
-    const netRecurringKES = BigInt(amount - discount);
-    numerator += interval === 365 ? netRecurringKES : netRecurringKES * 12n;
+    const netRecurringKES = amount - discount;
+    const addition = interval === 365 ? netRecurringKES : netRecurringKES * 12;
+    const nextNumerator = numerator + addition;
+    if (!Number.isSafeInteger(nextNumerator)) {
+      incomplete += 1;
+      continue;
+    }
+    numerator = nextNumerator;
     included += 1;
   }
 
@@ -102,7 +108,7 @@ export function calculateRecurringRevenueMetrics(
     includedSubscriptionCount: included,
     excludedTestSubscriptionCount: excludedTest,
     incompleteSubscriptionCount: 0,
-    mrrNumeratorKES: numerator.toString(),
+    mrrNumeratorKES: String(numerator),
     mrrDenominator: 12,
     arrKES: numerator.toString(),
     note: "MRR is the exact monthly-normalized recurring consideration (30-day price as-is; 365-day annual price divided by 12). ARR is MRR × 12. This is a management run-rate, not cash received or statutory revenue.",
