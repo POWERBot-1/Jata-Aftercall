@@ -62,3 +62,21 @@ The next safe implementation step is therefore not to invent a per-transition sc
 ## Payload root-shape hardening — 2026-11-22
 
 The generic JSON guard now rejects null, scalar and array roots. Lifecycle JSON columns are object contracts; accepting a scalar or array at the root would bypass the intended key-based review boundary even if nested values were bounded. A unit test covers null, undefined, string, number, boolean, empty array, non-empty array and a valid empty object. This is defense-in-depth only; it does not replace task-specific strict allowlists or constitute executed test evidence until exact-head CI runs.
+
+## Candidate-head static inventory evidence — 2026-11-22
+
+The fail-closed TypeScript-compiler-AST inventory ran in POS/ERP verification workflow [44999096907](https://github.com/POWERBot-1/Jata-Aftercall/actions/runs/44999096907) on candidate SHA `66e050f1cbff1c05e90fe6e5ef4612273d9cc44f`.
+
+| Measure | Exact result |
+|---|---:|
+| Tracked TS/TSX/JS source files scanned | 1,533 |
+| Production references to lifecycle enqueue/run creation adapter | 0 |
+| Test references | 7 |
+| TypeScript parse errors | 0 |
+| Scanner unit tests | 3 passed, 0 failed |
+
+**Assessment:** PASS for the bounded static inventory gate on this exact candidate SHA. The scan did not find a production callsite for `enqueueLifecycleTasks` or `createLifecycleExecutionRun`; the seven references are test references. This is stronger than the earlier PR #137/#138 changed-file review, but it is not a whole-program proof. Reflection, computed module paths, runtime-generated code and arbitrary indirect invocation are outside the scanner's static-analysis model.
+
+**Do not over-interpret this result:** the per-task producer inventory remains BLOCKED because no real production producer contract exists to enumerate. Task-specific strict allowlists and fixtures derived from real producer contracts remain BLOCKED / NOT TESTED. The next implementation must not invent a payload schema or wire the pure planner into enqueue merely to create a caller. A separately reviewed first producer contract is required before production enqueue wiring.
+
+The same workflow completed successfully: migration-chain scenarios reported `RESULT: PASS (all migration scenarios)`; the PostgreSQL suite reported 12 test files and 115 tests passed. The candidate remains a draft PR, and no worker or scheduler was activated.
