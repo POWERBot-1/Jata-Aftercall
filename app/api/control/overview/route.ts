@@ -141,7 +141,7 @@ export async function GET() {
           source: "All product subscription lifecycle schemas",
           note: "No persisted TRIAL status or trial-end timestamp exists across the six subscription models. No trial count is inferred.",
         },
-      };;
+      };
     }, (data) => data.byStatus.some((row: any) => row.status === "FAILED") ? "FAILED" : data.byStatus.some((row: any) => row.status === "PENDING" || row.status === "EXPIRING") ? "PENDING" : "VERIFIED");
   }
 
