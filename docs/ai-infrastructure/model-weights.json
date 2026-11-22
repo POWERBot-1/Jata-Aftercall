@@ -1,0 +1,109 @@
+{
+  "$comment": [
+    "Model weight provenance registry — enforced by tests/unit/licence-policy.test.ts.",
+    "",
+    "Rules for adding an entry:",
+    "  1. licence must be on the commercial-use allowlist (Apache-2.0, MIT, BSD-2/3-Clause, CC0-1.0).",
+    "     Model WEIGHTS are licensed separately from inference CODE; both must be checked.",
+    "  2. source must be the canonical https URL for the exact artefact (not a mirror, not a",
+    "     project homepage). Kokoro's maintainers warn that similarly-named sites are scam mirrors.",
+    "  3. revision must be a pinned commit/tag, never a floating branch.",
+    "  4. sha256 + bytes must come from the artefact actually fetched, never from a model card.",
+    "  5. verifiedOn is the date the licence and hash were last confirmed against the source.",
+    "",
+    "The 'weights' array stays EMPTY until a download is actually performed and hashed.",
+    "Registering a hash that was never computed would be a fabricated integrity claim, so no",
+    "placeholder rows are pre-populated. Candidates are tracked in 'candidates' instead, which is",
+    "human-readable provenance with no integrity assertion."
+  ],
+  "weights": [],
+  "candidates": [
+    {
+      "id": "kokoro-82m",
+      "role": "text-to-speech (primary, licence-free voice tier)",
+      "repo": "hexgrad/Kokoro-82M",
+      "licence": "Apache-2.0",
+      "licenceScope": "weights and inference code both Apache-2.0",
+      "verifiedOn": "2026-11-22",
+      "status": "CANDIDATE — not downloaded",
+      "notes": "82M params, CPU-capable near real-time, 54 voices. No Kiswahili. Download only from the canonical HF org (hexgrad); maintainers warn of scam mirrors."
+    },
+    {
+      "id": "faster-whisper",
+      "role": "speech-to-text",
+      "repo": "SYSTRAN/faster-whisper",
+      "licence": "MIT",
+      "licenceScope": "code MIT; Whisper weights MIT (openai/whisper)",
+      "verifiedOn": "2026-11-22",
+      "status": "CANDIDATE — not downloaded",
+      "notes": "CTranslate2 reimplementation of Whisper. Handles English well and Kiswahili acceptably; Kenyan-accented English and code-switched Sheng are the known gap."
+    },
+    {
+      "id": "silero-vad",
+      "role": "voice activity detection",
+      "repo": "snakers4/silero-vad",
+      "licence": "MIT",
+      "licenceScope": "code and weights MIT",
+      "verifiedOn": "2026-11-22",
+      "status": "CANDIDATE — not downloaded",
+      "notes": "Cuts STT cost by endpointing utterances before recognition."
+    },
+    {
+      "id": "bge-m3",
+      "role": "embeddings (multilingual retrieval)",
+      "repo": "BAAI/bge-m3",
+      "licence": "MIT",
+      "licenceScope": "weights MIT",
+      "verifiedOn": "2026-11-22",
+      "status": "CANDIDATE — not downloaded",
+      "notes": "1024-dim, multilingual incl. Kiswahili/English cross-lingual. Target dimension for the AiKnowledgeChunk design."
+    },
+    {
+      "id": "qwen3-8b",
+      "role": "reasoning / phrasing (self-host option only)",
+      "repo": "Qwen/Qwen3-8B",
+      "licence": "Apache-2.0",
+      "licenceScope": "weights Apache-2.0 with explicit patent grant",
+      "verifiedOn": "2026-11-22",
+      "status": "CANDIDATE — not downloaded",
+      "notes": "Chosen as the self-host baseline specifically to avoid the Llama naming rule and the Gemma prohibited-use passthrough. Requires a GPU tier; not justified on cost, only on data residency."
+    },
+    {
+      "id": "chatterbox-multilingual",
+      "role": "text-to-speech (Kiswahili path)",
+      "repo": "resemble-ai/chatterbox",
+      "licence": "MIT",
+      "licenceScope": "code and weights MIT",
+      "verifiedOn": "2026-11-22",
+      "status": "DEFERRED — retired upstream (Aug 2026)",
+      "notes": "MIT permits commercial use, but there are no upstream fixes. Includes a built-in watermark that must not be stripped. Shipping it would also enable voice cloning, which JATA should not offer (fraud/impersonation exposure)."
+    }
+  ],
+  "rejected": [
+    { "id": "xtts-v2", "reason": "Coqui Public Model Licence — non-commercial weights; vendor shut down 2024 so no licence can be purchased" },
+    { "id": "f5-tts", "reason": "MIT code but official checkpoints are CC-BY-NC-4.0" },
+    { "id": "piper1-gpl", "reason": "Maintained successor is GPL-3.0-or-later; per-voice licences vary and the project grants none" },
+    { "id": "llama-3.3", "reason": "Llama Community Licence requires 'Built with Llama' display and a 'Llama' prefix on derived model names — contaminates product naming" },
+    { "id": "gemma-3", "reason": "Gemma Terms of Use require passing Google's Prohibited Use Policy downstream as an enforceable provision in customer agreements" },
+    { "id": "rvc-voice-conversion", "reason": "Real-time voice conversion enables impersonation; risk exceeds any product value" }
+  ],
+  "datasets": [
+    {
+      "id": "mozilla-common-voice",
+      "licence": "CC0-1.0",
+      "verifiedOn": "2026-11-22",
+      "trainingUse": "permitted",
+      "redistribution": "PROHIBITED — download terms forbid re-hosting the corpus",
+      "speakerIdentification": "PROHIBITED — download terms forbid attempts to identify speakers",
+      "notes": "Kiswahili included. CC0 on the data does not grant the platform's download terms."
+    },
+    {
+      "id": "fleurs",
+      "licence": "CC-BY-4.0",
+      "verifiedOn": "2026-11-22",
+      "trainingUse": "evaluation only (~12h per language)",
+      "redistribution": "attribution required",
+      "notes": "102 languages incl. Kiswahili. Standard multilingual evaluation set; too small to train."
+    }
+  ]
+}

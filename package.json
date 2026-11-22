@@ -57,7 +57,8 @@
     "test:mjengo": "vitest run tests/unit/mjengo-*.test.ts",
     "verify:mjengo:nav": "node scripts/verify/mjengo-nav-audit.mjs",
     "test:browser:business-hub": "node scripts/browser/business-hub.check.mjs",
-    "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs"
+    "test:browser:hub-journey": "node scripts/browser/business-hub-journey.check.mjs",
+    "test:db:remaining": "vitest run tests/integration/ai-front-desk-entitlement-postgres.test.ts tests/integration/business-hub-loyalty-points-postgres.test.ts tests/integration/openpage-authenticated-postgres.test.ts tests/integration/payment-wallet-refunds-postgres.test.ts tests/integration/payment-wallet-stk-receipt-postgres.test.ts tests/integration/pos-refund-race-postgres.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",

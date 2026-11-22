@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { activeSubscriptionWindow } from "../helpers/testClock";
 
 const state = {
   session: null as null | { userId: string; email: string; role: string },
@@ -311,12 +312,21 @@ describe("JATA Autopilot closed-loop execution, rollback & strict tenant isolati
       faqs: [],
     });
 
+    // An ACTIVE subscription, expressed relative to the real clock.
+    //
+    // These dates used to be absolute (2026-10-10 / 2026-11-10 / 2026-11-13). On 2026-11-14 the
+    // window lapsed and this suite began failing with no code change: entitlement correctly went
+    // to false and execution was correctly refused with ENTITLEMENT_REQUIRED. The suite asserts
+    // order/offer/FAQ execution and rollback, never entitlement expiry, so "currently valid" is
+    // the intended meaning. Time-sensitive assertions in this file pass an explicit `now`
+    // (see `daytimeNairobi` below) and do not read this fixture's dates.
+    const activeWindow = activeSubscriptionWindow();
     state.subs.set("biz_a", {
       status: "ACTIVE",
       planKey: "JATA_AUTOPILOT",
-      startAt: new Date("2026-10-10T00:00:00Z"),
-      expiresAt: new Date("2026-11-10T00:00:00Z"),
-      graceUntil: new Date("2026-11-13T00:00:00Z"),
+      startAt: activeWindow.startAt,
+      expiresAt: activeWindow.expiresAt,
+      graceUntil: activeWindow.graceUntil,
     });
 
     state.unanswered.set("uq_1", {

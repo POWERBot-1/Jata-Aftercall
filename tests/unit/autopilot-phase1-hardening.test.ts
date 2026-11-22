@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Prisma } from "@prisma/client";
+import { activeSubscriptionWindow } from "../helpers/testClock";
 
 const state = {
   session: null as null | { userId: string; email: string; role: string },
@@ -463,15 +464,24 @@ describe("Stage C Phase 1 adversarial hardening across all 10 priorities", () =>
       isActive: true,
     });
 
+    // ACTIVE subscription expressed relative to the real clock.
+    //
+    // These were absolute (2026-10-15 / 2026-11-14 / 2026-11-17). The window lapsed on 2026-11-18
+    // and Priority 2 began failing at the foreign-question assertion: execution was refused with
+    // ENTITLEMENT_REQUIRED before it could reach the tenant check it was actually testing. The
+    // property under test is cross-tenant refusal, not expiry. Tests that genuinely assert time
+    // behaviour (Priority 4 expiry, quiet hours in Priority 5) pass an explicit `now` and are
+    // unaffected by this fixture.
+    const activeWindow = activeSubscriptionWindow();
     state.autopilotSubs.set("biz_a", {
       id: "apsub_initial",
       businessId: "biz_a",
       status: "ACTIVE",
       planKey: "JATA_AUTOPILOT",
       paymentId: "pay_initial",
-      startAt: new Date("2026-10-15T00:00:00Z"),
-      expiresAt: new Date("2026-11-14T00:00:00Z"),
-      graceUntil: new Date("2026-11-17T00:00:00Z"),
+      startAt: activeWindow.startAt,
+      expiresAt: activeWindow.expiresAt,
+      graceUntil: activeWindow.graceUntil,
     });
 
     state.session = { userId: "user_owner_a", email: "owner@roastery.ke", role: "CUSTOMER" };
