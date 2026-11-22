@@ -8,6 +8,7 @@ export type RecurringSubscriptionMetricSource = {
   recurringDiscountKES: number | null;
   recurringCurrency: string | null;
   recurringIntervalDays: number | null;
+  recurringPriceEffectiveAt: Date | string | null;
   payment: {
     id: string;
     businessId: string | null;
@@ -92,6 +93,7 @@ export function calculateRecurringRevenueMetrics(
       !Number.isSafeInteger(amount) || amount === null || amount <= 0 ||
       !Number.isSafeInteger(discount) || discount === null || discount < 0 || discount > amount ||
       row.recurringCurrency !== "KES" ||
+      !Number.isFinite((row.recurringPriceEffectiveAt instanceof Date ? row.recurringPriceEffectiveAt : new Date(row.recurringPriceEffectiveAt ?? "")).getTime()) ||
       (interval !== 30 && interval !== 365)
     ) {
       incomplete += 1;
@@ -120,7 +122,7 @@ export function calculateRecurringRevenueMetrics(
       mrrNumeratorKES: null,
       mrrDenominator: 12,
       arrKES: null,
-      note: "At least one active subscription lacks verified live settlement, matching immutable payment linkage, a complete recurring-price snapshot, or zero-refund/chargeback evidence. The aggregate is withheld rather than understated.",
+      note: "At least one active subscription lacks verified live settlement, matching immutable payment linkage, a complete recurring-price snapshot including its effective timestamp, or zero-refund/chargeback evidence. The aggregate is withheld rather than understated.",
     };
   }
 
