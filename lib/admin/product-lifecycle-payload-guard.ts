@@ -12,6 +12,10 @@ const SUSPICIOUS_VALUE = [
 ];
 
 export function assertSafeLifecyclePayload(value: unknown): void {
+  // JSON payload columns in the lifecycle ledger are object contracts, never scalars or arrays.
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("LIFECYCLE_PAYLOAD_INVALID_ROOT");
+  }
   const seen = new Set<object>();
   let nodes = 0;
   const visit = (item: unknown, depth: number): void => {
