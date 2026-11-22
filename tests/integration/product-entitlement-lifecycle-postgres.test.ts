@@ -59,10 +59,13 @@ describe.skipIf(!enabled)("six-product entitlement lifecycle inventory on Postgr
 
       let planId: string;
       if ("core" in spec && spec.core) {
-        const plan = await client.planConfig.create({
-          data: { key: `${spec.planKey}_${stamp}`, name: `Lifecycle ${spec.slug}`, priceKES: 499, durationDays: 30, isActive: true },
+        // The lifecycle adapter recognizes canonical product keys. Reuse an existing
+        // canonical plan when present; otherwise create and clean up an isolated fixture.
+        const existingPlan = await client.planConfig.findUnique({ where: { key: spec.planKey } });
+        const plan = existingPlan ?? await client.planConfig.create({
+          data: { key: spec.planKey, name: `Lifecycle ${spec.slug}`, priceKES: 499, durationDays: 30, isActive: true },
         });
-        planIds.push(plan.id);
+        if (!existingPlan) planIds.push(plan.id);
         planId = plan.id;
       } else {
         planId = spec.planKey;
