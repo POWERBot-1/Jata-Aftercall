@@ -15,8 +15,10 @@ function payment(overrides: Partial<PaymentMetric> = {}): PaymentMetric {
     paystackId: "provider-transaction-a",
     providerSettledAt: "2026-11-01T10:00:00.000Z",
     providerSettlementReference: "JATA-REF-A",
-    settledRefundMinor: null,
-    settledChargebackMinor: null,
+    settledRefundMinor: 0n,
+    settledChargebackMinor: 0n,
+    reconciliationStatus: "RECONCILED",
+    reconciledAt: "2026-11-01T10:05:00.000Z",
     ...overrides,
   };
 }
@@ -112,6 +114,10 @@ describe("calculateRecurringRevenueMetrics", () => {
     ["missing provider transaction id", subscription({ payment: payment({ paystackId: null }) })],
     ["missing provider settlement reference", subscription({ payment: payment({ providerSettlementReference: null }) })],
     ["invalid settlement timestamp", subscription({ payment: payment({ providerSettledAt: "not-a-date" }) })],
+    ["unreconciled payment", subscription({ payment: payment({ reconciliationStatus: "UNRECONCILED" }) })],
+    ["missing reconciliation timestamp", subscription({ payment: payment({ reconciledAt: null }) })],
+    ["unknown settled refund amount", subscription({ payment: payment({ settledRefundMinor: null }) })],
+    ["unknown settled chargeback amount", subscription({ payment: payment({ settledChargebackMinor: null }) })],
     ["mismatched payment id", subscription({ paymentId: "another-payment" })],
     ["mismatched payment business", subscription({ payment: payment({ businessId: "another-business" }) })],
     ["mismatched payment plan", subscription({ payment: payment({ planId: "another-plan" }) })],
