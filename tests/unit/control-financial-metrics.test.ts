@@ -68,6 +68,8 @@ describe("calculateRecurringRevenueMetrics", () => {
     ["unknown environment", subscription({ payment: { status: "PAID", environment: "UNKNOWN", reconciliationStatus: "RECONCILED", providerSettledAt: "2026-11-01T10:00:00.000Z", providerSettlementReference: "ref" } })],
     ["unreconciled payment", subscription({ payment: { status: "PAID", environment: "LIVE", reconciliationStatus: "UNRECONCILED", providerSettledAt: "2026-11-01T10:00:00.000Z", providerSettlementReference: "ref" } })],
     ["missing provider settlement reference", subscription({ payment: { status: "PAID", environment: "LIVE", reconciliationStatus: "RECONCILED", providerSettledAt: "2026-11-01T10:00:00.000Z", providerSettlementReference: null } })],
+    ["invalid settlement timestamp", subscription({ payment: { status: "PAID", environment: "LIVE", reconciliationStatus: "RECONCILED", providerSettledAt: "not-a-date", providerSettlementReference: "ref" } })],
+    ["non-paid active subscription", subscription({ payment: { status: "PENDING", environment: "LIVE", reconciliationStatus: "RECONCILED", providerSettledAt: "2026-11-01T10:00:00.000Z", providerSettlementReference: "ref" } })],
     ["missing immutable price snapshot", subscription({ recurringAmountKES: null })],
     ["missing discount snapshot", subscription({ recurringDiscountKES: null })],
     ["unsupported currency", subscription({ recurringCurrency: "USD" })],
