@@ -58,7 +58,7 @@ function hasSettlementAndLinkageEvidence(row: RecurringSubscriptionMetricSource)
 }
 
 /**
- * Calculate management run-rate only from immutable subscription-price snapshots
+ * Calculate platform management run-rate across the six persisted product subscription models only from immutable subscription-price snapshots
  * linked by payment id/reference, business and plan to a verified live provider
  * settlement. Any settled refund/chargeback, unknown environment, broken linkage,
  * missing snapshot or unsupported interval makes the aggregate unavailable.
@@ -75,12 +75,18 @@ export function calculateRecurringRevenueMetrics(
   let excludedTest = 0;
   let incomplete = 0;
   let numerator = 0;
+  const seenPaymentIds = new Set<string>();
 
   for (const row of active) {
     if (row.payment?.environment === "TEST") {
       excludedTest += 1;
       continue;
     }
+    if (!row.paymentId || seenPaymentIds.has(row.paymentId)) {
+      incomplete += 1;
+      continue;
+    }
+    seenPaymentIds.add(row.paymentId);
     if (!hasSettlementAndLinkageEvidence(row)) {
       incomplete += 1;
       continue;
