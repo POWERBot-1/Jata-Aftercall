@@ -15,6 +15,12 @@ const row = (overrides: Partial<ProductLifecycleEvidence> = {}): ProductLifecycl
   paymentReference: "ref-1",
   subscriptionPaymentReference: "ref-1",
   paymentPurpose: "SUBSCRIPTION",
+  paymentEnvironment: "LIVE",
+  paymentReconciliationStatus: "MATCHED",
+  providerSettledAt: new Date("2026-11-01T10:00:00.000Z"),
+  providerSettlementReference: "ref-1",
+  settledRefundMinor: null,
+  settledChargebackMinor: null,
   subscriptionPlanId: "plan-1",
   paymentBusinessId: "biz-1",
   paymentUserId: "user-1",
@@ -63,6 +69,22 @@ describe("product entitlement reconciliation", () => {
   it("detects payment tenant and owner mismatch", () => {
     const report = summarizeProductEntitlementLifecycle([row({ paymentBusinessId: "biz-other" })]);
     expect(report.counts.PAYMENT_TENANT_OR_OWNER_MISMATCH).toBe(1);
+  });
+
+  it("rejects PAID payments without live provider reconciliation", () => {
+    const cases = [
+      row({ paymentEnvironment: "UNKNOWN" }),
+      row({ paymentEnvironment: "TEST" }),
+      row({ paymentReconciliationStatus: "UNRECONCILED" }),
+      row({ providerSettledAt: null }),
+      row({ providerSettlementReference: "provider-other-ref" }),
+      row({ settledRefundMinor: BigInt(1) }),
+      row({ settledChargebackMinor: BigInt(1) }),
+    ];
+    for (const evidence of cases) {
+      const report = summarizeProductEntitlementLifecycle([evidence]);
+      expect(report.counts.PAYMENT_SETTLEMENT_UNVERIFIED).toBe(1);
+    }
   });
 
   it("detects a linked paid payment from a different product plan", () => {
