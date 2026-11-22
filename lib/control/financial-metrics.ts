@@ -1,15 +1,26 @@
 export type RecurringSubscriptionMetricSource = {
   status: string;
+  businessId: string;
+  planId: string;
+  paymentId: string | null;
+  paymentReference: string | null;
   recurringAmountKES: number | null;
   recurringDiscountKES: number | null;
   recurringCurrency: string | null;
   recurringIntervalDays: number | null;
   payment: {
+    id: string;
+    businessId: string | null;
+    planId: string | null;
+    reference: string;
     status: string;
     environment: string;
-    reconciliationStatus: string;
+    currency: string;
+    paystackId: string | null;
     providerSettledAt: Date | string | null;
     providerSettlementReference: string | null;
+    settledRefundMinor: unknown;
+    settledChargebackMinor: unknown;
   } | null;
 };
 
@@ -28,19 +39,32 @@ export type RecurringRevenueMetrics = {
   note?: string;
 };
 
-function hasSettlementEvidence(payment: RecurringSubscriptionMetricSource["payment"]): boolean {
-  if (!payment || payment.status !== "PAID" || payment.environment !== "LIVE" || payment.reconciliationStatus !== "RECONCILED") return false;
-  if (typeof payment.providerSettlementReference !== "string" || !payment.providerSettlementReference.trim()) return false;
+function isZeroOrAbsent(value: unknown): boolean {
+  return value === null || value === undefined || String(value) === "0";
+}
+
+function hasSettlementAndLinkageEvidence(row: RecurringSubscriptionMetricSource): boolean {
+  const payment = row.payment;
+  if (!payment || payment.status !== "PAID" || payment.environment !== "LIVE" || payment.currency !== "KES") return false;
+  if (!row.paymentId || payment.id !== row.paymentId) return false;
+  if (!row.paymentReference || payment.reference !== row.paymentReference) return false;
+  if (payment.businessId !== row.businessId || payment.planId !== row.planId) return false;
+  if (payment.providerSettlementReference !== payment.reference) return false;
+  if (typeof payment.paystackId !== "string" || !payment.paystackId.trim()) return false;
+  if (!isZeroOrAbsent(payment.settledRefundMinor) || !isZeroOrAbsent(payment.settledChargebackMinor)) return false;
   const settledAt = payment.providerSettledAt instanceof Date ? payment.providerSettledAt : new Date(payment.providerSettledAt ?? "");
   return Number.isFinite(settledAt.getTime());
 }
 
 /**
  * Calculate management run-rate only from immutable subscription-price snapshots
- * linked to a reconciled, live, settled payment. The owner-approved convention is
- * monthly consideration as-is for 30-day plans and annual consideration / 12 for
- * 365-day plans. Unknown intervals, currencies, missing snapshots and unreconciled
- * active rows make the aggregate unavailable rather than silently understating it.
+ * linked by payment id/reference, business and plan to a verified live provider
+ * settlement. Any settled refund/chargeback, unknown environment, broken linkage,
+ * missing snapshot or unsupported interval makes the aggregate unavailable.
+ *
+ * Owner-approved normalization: 30-day recurring price as-is; 365-day annual
+ * recurring price divided by 12. The integer numerator / 12 representation avoids
+ * introducing an undocumented rounding rule.
  */
 export function calculateRecurringRevenueMetrics(
   subscriptions: readonly RecurringSubscriptionMetricSource[],
@@ -52,12 +76,11 @@ export function calculateRecurringRevenueMetrics(
   let numerator = 0;
 
   for (const row of active) {
-    const payment = row.payment;
-    if (payment?.environment === "TEST") {
+    if (row.payment?.environment === "TEST") {
       excludedTest += 1;
       continue;
     }
-    if (!hasSettlementEvidence(payment)) {
+    if (!hasSettlementAndLinkageEvidence(row)) {
       incomplete += 1;
       continue;
     }
@@ -97,7 +120,7 @@ export function calculateRecurringRevenueMetrics(
       mrrNumeratorKES: null,
       mrrDenominator: 12,
       arrKES: null,
-      note: "At least one active subscription lacks verified live settlement or a complete immutable recurring-price snapshot. The aggregate is withheld to avoid understating run-rate.",
+      note: "At least one active subscription lacks verified live settlement, matching immutable payment linkage, a complete recurring-price snapshot, or zero-refund/chargeback evidence. The aggregate is withheld rather than understated.",
     };
   }
 
@@ -110,7 +133,7 @@ export function calculateRecurringRevenueMetrics(
     incompleteSubscriptionCount: 0,
     mrrNumeratorKES: String(numerator),
     mrrDenominator: 12,
-    arrKES: numerator.toString(),
-    note: "MRR is the exact monthly-normalized recurring consideration (30-day price as-is; 365-day annual price divided by 12). ARR is MRR × 12. This is a management run-rate, not cash received or statutory revenue.",
+    arrKES: String(numerator),
+    note: "MRR is the exact monthly-normalized recurring consideration (30-day price as-is; 365-day annual price divided by 12). ARR is MRR × 12. Payment, subscription, business, plan and provider identifiers were reconciled in the read model. This is a management run-rate, not cash received or statutory revenue.",
   };
 }
