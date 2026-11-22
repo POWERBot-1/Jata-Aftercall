@@ -396,7 +396,8 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json();
     const businessId = typeof body?.businessId === "string" ? body.businessId.trim() : "";
-    const guard = await guardTenantMutation(session, businessId);
+    // Editing the website draft is configuration (MANAGER and above), matching Studio "edit" (R-TI-03).
+    const guard = await guardTenantMutation(session, businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
     const experience = await prisma.businessExperience.findUnique({ where: { businessId } });

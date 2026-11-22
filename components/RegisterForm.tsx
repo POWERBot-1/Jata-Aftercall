@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field, FormError } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import type { PostAuthDestination } from "@/lib/post-auth-destination";
 
-export default function RegisterForm({ refCode = null }: { refCode?: string | null }) {
+export default function RegisterForm({ refCode = null, destination = "/dashboard" }: { refCode?: string | null; destination?: PostAuthDestination }) {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", businessName: "" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,7 @@ export default function RegisterForm({ refCode = null }: { refCode?: string | nu
         setErr(data.error || "We couldn't create your account. Please try again.");
         return;
       }
-      router.push("/dashboard");
+      router.push(destination);
       router.refresh();
     } catch {
       setErr("We couldn't create your account. Please try again.");

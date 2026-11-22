@@ -18,6 +18,7 @@ import { ContactActions } from "./ContactActions";
 import { PageViewTracker } from "./Track";
 import { RenderModeProbe } from "./RenderModeProbe";
 import { isRenderPreference } from "@/lib/experience/renderMode";
+import { primaryCtaLabel } from "@/lib/experience/cta";
 
 export function StorefrontShell({
   data,
@@ -38,6 +39,7 @@ export function StorefrontShell({
   const nav = navigationFor(document);
   const commerce = profile.capabilities.includes("commerce");
   const booking = profile.capabilities.includes("booking");
+  const primaryLabel = primaryCtaLabel(undefined, profile.cta.primary, commerce ? "shop" : booking ? "book" : "contact");
 
   return (
     <div className={themeRootClassName(theme, family ? `eb-family-${family.key} eb-density-${document.artDirection!.density}` : "")} data-template-family={family?.key} style={themeStyleVars(theme, document.brand)}>
@@ -86,7 +88,7 @@ export function StorefrontShell({
             ) : null}
             <div className="eb-nav__cta">
               <Link href={commerce ? `/b/${business.slug}/shop` : booking ? `/b/${business.slug}/book` : `#contact`} className="eb-btn eb-btn--sm">
-                {profile.cta.primary}
+                {primaryLabel}
               </Link>
             </div>
           </div>
@@ -154,7 +156,7 @@ export function StorefrontShell({
           location={document.settings.location || null}
           lat={document.settings.lat}
           lng={document.settings.lng}
-          primaryLabel={profile.cta.primary}
+          primaryLabel={primaryLabel}
           showCart={commerce}
           businessName={document.brand.businessName || business.name}
         />

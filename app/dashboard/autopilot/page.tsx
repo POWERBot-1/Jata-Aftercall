@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   ArrowRight,
   BrainCircuit,
@@ -29,6 +28,7 @@ import {
   categoryLabel,
   photoForCategory,
 } from "@/lib/workspaceImagery";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export const metadata = { title: "JATA Autopilot" };
 
 export default async function AutopilotIndexPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
 
   const ownedIds = await getOwnedBusinessIds(session);
   const businesses = await prisma.business.findMany({

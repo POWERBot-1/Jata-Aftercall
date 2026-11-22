@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getTeamAccessStatus } from "@/lib/team-access";
 import { TeamAccessVerificationForm } from "@/components/TeamAccessVerificationForm";
 import { WorkspaceHero, WorkspacePanel } from "@/components/workspace/WorkspaceUI";
+import { redirectToDashboardLogin } from "@/lib/dashboard-login-redirect";
 
 export const metadata: Metadata = { title: "Team access" };
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /** No phone number, user id or entitlement flag is accepted from this page's client. */
 export default async function TeamAccessPage() {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) await redirectToDashboardLogin();
   const status = await getTeamAccessStatus(session.userId);
   return (
     <div className="ws-stack">

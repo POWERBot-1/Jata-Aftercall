@@ -73,7 +73,7 @@ describe("anonymous access to the Business POS is still refused", () => {
     const { readFileSync } = await import("node:fs");
     const path = await import("node:path");
     const source = readFileSync(path.resolve(__dirname, "../../app/dashboard/pos/page.tsx"), "utf8");
-    expect(source).toContain('if (!session) redirect("/login")');
+    expect(source).toContain("if (!session) await redirectToDashboardLogin();");
     // Businesses come from the session membership, never from a URL parameter.
     expect(source).toContain("getOwnedBusinessIds(session)");
     expect(source).not.toContain("searchParams");

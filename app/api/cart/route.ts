@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { canAccessBusiness } from "@/lib/tenant";
+import { canMemberPerform } from "@/lib/tenant";
 import { buildCartFromLines, parseConversationalOrder, type CartLine } from "@/lib/cart";
 import { getExtendedAIConfig, resolveDeliveryZoneFee } from "@/lib/ai-config";
 import { chargeableUnitPrice } from "@/lib/sale-pricing";
@@ -29,7 +29,8 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
-    const allowed = await canAccessBusiness(user.id, businessId, user.role);
+    // Membership alone is a read authorization; recording activity needs STAFF+ (R-TI-03).
+    const allowed = await canMemberPerform(user.id, businessId, user.role, "operate");
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden — tenant isolation enforced." }, { status: 403 });
     }

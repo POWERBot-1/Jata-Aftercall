@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { assertBusinessOwnership, guardTenantMutation } from "@/lib/tenant";
+import { guardTenantMutation } from "@/lib/tenant";
 import { sanitizeText } from "@/lib/validation";
 import { publicErrorMessage, SAFE_ERRORS } from "@/lib/safeError";
 import { safeUrl } from "@/lib/experience/document";
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const businessId = body.businessId;
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardTenantMutation(session, businessId, "configure");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const title = sanitizeText(body.title || "", 120);
     if (!title) return NextResponse.json({ error: "Offer title required" }, { status: 400 });
@@ -72,7 +72,10 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const businessId = searchParams.get("businessId");
   if (!businessId) return NextResponse.json({ error: "businessId required" }, { status: 400 });
-  await assertBusinessOwnership(businessId, session);
+  // R-TI-02: the ownership refusal used to be thrown uncaught (500 for another tenant).
+  // R-TI-03: removing the offer is configuration (MANAGER and above), not any member.
+  const guard = await guardTenantMutation(session, businessId, "configure");
+  if (!guard.ok) return NextResponse.json({ error: guard.status === 403 ? "Forbidden" : guard.error }, { status: guard.status });
   await prisma.offer.delete({ where: { businessId } }).catch(() => null);
   return NextResponse.json({ ok: true });
 }

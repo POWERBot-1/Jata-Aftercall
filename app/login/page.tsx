@@ -4,13 +4,15 @@ import Link from "next/link";
 import LoginForm from "@/components/LoginForm";
 import { WorkspaceAuthShell } from "@/components/workspace/WorkspaceAuthShell";
 import type { Metadata } from "next";
+import { postAuthNextToken, resolvePostAuthDestination } from "@/lib/post-auth-destination";
 
 export const metadata: Metadata = { title: "Log in" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
   const params = await searchParams;
   // Only explicit local destinations are permitted; never accept an arbitrary next URL.
-  const destination = params.next === "agents" ? "/agents/dashboard" : params.next === "control" ? "/control" : "/dashboard";
+  const destination = resolvePostAuthDestination(params.next);
+  const nextToken = postAuthNextToken(destination);
   const session = await getSession();
   if (session) redirect(destination);
   return (
@@ -33,7 +35,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       footnote={
         <>
           No account?{" "}
-          <Link href="/register" className="font-semibold text-[color:var(--ws-amber-deep)] underline">
+          <Link href={nextToken ? `/register?next=${nextToken}` : "/register"} className="font-semibold text-[color:var(--ws-amber-deep)] underline">
             Create one
           </Link>
         </>

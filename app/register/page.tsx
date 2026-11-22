@@ -5,6 +5,7 @@ import RegisterForm from "@/components/RegisterForm";
 import Link from "next/link";
 import { WorkspaceAuthShell } from "@/components/workspace/WorkspaceAuthShell";
 import type { Metadata } from "next";
+import { postAuthNextToken, resolvePostAuthDestination } from "@/lib/post-auth-destination";
 import {
   REFERRAL_COOKIE_NAME,
   findAttributionByToken,
@@ -46,10 +47,13 @@ async function resolveInvite(ref?: string) {
   return null;
 }
 
-export default async function RegisterPage({ searchParams }: { searchParams?: Promise<{ ref?: string }> }) {
-  const session = await getSession();
-  if (session) redirect("/dashboard");
+export default async function RegisterPage({ searchParams }: { searchParams?: Promise<{ ref?: string; next?: string | string[] }> }) {
   const params = (await searchParams) || {};
+  // Same exact-destination allowlist as /login; arbitrary URLs are never followed.
+  const destination = resolvePostAuthDestination(params.next);
+  const nextToken = postAuthNextToken(destination);
+  const session = await getSession();
+  if (session) redirect(destination);
   const invite = await resolveInvite(params.ref);
 
   return (
@@ -72,7 +76,7 @@ export default async function RegisterPage({ searchParams }: { searchParams?: Pr
       footnote={
         <>
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-[color:var(--ws-amber-deep)] underline">
+          <Link href={nextToken ? `/login?next=${nextToken}` : "/login"} className="font-semibold text-[color:var(--ws-amber-deep)] underline">
             Log in
           </Link>
         </>
@@ -86,7 +90,7 @@ export default async function RegisterPage({ searchParams }: { searchParams?: Pr
           </span>
         </p>
       )}
-      <RegisterForm refCode={params.ref ? String(params.ref) : null} />
+      <RegisterForm refCode={params.ref ? String(params.ref) : null} destination={destination} />
     </WorkspaceAuthShell>
   );
 }

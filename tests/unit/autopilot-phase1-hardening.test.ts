@@ -470,8 +470,8 @@ describe("Stage C Phase 1 adversarial hardening across all 10 priorities", () =>
       planKey: "JATA_AUTOPILOT",
       paymentId: "pay_initial",
       startAt: new Date("2026-10-15T00:00:00Z"),
-      expiresAt: new Date("2026-11-14T00:00:00Z"),
-      graceUntil: new Date("2026-11-17T00:00:00Z"),
+      expiresAt: new Date("2026-12-14T00:00:00Z"),
+      graceUntil: new Date("2026-12-17T00:00:00Z"),
     });
 
     state.session = { userId: "user_owner_a", email: "owner@roastery.ke", role: "CUSTOMER" };

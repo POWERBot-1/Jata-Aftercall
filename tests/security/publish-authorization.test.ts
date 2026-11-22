@@ -604,14 +604,25 @@ describe("PATCH /api/business — isPublished flips are publish-level (§5, §15
     );
   });
 
-  it("does not perform the publish payment check when isPublished is absent", async () => {
+  // R-TI-03: this test used to assert that a VIEWER could rename the business (200). Non-publish
+  // edits (name, phone, WhatsApp, location, theme) are settings: MANAGER and above.
+  it("refuses a VIEWER editing business details (settings need MANAGER+) and never touches the row", async () => {
     signIn("viewer1");
     const response = await businessPatch(
       jsonRequest("https://jata.test/api/business", { businessId: "biz-1", name: "Read Only Edit" }),
     );
+    expect(response.status).toBe(403);
+    expect(st.businessUpdate).not.toHaveBeenCalled();
+  });
+
+  it("does not perform the publish payment check when isPublished is absent (MANAGER edits details)", async () => {
+    signIn("manager1");
+    const response = await businessPatch(
+      jsonRequest("https://jata.test/api/business", { businessId: "biz-1", name: "Manager Edit" }),
+    );
     expect(response.status).toBe(200);
     expect(st.businessUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ name: "Read Only Edit" }) }),
+      expect.objectContaining({ data: expect.objectContaining({ name: "Manager Edit" }) }),
     );
   });
 });

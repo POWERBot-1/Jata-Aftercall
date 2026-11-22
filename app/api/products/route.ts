@@ -164,7 +164,8 @@ function sameImageUrlList(left: unknown, right: unknown): boolean {
 }
 
 async function assertOwner(session: SessionPayload | null, businessId: string) {
-  const guard = await guardTenantMutation(session, businessId);
+  // Creating, editing and deleting catalogue items is configuration: MANAGER and above (R-TI-03).
+  const guard = await guardTenantMutation(session, businessId, "configure");
   if (!guard.ok) return guard;
   return { ok: true as const };
 }

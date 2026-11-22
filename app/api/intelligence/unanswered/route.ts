@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!session) return NextResponse.json({ error: SAFE_ERRORS.signIn }, { status: 401 });
   const url = new URL(req.url);
   const businessId = url.searchParams.get("businessId");
-  const guard = await guardTenantMutation(session, businessId);
+  const guard = await guardTenantMutation(session, businessId, "read");
   if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   const questions = await getUnansweredQuestions(businessId!);
   return NextResponse.json({ unansweredQuestions: questions });
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
+    const guard = await guardTenantMutation(session, businessId, "operate");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!businessId) return NextResponse.json({ error: "Business required." }, { status: 400 });
@@ -47,7 +47,8 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json();
     const businessId = body.businessId || body.id;
-    const guard = await guardTenantMutation(session, businessId);
+    // Approving an answer the AI will repeat to customers edits the knowledge base (R-TI-03).
+    const guard = await guardTenantMutation(session, businessId, "edit_knowledge");
     if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
     const questionId = body.questionId || body.id;
     const approvedAnswer = typeof body.approvedAnswer === "string" ? body.approvedAnswer.trim() : "";
