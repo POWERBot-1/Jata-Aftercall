@@ -32,6 +32,7 @@ function subscription(overrides: Partial<RecurringSubscriptionMetricSource> = {}
     recurringDiscountKES: 0,
     recurringCurrency: "KES",
     recurringIntervalDays: 30,
+    recurringPriceEffectiveAt: "2026-11-01T10:00:00.000Z",
     payment: payment(),
     ...overrides,
   };
@@ -99,6 +100,7 @@ describe("calculateRecurringRevenueMetrics", () => {
     ["settled refund present", subscription({ payment: payment({ settledRefundMinor: "100" }) })],
     ["settled chargeback present", subscription({ payment: payment({ settledChargebackMinor: "1" }) })],
     ["missing immutable price snapshot", subscription({ recurringAmountKES: null })],
+    ["missing price effective timestamp", subscription({ recurringPriceEffectiveAt: null })],
     ["missing discount snapshot", subscription({ recurringDiscountKES: null })],
     ["unsupported currency", subscription({ recurringCurrency: "USD" })],
     ["unsupported interval", subscription({ recurringIntervalDays: 90 })],
