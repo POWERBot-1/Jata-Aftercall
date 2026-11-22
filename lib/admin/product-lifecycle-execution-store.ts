@@ -311,7 +311,9 @@ export async function finishLifecycleExecutionRun(input: {
   summary: Record<string, unknown>; cursor?: Record<string, unknown>;
 }) {
   boundedText(input.runId, "RUN_ID", 128);
+  assertSafeLifecyclePayload(input.summary);
   const summary = JSON.parse(safeJson(input.summary));
+  if (input.cursor !== undefined) assertSafeLifecyclePayload(input.cursor);
   const cursor = input.cursor === undefined ? undefined : JSON.parse(safeJson(input.cursor));
   const now = new Date();
   return prisma.$transaction(async (tx: Tx) => {
