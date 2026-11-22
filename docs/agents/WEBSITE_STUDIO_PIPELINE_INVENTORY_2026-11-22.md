@@ -2,7 +2,7 @@
 
 **Assessment type:** source inspection only. **MOTION-003 acceptance: PARTIAL / NOT COMPLETE.** No browser, database, visual, accessibility, performance, or production test was run for this inventory. It does not authorize publication or release.
 
-**Inspected candidate:** `720ef87f8e309a166bbde739323503d76cb559a0` (PR #139 head).
+**Inspected candidate:** `6fe8f087f4a65e54072d793afc35d17dca984dd0` (PR #139 exact head at the time of this update).
 
 ## 1. Generation and editor path
 
@@ -95,8 +95,20 @@ A follow-up review found existing unit coverage that should be distinguished fro
 - `tests/unit/storefront-motion.test.ts` exercises the finite recipe registry, SSR readability, lazy import, scope ownership, reduced-motion changes, Save-Data/network/visibility changes, cancellation, fallback behavior, focus handling and bounded reveal concurrency. Its own test description explicitly identifies the runtime doubles as unit doubles, not browser evidence.
 - `package.json` exposes browser commands including `test:browser:motion`, `test:browser:families`, `test:browser:layout`, `test:browser:studio-authenticated` and `test:smoke:studio`. The presence of scripts is not evidence that they ran successfully on this commit.
 
-The repository's `.github/workflows/motion-evidence.yml` contains a disposable PostgreSQL 16 + synthetic-fixture + production-build + Chrome capture path, with generated-family and route-behaviour artifacts. Its pull-request trigger is restricted to PRs targeting `main`; PR #139 targets `arena/subscription-payment-reconciliation`. Its other trigger is `workflow_dispatch`. The available GitHub connection in this session exposes workflow inspection and reruns, but no workflow-dispatch operation. Consequently this exact candidate has no motion-evidence workflow run. Do not infer a pass from the workflow's existence or from the unit suite.
+The repository's `.github/workflows/motion-evidence.yml` contains a disposable PostgreSQL 16 + synthetic-fixture + production-build + Chrome capture path, with generated-family and route-behaviour artifacts. Its pull-request trigger includes PRs targeting `main` and `arena/subscription-payment-reconciliation`; PR #139 targets the latter. Exact-head run `45019358288` was created for SHA `6fe8f087f4a65e54072d793afc35d17dca984dd0`. The historical baseline job completed successfully. The candidate job completed dependency installation, Prisma generation, disposable migration, fixture seeding, production build, and isolated server startup, but the generated-family capture step remains in progress; route capture and artifact uploads are still pending. Only the historical baseline artifact is currently available. Candidate browser acceptance therefore remains IN PROGRESS / NOT ESTABLISHED.
 
-The existing `candidate-rehearsal.yml` separately uses disposable PostgreSQL 18, but likewise triggers pull requests only when the target is `main`, or manual dispatch with an explicit full SHA. It has not run for this PR. PostgreSQL 16 migration/integration evidence remains distinct from PostgreSQL 18 acceptance.
+The existing `candidate-rehearsal.yml` separately uses disposable PostgreSQL 18. Exact-head run `45019358299` completed all three jobs successfully: full logical backup/restore rehearsal, exact candidate migration, and D2 build/audit/controls. This is disposable PostgreSQL 18 evidence only; it is not Neon production PITR, scheduled backup, or RPO/RTO evidence.
 
-**Reconciled status:** all-20-family deterministic generation/SSR and the motion controller's unit-double suite have source-level test coverage. Authenticated real-browser Studio flow, screenshots/recordings, six-viewport acceptance, and PostgreSQL 18 remain NOT TESTED for this candidate.
+**Reconciled status:** all-20-family deterministic generation/SSR and the motion controller's unit-double suite have source-level test coverage. The exact-head PostgreSQL 18 disposable rehearsal is PASS. Authenticated real-browser Studio flow, candidate screenshots/recordings, six-viewport acceptance, and independent visual review remain NOT ESTABLISHED until the candidate capture completes and its artifacts are inspected.
+
+
+## 9. Exact-head verification update — 2026-11-22
+
+- Candidate SHA: `6fe8f087f4a65e54072d793afc35d17dca984dd0`.
+- Motion workflow `45019358288`: historical baseline PASS; candidate capture IN PROGRESS at `Capture real generated Studio family paths`. The step has a 15-minute timeout. At the latest inspection, route-behaviour capture and all candidate artifact uploads were pending. The job-log endpoint returned `BlobNotFound` while the job was running; no candidate observations were available to inspect.
+- PostgreSQL 18 rehearsal `45019358299`: all three jobs SUCCESS on disposable infrastructure. This does not establish production Neon recovery objectives.
+- POS/ERP verification `45019358300`: both schema/types/unit/offline-build and migration/PostgreSQL integration jobs SUCCESS in isolated CI.
+- The generic feature-flag registry was not added indiscriminately to sensitive routes. A bounded source audit of six routes documented existing purpose-built guards and side-effect boundaries in PR #139; it is not an exhaustive route inventory.
+- Programme-completeness workflow remains FAIL with 24 non-PASS requirements. No readiness promotion is justified.
+
+**Disposition:** source inventory corrected to match exact-head workflow evidence. Browser acceptance, independent screenshot review, production recovery evidence, and programme completeness remain open. No production database, deployment, payment, provider, DNS, or access-policy changes were made.
