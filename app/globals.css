@@ -5727,3 +5727,43 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
     line-height: 1.04;
   }
 }
+
+
+/* 320px first-screen clearance: the fixed two-row contact bar leaves a materially smaller
+   readable hero area than wider phones. Keep the hero copy compact instead of relying on a
+   large bottom padding value (padding below the copy cannot move overlapping text upward).
+   Scope to pages with the fixed bar and the narrowest supported viewport; wider layouts retain
+   their established typography and spacing. */
+@media (max-width: 360px) {
+  .eb-scope:has(.eb-actionbar) .eb-hero__content {
+    box-sizing: border-box;
+    padding: 1rem 1rem 1.25rem;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
+    gap: 0.75rem;
+    padding-bottom: 1.25rem;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero .eb-h1 {
+    font-size: clamp(1.7rem, 8vw, 2.2rem);
+    line-height: 1.06;
+    margin-top: 0.45rem !important;
+    max-width: 16ch;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero .eb-lede {
+    margin-top: 0.45rem;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero__actions {
+    gap: 0.5rem;
+    margin-top: 0.65rem;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-hero__actions .eb-btn {
+    min-height: 2.75rem;
+  }
+  .eb-scope:has(.eb-actionbar) .eb-family-cardless-immersive .eb-hero__content {
+    padding-bottom: 1.25rem;
+  }
+}
