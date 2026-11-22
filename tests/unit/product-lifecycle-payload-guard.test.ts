@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { assertSafeLifecyclePayload } from "@/lib/admin/product-lifecycle-payload-guard";
 
 describe("lifecycle payload safety guard", () => {
+  it("requires the JSON payload root to be a plain object contract", () => {
+    for (const value of [null, undefined, "EXPIRED", 1, true, [], ["EXPIRED"]]) {
+      expect(() => assertSafeLifecyclePayload(value)).toThrow("LIFECYCLE_PAYLOAD_INVALID_ROOT");
+    }
+    expect(() => assertSafeLifecyclePayload({})).not.toThrow();
+  });
   it("accepts bounded operational metadata", () => {
     expect(() => assertSafeLifecyclePayload({
       observationState: "EXPIRED",
