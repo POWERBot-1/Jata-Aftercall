@@ -141,7 +141,7 @@ export async function dispatchBatch(
     return summary;
   }
 
-  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } }).catch(() => null);
+  const configuration = await client.erpConfiguration.findUnique({ where: { businessId: input.businessId } });
   const flags = parseFlags(configuration?.featureFlagsJson);
   if (flags.messagingKillSwitch) {
     await client.msgCampaign.update({ where: { id: campaign.id }, data: { status: "PAUSED", pausedAt: now, failureReason: "Messaging is paused by the platform safety switch. Nothing was sent." } });
