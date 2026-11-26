@@ -1,20 +1,18 @@
 /**
- * Domain abstraction per §26A — never hardcode jata.link.
- * Generates canonical business URLs from PUBLIC_BASE_URL.
- * MVP always uses path-based /b/[slug] — compatible with provider-generated HTTPS domain.
+ * Domain abstraction per §26A — generates public business URLs from an explicit
+ * owner-configured origin, then the owner-approved canonical production apex.
  *
- * Resolution order (see getBaseUrl):
- *   1. Explicit, non-localhost PUBLIC_BASE_URL (then NEXTAUTH_URL) — operator configuration always wins.
- *   2. On Vercel: VERCEL_PROJECT_PRODUCTION_URL — the stable production domain. Vercel sets it at build
- *      and runtime (also on preview deployments) precisely for links that must point to production.
- *   3. On Vercel: VERCEL_URL — the ephemeral per-deployment host (e.g. jata-aftercall-<hash>-<team>.vercel.app).
- *      It changes every deploy and sits behind Deployment Protection, so it is only a last resort.
- *   4. Local/development: PUBLIC_BASE_URL -> NEXTAUTH_URL -> http://localhost:3000 (localhost allowed here).
+ * Resolution order:
+ *   1. Explicit, non-localhost PUBLIC_BASE_URL (then NEXTAUTH_URL).
+ *   2. On Vercel production/preview: https://jataaftercall.co.ke.
+ *      VERCEL_PROJECT_PRODUCTION_URL and VERCEL_URL are deployment metadata, not
+ *      customer-facing canonical origins; never emit a protected/ephemeral Vercel URL.
+ *   3. Local/development: PUBLIC_BASE_URL -> NEXTAUTH_URL -> http://localhost:3000.
  *
  * Localhost values must never override a production URL when running on Vercel.
  */
-
 const LOCAL_FALLBACK_URL = "http://localhost:3000";
+const CANONICAL_PRODUCTION_URL = "https://jataaftercall.co.ke";
 
 function isLocalhostUrl(url: string): boolean {
   if (!url) return false;
@@ -44,20 +42,19 @@ export function getBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   const vercelProduction = vercelHostToUrl(env.VERCEL_PROJECT_PRODUCTION_URL);
   const vercelDeployment = vercelHostToUrl(env.VERCEL_URL);
 
-  // `vercel dev` reports VERCEL_ENV=development — treat it like any other local run.
-  const onVercel = vercelEnv !== "development" && Boolean(vercelProduction || vercelDeployment);
+  // Vercel system variables are used only to identify a Vercel runtime. Their hostnames
+  // are not returned as customer-facing origins because they may be protected aliases.
+  const onVercel =
+    vercelEnv === "production" ||
+    vercelEnv === "preview" ||
+    (vercelEnv !== "development" && Boolean(vercelProduction || vercelDeployment));
 
   if (onVercel) {
-    // 1. Explicit non-localhost configuration wins; localhost values are ignored on Vercel.
     if (publicBase && !isLocalhostUrl(publicBase)) return sanitizeBase(publicBase);
     if (nextAuth && !isLocalhostUrl(nextAuth)) return sanitizeBase(nextAuth);
-    // 2. Stable production domain — never the ephemeral, Deployment-Protected deployment host.
-    if (vercelProduction) return vercelProduction;
-    // 3. Legacy last resort when the production URL variable is not exposed.
-    return vercelDeployment;
+    return CANONICAL_PRODUCTION_URL;
   }
 
-  // 4. Local/development: unchanged fallback chain.
   return sanitizeBase(publicBase || nextAuth || LOCAL_FALLBACK_URL);
 }
 
