@@ -5809,9 +5809,11 @@ body:has([data-evidence-fixture-root]) .product-theme-toolbar { display: none; }
    retain compact typography and one-row hero CTA sizing. */
 @media (max-width: 360px) {
   .eb-scope:has(.eb-actionbar) .eb-hero__content {
-    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 2rem) !important;
+    padding-top: 0 !important;
+    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 4rem) !important;
   }
   .eb-scope:has(.eb-actionbar) .eb-hero--split .eb-hero__grid {
-    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 2rem) !important;
+    padding-top: 0 !important;
+    padding-bottom: calc(var(--eb-actionbar-h, 10.5rem) + env(safe-area-inset-bottom) + 4rem) !important;
   }
 }
